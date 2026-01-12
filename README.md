@@ -1,75 +1,78 @@
-# 📦 InventiEase
-### *Smart Inventory & FEFO Management*
+📦 InventiEase: Smart Inventory & FEFO Management
+InventiEase is a robust cross-platform mobile application built to modernize inventory tracking. Unlike traditional systems, InventiEase focuses on perishability management, ensuring that items nearing expiry are prioritized for sale or use, significantly reducing operational waste.
 
-[![React Native](img.shields.io)](reactnative.dev)
-[![Node.js](img.shields.io)](nodejs.org)
-[![MongoDB](img.shields.io)](www.mongodb.com)
+✨ Key Features
+Smart Batch Tracking: Manage multiple batches of the same product with unique expiry dates and quantities.
 
-InventiEase is a robust cross-platform mobile application built to modernize inventory tracking. Unlike traditional systems, InventiEase focuses on **perishability management**, ensuring that items nearing expiry are prioritized, significantly reducing operational waste.
+FEFO Priority Dashboard: Automatically identifies and highlights items that need to be cleared first based on the "First-Expired-First-Out" principle.
 
----
+Image Capture: Integrated camera functionality to snap product photos for instant visual identification.
 
-## ✨ Key Features
+Barcode Integration: Quick-scan capabilities for rapid inventory audits (supports EAN/UPC).
 
-*   **🍱 Bento-Style Dashboard** – View "Critical" stock levels and total inventory value in a clean, modern grid.
-*   **⏳ FEFO Priority** – Automatically highlights items to be cleared first based on the *"First-Expired-First-Out"* principle.
-*   **📦 Smart Batch Tracking** – Manage multiple batches of the same product with unique expiry dates.
-*   **📸 Image Capture** – Integrated camera functionality for instant visual identification of products.
-*   **🔍 Barcode Integration** – Quick-scan capabilities for rapid inventory audits (EAN/UPC support).
-*   **🌙 Dark Mode** – Fully responsive UI that adapts to user system preferences.
+Real-time Analytics: Track "Critical" stock levels and total inventory value via a bento-style dashboard.
 
----
+Dark Mode Support: Fully responsive UI that adapts to user system preferences.
 
-## 🛠 Tech Stack
+🛠 Tech Stack
+Frontend:
 
-Use code with caution.
+React Native (Expo) - Cross-platform mobile framework.
 
-Frontend	Backend	Database
-React Native (Expo)	Node.js & Express	MongoDB Atlas
-Axios (API)	RESTful Architecture	Mongoose (Modeling)
-Context API (State)	Middleware Logic	Nested Batch Schemas
+Axios - For asynchronous API communication.
+
+Context API - Global state and theme management.
+
+Backend:
+
+Node.js & Express - Scalable RESTful API architecture.
+
+MongoDB Atlas - Cloud-based NoSQL database for flexible product schemas.
+
+Mongoose - Advanced data modeling and middleware for batch calculations.
+
 🚀 Getting Started
 Prerequisites
 Node.js (v18+)
+
 Expo Go app (for physical device testing)
+
 MongoDB Atlas Account
+
 Installation
-Clone the Repository
-bash
-git clone 
+Clone the Repository:
 
-bash
-github.com
+Bash
 
-bash
+git clone https://github.com/yourusername/inventiease.git
+cd inventiease
+Setup Backend:
 
-cd Inventory-Application
+Bash
 
-Setup Backend
-bash
 cd backend
 npm install
 # Create a .env file with your MONGO_URI and PORT
 npm run dev
+Setup Frontend:
 
-Setup Frontend
-bash
+Bash
+
 cd frontend
 npm install
 # Create a .env file with EXPO_PUBLIC_API_URL=http://YOUR_IP:5000/api
 npx expo start
-
 📊 Database Schema (FEFO Optimized)
-The system utilizes a nested Batch Schema within the Product model. This allows the system to calculate totalQuantity and nearestExpiry dynamically.
-javascript
+The system utilizes a nested Batch Schema within the Product model. This allows the system to calculate totalQuantity and nearestExpiry dynamically without redundant data entry.
+
+JavaScript
+
 // Example Batch Logic
 {
   name: "Whole Milk",
   totalQuantity: 50,
   batches: [
-    { qty: 20, expiry: "2026-02-10" }, // Targeted first!
+    { qty: 20, expiry: "2026-02-10" }, // Targeted first
     { qty: 30, expiry: "2026-03-15" }
   ]
 }
-
-Created by Nelson - 2026
