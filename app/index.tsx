@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext"; // Path to your context
+import { useTheme } from "../context/ThemeContext";
 
 export default function WelcomeScreen() {
   const router = useRouter();

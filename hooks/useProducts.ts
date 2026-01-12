@@ -6,15 +6,22 @@ export interface Product {
   id?: string;               // Optional alias for old code
   name: string;
   category: string;
-  imageUrl: string;          // The image URL
-  expiryDate: string;        // We will pull this from the nearest batch
-  totalQuantity: number;     // Total stock
-  quantity?: number;         // Alias for UI consistency
-  receivedDate: string;      // From the database timestamp
+  imageUrl?: string;
+  isPerishable: boolean;
+  expiryDate?: string;
+  totalQuantity: number; 
+  quantity?: number;
+  receivedDate: string
   hasBarcode: boolean;
   barcode?: string;
+    batches?: Array<{
+    batchNumber: string;
+    quantity: number;
+    expiryDate: string;
+  }>;
   internalCode?: string;
 }
+
 
 export const useProducts = () => {
   // Pass the Interface to useState <Product[]>

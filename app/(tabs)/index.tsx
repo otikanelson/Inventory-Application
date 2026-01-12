@@ -1,5 +1,4 @@
-// app/(tabs)/index.tsx
-import React from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,47 +8,98 @@ import {
   Pressable,
   ImageBackground,
   RefreshControl,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Href, useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
 import { ProductCard } from "../../components/ProductCard";
 import { useProducts, Product } from "../../hooks/useProducts";
+
+const SkeletonItem = ({ theme }: { theme: any }) => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.7,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.skeletonBox,
+        { backgroundColor: theme.surface, borderColor: theme.border, opacity },
+      ]}
+    >
+      <View
+        style={[styles.skeletonImage, { backgroundColor: theme.background }]}
+      >
+        <Ionicons name="cube-outline" size={30} color={theme.subtext + "50"} />
+      </View>
+      <View
+        style={[
+          styles.skeletonText,
+          { backgroundColor: theme.subtext + "20", width: "70%" },
+        ]}
+      />
+      <View
+        style={[
+          styles.skeletonText,
+          { backgroundColor: theme.subtext + "20", width: "40%" },
+        ]}
+      />
+    </Animated.View>
+  );
+};
 
 export default function Dashboard() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, error, refresh } = useProducts();
-  const criticalCount = products.filter((p: Product) => {
-  if (!p.expiryDate || p.expiryDate === 'N/A') return false;
-  
-  const today = new Date();
-  const expDate = new Date(p.expiryDate);
-  const diffTime = expDate.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  // Define "Critical" as 7 days or less
-  return diffDays <= 7 && diffDays >= 0; 
-}).length;
+  const [searchQuery, setSearchQuery] = useState("");
 
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
 
-  // Create 6 dummy items for the skeleton effect
-  const skeletonData = Array(6).fill({ _id: "skeleton" });
+  const filteredProducts = useMemo(() => {
+    return products.filter((p: Product) => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  }, [products, searchQuery]);
 
-  // Calculate FEFO Priority (Safely handle empty arrays during loading)
-  const fefoItems =
-    products.length > 0
-      ? [...products]
-          .sort(
-            (a, b) =>
-              new Date(a.expiryDate).getTime() -
-              new Date(b.expiryDate).getTime()
-          )
-          .slice(0, 2)
-      : [];
+  const fefoItems = useMemo(() => {
+    return products
+      .filter((p: Product) => p.isPerishable && p.expiryDate && p.expiryDate !== "N/A")
+      .sort((a, b) => new Date(a.expiryDate!).getTime() - new Date(b.expiryDate!).getTime())
+      .slice(0, 2);
+  }, [products]);
+
+  const criticalCount = useMemo(() => {
+    return products.filter((p: Product) => {
+      if (!p.isPerishable || !p.expiryDate || p.expiryDate === "N/A")
+        return false;
+      const diffDays = Math.ceil(
+        (new Date(p.expiryDate).getTime() - new Date().getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      return diffDays <= 7 && diffDays >= 0;
+    }).length;
+  }, [products]);
 
   const ListHeader = () => (
     <View style={styles.headerContainer}>
@@ -61,81 +111,63 @@ export default function Dashboard() {
           <Text style={[styles.title, { color: theme.text }]}>Dashboard</Text>
         </View>
         <Pressable
-          style={[
-            styles.iconBtn,
-            { backgroundColor: isDark ? "#ffffff15" : "#00000033" },
-          ]}
-          onPress={() => router.push("../alerts")}
+          style={[styles.iconBtn, { backgroundColor: theme.surface }]}
+          onPress={() => router.push("/alerts")}
         >
           <Ionicons name="notifications-outline" size={22} color={theme.text} />
           <View style={[styles.dot, { backgroundColor: theme.notification }]} />
         </Pressable>
       </View>
 
-      <View
-        style={[
-          styles.searchBar,
-          {
-            backgroundColor: theme.surface,
-            borderColor: theme.border,
-            borderWidth: 1,
-          },
-        ]}
-      >
-        <Ionicons name="search" size={20} color={theme.subtext} />
-        <TextInput
-          placeholder="Search Something..."
-          placeholderTextColor={theme.subtext}
-          style={[styles.input, { color: theme.text }]}
-        />
-      </View>
-
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           FEFO Priority
         </Text>
-        <Pressable onPress={() => router.push("../FEFO")}>
+        <Pressable onPress={() => router.push("/FEFO")}>
           <Text style={{ color: theme.primary, fontWeight: "700" }}>
             Show more
           </Text>
         </Pressable>
       </View>
 
-      {/* Show actual FEFO items or a placeholder during loading */}
-      {loading && products.length === 0 ? (
-        <View
-          style={[
-            styles.fefoPlaceholder,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        />
-      ) : (
-        fefoItems.map((item: Product) => (
-          <View
+      {fefoItems.length > 0 ? (
+        fefoItems.map((item) => (
+          <Pressable
             key={item._id}
+            onPress={() => router.push(`/product/${item._id}` as Href)}
             style={[
               styles.fefoItem,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.border,
-                borderWidth: 1,
-              },
+              { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
           >
-            <Text style={{ color: theme.text, fontWeight: "600" }}>
-              {item.name}
-            </Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <View
+                style={[
+                  styles.indicator,
+                  { backgroundColor: theme.notification },
+                ]}
+              />
+              <Text style={{ color: theme.text, fontWeight: "700" }}>
+                {item.name}
+              </Text>
+            </View>
             <Text
               style={{
                 color: theme.notification,
                 fontSize: 12,
-                fontWeight: "700",
+                fontWeight: "800",
               }}
             >
               Exp: {new Date(item.expiryDate).toLocaleDateString()}
             </Text>
-          </View>
+          </Pressable>
         ))
+      ) : (
+        <View style={[styles.emptyFefo, { borderColor: theme.border }]}>
+          <Text style={{ color: theme.subtext }}>No urgent items</Text>
+        </View>
       )}
 
       <View style={styles.statRow}>
@@ -143,34 +175,40 @@ export default function Dashboard() {
           style={[
             styles.statCard,
             {
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
-              borderWidth: 1,
+              backgroundColor: theme.primary + "10",
+              borderColor: theme.primary + "30",
             },
           ]}
         >
-          <Text style={[styles.statVal, { color: theme.text }]}>
-            {loading ? "--" : products.length}
+          <Text style={[styles.statVal, { color: theme.primary }]}>
+            {products.length}
           </Text>
-          <Text style={{ color: theme.subtext, fontSize: 12 }}>
-            Total Items
+          <Text
+            style={{ color: theme.primary, fontSize: 10, fontWeight: "700" }}
+          >
+            TOTAL ITEMS
           </Text>
         </View>
         <View
           style={[
             styles.statCard,
             {
-              backgroundColor: theme.notification + "15",
+              backgroundColor: theme.notification + "10",
               borderColor: theme.notification + "30",
-              borderWidth: 1,
             },
           ]}
         >
           <Text style={[styles.statVal, { color: theme.notification }]}>
-            {loading ? "--" : criticalCount}
+            {criticalCount}
           </Text>
-          <Text style={{ color: theme.notification, fontSize: 12 }}>
-            Critical
+          <Text
+            style={{
+              color: theme.notification,
+              fontSize: 10,
+              fontWeight: "700",
+            }}
+          >
+            CRITICAL
           </Text>
         </View>
       </View>
@@ -178,10 +216,10 @@ export default function Dashboard() {
       <Text
         style={[styles.sectionTitle, { color: theme.text, marginBottom: 15 }]}
       >
-        All Items
+        {searchQuery
+          ? `Results (${filteredProducts.length})`
+          : "Inventory List"}
       </Text>
-
-      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 
@@ -190,29 +228,44 @@ export default function Dashboard() {
       <ImageBackground
         source={backgroundImage}
         style={StyleSheet.absoluteFill}
-        resizeMode="cover"
       />
 
+      {/* SEARCH BAR MOVED OUTSIDE FLATLIST HEADER TO PREVENT KEYBOARD DISMISSAL */}
+      <View style={styles.topFixedSearch}>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <Ionicons name="search" size={20} color={theme.subtext} />
+          <TextInput
+            placeholder="Search name or category..."
+            placeholderTextColor={theme.subtext}
+            style={[styles.input, { color: theme.text }]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+          />
+          {searchQuery !== "" && (
+            <Pressable onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={20} color={theme.subtext} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
       <FlatList
-        data={loading && products.length === 0 ? skeletonData : products}
+        data={loading ? Array(6).fill({}) : filteredProducts}
         keyExtractor={(item, index) =>
-          item._id === "skeleton" ? `skeleton-${index}` : item._id
+          loading ? `skeleton-${index}` : item._id
         }
-        renderItem={({ item }) =>
-          item._id === "skeleton" ? (
-            <View
-              style={[
-                styles.skeletonBox,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            />
-          ) : (
-            <ProductCard item={item} />
-          )
-        }
-        ListHeaderComponent={ListHeader}
         numColumns={2}
         columnWrapperStyle={styles.row}
+        ListHeaderComponent={ListHeader}
+        renderItem={({ item }) =>
+          loading ? <SkeletonItem theme={theme} /> : <ProductCard item={item} />
+        }
         contentContainerStyle={styles.listPadding}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -228,42 +281,45 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  listPadding: { padding: 20, paddingBottom: 120 },
-  headerContainer: { marginBottom: 10 },
+  topFixedSearch: { paddingTop: 60, paddingHorizontal: 20, zIndex: 10 },
+  listPadding: { paddingHorizontal: 20, paddingBottom: 120 },
+  headerContainer: { marginTop: 10, marginBottom: 10 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 50,
     marginBottom: 25,
   },
   greet: { fontSize: 14, fontWeight: "600" },
   title: { fontSize: 32, fontWeight: "900" },
   iconBtn: {
-    height: 45,
-    width: 45,
-    borderRadius: 25,
+    height: 48,
+    width: 48,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ffffff10",
   },
   dot: {
     position: "absolute",
-    top: 10,
-    right: 12,
+    top: 12,
+    right: 14,
     width: 8,
     height: 8,
     borderRadius: 4,
     borderColor: "#FFF",
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    padding: 12,
     borderRadius: 18,
-    marginBottom: 20,
+    borderWidth: 1,
+    paddingHorizontal: 15,
   },
-  input: { marginLeft: 10, flex: 1, fontSize: 16 },
+  input: { marginLeft: 10, flex: 1, fontSize: 16, height: 25, padding: 0 },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -272,35 +328,47 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 20, fontWeight: "800" },
   fefoItem: {
-    padding: 18,
+    padding: 16,
     borderRadius: 20,
-    marginBottom: 10,
+    marginBottom: 8,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
   },
-  fefoPlaceholder: {
-    height: 60,
+  indicator: { width: 4, height: 16, borderRadius: 2 },
+  emptyFefo: {
+    padding: 20,
     borderRadius: 20,
-    marginBottom: 10,
+    borderStyle: "dashed",
     borderWidth: 1,
-    opacity: 0.5,
+    alignItems: "center",
   },
-  statRow: { flexDirection: "row", gap: 15, marginVertical: 25 },
-  statCard: { flex: 1, padding: 15, borderRadius: 22, alignItems: "center" },
-  statVal: { fontSize: 22, fontWeight: "900" },
-  row: { justifyContent: "space-between", gap: 12 },
-  skeletonBox: {
+  statRow: { flexDirection: "row", gap: 12, marginVertical: 20 },
+  statCard: {
     flex: 1,
-    height: 180, // Matches your ProductCard height roughly
-    borderRadius: 24,
-    marginBottom: 12,
+    padding: 12,
+    borderRadius: 22,
+    alignItems: "center",
     borderWidth: 1,
-    opacity: 0.4,
   },
-  errorText: {
-    color: "#ff3b3b",
-    textAlign: "center",
+  statVal: { fontSize: 22, fontWeight: "900" },
+  row: { justifyContent: "space-between" },
+  skeletonBox: {
+    flex: 0.48,
+    height: 210,
+    borderRadius: 24,
+    marginBottom: 15,
+    padding: 12,
+    borderWidth: 1,
+  },
+  skeletonImage: {
+    width: "100%",
+    height: 110,
+    borderRadius: 18,
     marginBottom: 10,
-    fontWeight: "600",
+    justifyContent: "center",
+    alignItems: "center",
   },
+  skeletonText: { height: 12, borderRadius: 6, marginBottom: 8 },
 });

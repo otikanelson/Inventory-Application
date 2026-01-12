@@ -26,4 +26,5 @@ const PORT = process.env.PORT || 5000;
 
 app.use('/api/products', require('./routes/productRoutes'));
 
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`.yellow.bold));

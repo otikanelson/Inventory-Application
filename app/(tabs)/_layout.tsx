@@ -38,6 +38,7 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: theme.primary,
           tabBarInactiveTintColor: theme.subtext,
+          tabBarHideOnKeyboard: true,
           tabBarStyle: {
             position: "absolute",
             backgroundColor: "transparent",
@@ -52,7 +53,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: "Home",
+            title: "Dashboard",
             tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} />,
           }}
         />
@@ -66,6 +67,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="scan"
           options={{
+            tabBarStyle: { display: 'none' },
             title: "",
             tabBarIcon: ({ focused }) => (
               <View style={styles.scanIconWrapper}>
@@ -88,8 +90,8 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="FEFO"
           options={{
-            title: "FEFO",
-            tabBarIcon: ({ color }) => <Ionicons name="list-outline" size={24} color={color} />,
+            title: "stats",
+            tabBarIcon: ({ color }) => <Ionicons name="stats-chart-outline" size={24} color={color} />,
           }}
         />
       </Tabs>

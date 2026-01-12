@@ -1,130 +1,76 @@
-// components/ProductCard.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, Href } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
-import { Product } from '../data/dummyProducts';
+import { Product } from '../hooks/useProducts';
 
 const { width } = Dimensions.get('window');
 
-export const ProductCard = ({ item }: { item: Product & { imageUrl?: string } }) => {
+export const ProductCard = ({ item }: { item: Product }) => {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Use as Href to bypass TypeScript path validation
+  const handlePress = () => {
+    const id = item._id || item.id;
+    router.push(`/product/${id}` as Href);
+  };
+
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      {/* Top Pill Labels */}
+    <Pressable 
+      onPress={handlePress}
+      style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+    >
       <View style={styles.topLabels}>
-        <View style={[styles.pill, { backgroundColor: isDark ? '#ffffff10' : '#f3f4f6' }]}>
-          <Text style={[styles.pillText, { color: theme.text }]}>{item.category || 'Item'}</Text>
+        <View style={[styles.pill, { backgroundColor: theme.background + "80" }]}>
+          <Text style={[styles.pillText, { color: theme.text }]}>
+            {item.category || 'General'}
+          </Text>
         </View>
-        <Text style={[styles.locationCode, { color: theme.subtext }]}>C5-R2</Text>
       </View>
 
-      {/* Image Container with Loader Logic */}
-      <View style={styles.imageContainer}>
-        {/* Placeholder: Shows if no image or until image is loaded */}
+      <View style={[styles.imageWrapper, { backgroundColor: theme.background }]}>
         {!isLoaded && (
-          <View style={styles.placeholderOverlay}>
-            <Ionicons 
-              name="cube-outline" 
-              size={60} 
-              color={isDark ? '#ffffff20' : '#e5e7eb'} 
-            />
-          </View>
+          <Ionicons name="cube-outline" size={40} color={isDark ? '#ffffff10' : '#00000010'} />
         )}
-
-        {/* Real Image */}
         {item.imageUrl && (
           <Image
             source={{ uri: item.imageUrl }}
             style={[styles.image, { opacity: isLoaded ? 1 : 0 }]}
             onLoad={() => setIsLoaded(true)}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         )}
       </View>
 
-      {/* Footer Info */}
       <View style={styles.footer}>
-        <View>
-          <Text style={[styles.quantity, { color: theme.subtext }]}>{item.quantity} Items</Text>
-          <Text style={[styles.name, { color: theme.text }]} numberOfLines={2}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.quantity, { color: theme.primary }]}>
+            {item.quantity} in stock
+          </Text>
+          <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
             {item.name}
           </Text>
         </View>
-        <Pressable style={[styles.arrowBtn, { backgroundColor: isDark ? '#ffffff10' : '#1e293b' }]}>
-          <Ionicons name="arrow-forward" size={18} color={isDark ? theme.text : '#FFF'} />
-        </Pressable>
+        <View style={[styles.arrowBtn, { backgroundColor: theme.primary }]}>
+          <Ionicons name="chevron-forward" size={18} color="#FFF" />
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    width: (width / 2) - 26,
-    height: 280,
-    borderRadius: 30,
-    borderWidth: 1,
-    padding: 15,
-    justifyContent: 'space-between',
-    marginBottom: 5,
-  },
-  topLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  pillText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  locationCode: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  imageContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    borderRadius: 30,
-  },
-  placeholderOverlay: {
-    position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  quantity: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '800',
-    width: 90,
-  },
-  arrowBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  }
+  card: { width: (width / 2) - 27, height: 240, borderRadius: 24, borderWidth: 1, padding: 12, marginBottom: 16 },
+  topLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  pill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  pillText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  imageWrapper: { width: '100%', height: 120, borderRadius: 18, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  image: { width: '100%', height: '100%', position: 'absolute' },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  quantity: { fontSize: 11, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' },
+  name: { fontSize: 16, fontWeight: '800' },
+  arrowBtn: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' }
 });
