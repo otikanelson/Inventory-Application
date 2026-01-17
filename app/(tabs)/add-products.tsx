@@ -1,3 +1,14 @@
+// Goal: Create an "Add Products" screen in React Native with the following features.
+// Features:
+// - Dynamic Modes: Handle 'Registry' (master product creation) and 'Inventory' (batch stock addition) based on navigation params.
+// - Smart Pre-fill: Automatically populate barcode, name, and category when coming from the Scanner.
+// - Locked State: Prevent modification of product identity (name/category) when adding a batch to an existing product.
+// - Image Management: Support camera/gallery selection for product photos with a removal option.
+// - Perishable Logic: Toggle visibility of the Expiry Date field only if the product is marked as perishable.
+// - Centralized Mutations: Utilize useInventoryActions hook for all backend interactions to maintain consistency.
+// - Validation: Ensure required fields (name, barcode, quantity for inventory) are filled before submission.
+// - Navigation Safety: Clear form state and redirect to dashboard upon successful save with toast feedback.
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -15,21 +26,20 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import axios from "axios";
 import { useTheme } from "../../context/ThemeContext";
+import { useInventoryActions } from "../../hooks/useInventoryActions";
 import Toast from "react-native-toast-message";
 
 export default function AddProducts() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const { addProduct, addBatch, isSubmitting } = useInventoryActions();
 
-  const [loading, setLoading] = useState(false);
+  /** State Management **/
   const [image, setImage] = useState<string | null>(null);
   const [isPerishable, setIsPerishable] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-
   const [formData, setFormData] = useState({
     name: "",
     quantity: "",
@@ -42,106 +52,79 @@ export default function AddProducts() {
   const mode = (params.mode as "registry" | "inventory" | "manual") || "manual";
   const isLocked = params.locked === "true";
 
-  // Clear form and sync params
+  /** Sync Scanner Params **/
   useEffect(() => {
     if (params.barcode) {
-      setFormData({
+      setFormData((prev) => ({
+        ...prev,
         barcode: params.barcode as string,
         name: (params.name as string) || "",
         category: (params.category as string) || "",
-        quantity: "",
-        expiryDate: "",
-        price: "",
-      });
-      setImage(null); // Refresh image for new scan
+      }));
       if (params.isPerishable) setIsPerishable(params.isPerishable === "true");
     }
   }, [params.barcode, params.name]);
 
+  /** Image Picker Logic **/
   const pickImage = async (useCamera: boolean) => {
     setShowPicker(false);
     const perm = useCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
     if (!perm.granted) return;
 
+    const options: ImagePicker.ImagePickerOptions = {
+      quality: 0.5,
+      allowsEditing: true,
+      aspect: [1, 1],
+    };
+
     let result = useCamera
-      ? await ImagePicker.launchCameraAsync({
-          quality: 0.5,
-          allowsEditing: true,
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          quality: 0.5,
-          allowsEditing: true,
-        });
+      ? await ImagePicker.launchCameraAsync(options)
+      : await ImagePicker.launchImageLibraryAsync(options);
 
     if (!result.canceled) setImage(result.assets[0].uri);
   };
 
+  /** Form Submission Logic **/
   const handleSave = async () => {
     if (!formData.barcode || !formData.name) {
-      return Toast.show({
-        type: "error",
-        text1: "Missing Info",
-        text2: "Barcode and Name are required.",
-      });
+      return Toast.show({ type: "error", text1: "Missing Identity", text2: "Barcode and Name are required." });
     }
 
     try {
-      setLoading(true);
-
-      // SCENARIO A: REGISTRY MODE ONLY
       if (mode === "registry") {
-        await axios.post(`${API_URL}/products/registry/add`, {
-          ...formData,
-          isPerishable,
-          imageUrl: image || "", // Fix: Sending image to registry
-        });
-        Toast.show({
-          type: "success",
-          text1: "Registry Updated",
-          text2: `${formData.name} is now a registered product.`,
-        });
-      }
-
-      // SCENARIO B: INVENTORY MODE ONLY (OR MANUAL)
-      else {
-        await axios.post(`${API_URL}/products`, {
-          ...formData,
-          isPerishable,
+        /** Case 1: Create Master Entry in Global Registry **/
+        await addProduct({
+          name: formData.name,
+          barcode: formData.barcode,
+          category: formData.category,
+          isPerishable: isPerishable,
           imageUrl: image || "",
-          hasBarcode: true, // Fix: Explicitly setting the barcode flag
+          hasBarcode: params.hasBarcode !== "false",
+          // Convert strings to numbers here
+          quantity: formData.quantity ? Number(formData.quantity) : 0,
+          // If your Product type supports price, convert it too
+          // price: Number(formData.price) 
         });
-        Toast.show({
-          type: "success",
-          text1: "Inventory Updated",
-          text2: "New batch added successfully.",
+        
+        Toast.show({ type: "success", text1: "Global Registry Updated", text2: `${formData.name} is now registered.` });
+      } else {
+        /** Case 2: Add specific stock batch to existing product **/
+        if (!formData.quantity) return Toast.show({ type: "error", text1: "Qty Required", text2: "Enter stock amount." });
+        
+        await addBatch(formData.barcode, {
+          batchNumber: `BN-${Date.now().toString().slice(-6)}`,
+          quantity: Number(formData.quantity), // Fixed: Convert to number
+          expiryDate: formData.expiryDate || "N/A",
         });
+        Toast.show({ type: "success", text1: "Stock Added", text2: "New batch pushed to inventory." });
       }
 
-      // REFRESH: Clear all states and return to a clean form
-      setFormData({
-        name: "",
-        quantity: "",
-        expiryDate: "",
-        category: "",
-        price: "",
-        barcode: "",
-      });
-      setImage(null);
-      setIsPerishable(false);
-
-      // Small delay to let Toast show before redirecting
       setTimeout(() => router.replace("/(tabs)"), 1000);
     } catch (err) {
-      console.error(err);
-      Toast.show({
-        type: "error",
-        text1: "Save Failed",
-        text2: "Please check your connection.",
-      });
-    } finally {
-      setLoading(false);
+      Toast.show({ type: "error", text1: "Save Failed", text2: "Check backend connection." });
     }
   };
 
@@ -159,7 +142,7 @@ export default function AddProducts() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.title, { color: theme.text }]}>
-          {mode === "registry" ? "Register Item" : "Add Product"}
+          {mode === "registry" ? "Master Entry" : "Restock Item"}
         </Text>
 
         <Pressable
@@ -170,27 +153,28 @@ export default function AddProducts() {
           <Text
             style={{ color: theme.text, fontWeight: "700", marginLeft: 10 }}
           >
-            Use Smart Scanner
+            Smart Scanner
           </Text>
         </Pressable>
 
-        <Text style={styles.divider}>OR ENTER DETAILS</Text>
+        <Text style={styles.divider}>PRODUCT IDENTITY</Text>
 
-        <Text style={styles.label}>BARCODE</Text>
+        <Text style={styles.label}>BARCODE / ID</Text>
         <TextInput
           style={[
             styles.input,
-            { backgroundColor: theme.surface, color: theme.text },
+            { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, color: theme.text },
           ]}
           value={formData.barcode}
+          editable={!isLocked}
+          placeholder="Identification Code"
           onChangeText={(t) => setFormData({ ...formData, barcode: t })}
-          placeholder="Barcode..."
         />
 
         <View style={styles.photoRow}>
           <View style={styles.photoBoxContainer}>
             <Pressable
-              style={[styles.photoBox, { backgroundColor: theme.surface }]}
+              style={[styles.photoBox, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
               onPress={() => setShowPicker(true)}
             >
               {image ? (
@@ -208,10 +192,10 @@ export default function AddProducts() {
               </Pressable>
             )}
           </View>
-          <View>
-            <Text style={[styles.label, { marginTop: 0 }]}>PRODUCT PHOTO</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { marginTop: 0 }]}>IMAGE SOURCE</Text>
             <Text style={{ color: theme.subtext, fontSize: 12 }}>
-              Visual proof for {mode === "registry" ? "Registry" : "Inventory"}
+              Visual reference for the master registry entry.
             </Text>
           </View>
         </View>
@@ -221,7 +205,7 @@ export default function AddProducts() {
           style={[
             styles.input,
             isLocked && styles.locked,
-            { backgroundColor: theme.surface, color: theme.text },
+            { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, color: theme.text },
           ]}
           value={formData.name}
           editable={!isLocked}
@@ -235,7 +219,7 @@ export default function AddProducts() {
               style={[
                 styles.input,
                 isLocked && styles.locked,
-                { backgroundColor: theme.surface, color: theme.text },
+                { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1,  color: theme.text },
               ]}
               value={formData.category}
               editable={!isLocked}
@@ -243,11 +227,11 @@ export default function AddProducts() {
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>PRICE</Text>
+            <Text style={styles.label}>UNIT PRICE</Text>
             <TextInput
               style={[
                 styles.input,
-                { backgroundColor: theme.surface, color: theme.text },
+                { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1,  color: theme.text },
               ]}
               keyboardType="numeric"
               value={formData.price}
@@ -259,13 +243,16 @@ export default function AddProducts() {
         {mode === "registry" && (
           <View style={styles.toggleRow}>
             <Text style={{ color: theme.text, fontWeight: "bold" }}>
-              Is this item Perishable?
+              Require Expiry Tracking?
             </Text>
-            <Switch value={isPerishable} onValueChange={setIsPerishable} />
+            <Switch
+              value={isPerishable}
+              onValueChange={setIsPerishable}
+              trackColor={{ true: theme.primary }}
+            />
           </View>
         )}
 
-        {/* Quantity is only mandatory for Inventory mode */}
         {mode !== "registry" && (
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
@@ -273,7 +260,7 @@ export default function AddProducts() {
               <TextInput
                 style={[
                   styles.input,
-                  { backgroundColor: theme.surface, color: theme.text },
+                { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1,  color: theme.text },
                 ]}
                 keyboardType="numeric"
                 value={formData.quantity}
@@ -286,7 +273,7 @@ export default function AddProducts() {
                 <TextInput
                   style={[
                     styles.input,
-                    { backgroundColor: theme.surface, color: theme.text },
+                { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1,  color: theme.text },
                   ]}
                   value={formData.expiryDate}
                   placeholder="YYYY-MM-DD"
@@ -302,18 +289,21 @@ export default function AddProducts() {
         <Pressable
           style={[styles.completeBtn, { backgroundColor: theme.primary }]}
           onPress={handleSave}
-          disabled={loading}
+          disabled={isSubmitting}
         >
-          {loading ? (
+          {isSubmitting ? (
             <ActivityIndicator color="#FFF" />
           ) : (
             <Text style={styles.completeBtnText}>
-              {mode === "registry" ? "Add to Registry" : "Add to Inventory"}
+              {mode === "registry"
+                ? "Complete Registration"
+                : "Confirm Batch Stock"}
             </Text>
           )}
         </Pressable>
       </ScrollView>
 
+      {/* Image Choice Modal */}
       <Modal visible={showPicker} transparent animationType="slide">
         <View style={styles.pickerOverlay}>
           <View
@@ -322,7 +312,7 @@ export default function AddProducts() {
             <Pressable style={styles.pickerOpt} onPress={() => pickImage(true)}>
               <Ionicons name="camera" size={24} color={theme.primary} />
               <Text style={{ color: theme.text, marginLeft: 15 }}>
-                Take Photo
+                Take New Photo
               </Text>
             </Pressable>
             <Pressable
@@ -331,7 +321,7 @@ export default function AddProducts() {
             >
               <Ionicons name="images" size={24} color={theme.primary} />
               <Text style={{ color: theme.text, marginLeft: 15 }}>
-                Choose from Gallery
+                Pick from Gallery
               </Text>
             </Pressable>
             <Pressable
@@ -339,7 +329,7 @@ export default function AddProducts() {
               onPress={() => setShowPicker(false)}
             >
               <Text style={{ color: "#FF4444", fontWeight: "bold" }}>
-                Cancel
+                Dismiss
               </Text>
             </Pressable>
           </View>
@@ -377,7 +367,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   input: { padding: 16, borderRadius: 15, fontSize: 16 },
-  locked: { opacity: 0.6 },
+  locked: { opacity: 0.5 },
   row: { flexDirection: "row", gap: 15 },
   photoRow: {
     flexDirection: "row",

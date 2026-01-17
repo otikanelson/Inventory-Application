@@ -1,16 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const { addProduct, getProducts } = require('../controllers/productController');
+
+const { 
+  addProduct, 
+  getProducts, 
+  getProductById 
+} = require('../controllers/productController');
+
 const registryController = require('../controllers/registryController');
 
-
+// Route for /api/products
 router.route('/')
-  .post(addProduct)    // Triggered by "Save Product" button
-  .get(getProducts);   // Triggered by Dashboard load
+  .post(addProduct)
+  .get(getProducts);
 
-  
-  router.get('/registry/lookup/:barcode', registryController.lookupBarcode);
-  router.post('/registry/add', registryController.addToRegistry);
+// Route for /api/products/:id (This handles BOTH mongo ID and Barcode)
+router.route('/:id').get(getProductById);
 
+// External Registry routes
+router.get('/registry/lookup/:barcode', registryController.lookupBarcode);
+router.post('/registry/add', registryController.addToRegistry);
 
 module.exports = router;

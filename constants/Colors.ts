@@ -1,9 +1,9 @@
 // constants/Colors.ts
 export const Colors = {
   light: {
-    background: '#F2F4F7',
-    tabSurface: '#dfdfdfff',
-    surface: '#f0f0f0ff', // Search bars, categories
+    background: '#dcdddfff',
+    tabSurface: '#bebebeff',
+    surface: '#e2e2e2ff', // Search bars, categories
     text: '#1A1C1E',
     subtext: '#6C727F',
     primary: '#6366F1',

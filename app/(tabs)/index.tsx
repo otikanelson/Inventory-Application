@@ -1,227 +1,66 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  TextInput,
   Pressable,
   ImageBackground,
   RefreshControl,
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Href, useRouter } from "expo-router";
+import { useRouter, Href } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
-import { ProductCard } from "../../components/ProductCard";
-import { useProducts, Product } from "../../hooks/useProducts";
-
-const SkeletonItem = ({ theme }: { theme: any }) => {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  return (
-    <Animated.View
-      style={[
-        styles.skeletonBox,
-        { backgroundColor: theme.surface, borderColor: theme.border, opacity },
-      ]}
-    >
-      <View
-        style={[styles.skeletonImage, { backgroundColor: theme.background }]}
-      >
-        <Ionicons name="cube-outline" size={30} color={theme.subtext + "50"} />
-      </View>
-      <View
-        style={[
-          styles.skeletonText,
-          { backgroundColor: theme.subtext + "20", width: "70%" },
-        ]}
-      />
-      <View
-        style={[
-          styles.skeletonText,
-          { backgroundColor: theme.subtext + "20", width: "40%" },
-        ]}
-      />
-    </Animated.View>
-  );
-};
+import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
+import { useProducts } from "../../hooks/useProducts";
 
 export default function Dashboard() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
-  const { products, loading, error, refresh } = useProducts();
-  const [searchQuery, setSearchQuery] = useState("");
+  const { products, loading, refresh, inventoryStats } = useProducts();
+
+  const [activeTab, setActiveTab] = useState<"stocked" | "sold">("stocked");
+  const [displayLimit, setDisplayLimit] = useState(6);
 
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((p: Product) => 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
-  }, [products, searchQuery]);
-
   const fefoItems = useMemo(() => {
     return products
-      .filter((p: Product) => p.isPerishable && p.expiryDate && p.expiryDate !== "N/A")
-      .sort((a, b) => new Date(a.expiryDate!).getTime() - new Date(b.expiryDate!).getTime())
-      .slice(0, 2);
+      .map((p) => {
+        const earliest = p.batches?.reduce((earliest: Date | null, b) => {
+          if (!b?.expiryDate || b.expiryDate === "N/A") return earliest;
+          const d = new Date(b.expiryDate);
+          return !earliest || d < earliest ? d : earliest;
+        }, null);
+        return { product: p, earliest };
+      })
+      .filter(({ product, earliest }) => product.isPerishable && earliest)
+      .sort((a, b) => a.earliest!.getTime() - b.earliest!.getTime())
+      .slice(0, 2)
+      .map(({ product }) => product);
   }, [products]);
 
-  const criticalCount = useMemo(() => {
-    return products.filter((p: Product) => {
-      if (!p.isPerishable || !p.expiryDate || p.expiryDate === "N/A")
-        return false;
-      const diffDays = Math.ceil(
-        (new Date(p.expiryDate).getTime() - new Date().getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-      return diffDays <= 7 && diffDays >= 0;
-    }).length;
-  }, [products]);
+  const visibleData = useMemo(() => {
+    const baseData =
+      activeTab === "stocked"
+        ? [...products].sort(
+            (a, b) =>
+              new Date(b.updatedAt || 0).getTime() -
+              new Date(a.updatedAt || 0).getTime()
+          )
+        : products.filter((p) => p.quantity === 0);
 
-  const ListHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.greet, { color: theme.subtext }]}>
-            Inventory Manager
-          </Text>
-          <Text style={[styles.title, { color: theme.text }]}>Dashboard</Text>
-        </View>
-        <Pressable
-          style={[styles.iconBtn, { backgroundColor: theme.surface }]}
-          onPress={() => router.push("/alerts")}
-        >
-          <Ionicons name="notifications-outline" size={22} color={theme.text} />
-          <View style={[styles.dot, { backgroundColor: theme.notification }]} />
-        </Pressable>
-      </View>
+    return baseData.slice(0, displayLimit);
+  }, [products, activeTab, displayLimit]);
 
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          FEFO Priority
-        </Text>
-        <Pressable onPress={() => router.push("/FEFO")}>
-          <Text style={{ color: theme.primary, fontWeight: "700" }}>
-            Show more
-          </Text>
-        </Pressable>
-      </View>
-
-      {fefoItems.length > 0 ? (
-        fefoItems.map((item) => (
-          <Pressable
-            key={item._id}
-            onPress={() => router.push(`/product/${item._id}` as Href)}
-            style={[
-              styles.fefoItem,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
-            >
-              <View
-                style={[
-                  styles.indicator,
-                  { backgroundColor: theme.notification },
-                ]}
-              />
-              <Text style={{ color: theme.text, fontWeight: "700" }}>
-                {item.name}
-              </Text>
-            </View>
-            <Text
-              style={{
-                color: theme.notification,
-                fontSize: 12,
-                fontWeight: "800",
-              }}
-            >
-              Exp: {new Date(item.expiryDate).toLocaleDateString()}
-            </Text>
-          </Pressable>
-        ))
-      ) : (
-        <View style={[styles.emptyFefo, { borderColor: theme.border }]}>
-          <Text style={{ color: theme.subtext }}>No urgent items</Text>
-        </View>
-      )}
-
-      <View style={styles.statRow}>
-        <View
-          style={[
-            styles.statCard,
-            {
-              backgroundColor: theme.primary + "10",
-              borderColor: theme.primary + "30",
-            },
-          ]}
-        >
-          <Text style={[styles.statVal, { color: theme.primary }]}>
-            {products.length}
-          </Text>
-          <Text
-            style={{ color: theme.primary, fontSize: 10, fontWeight: "700" }}
-          >
-            TOTAL ITEMS
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.statCard,
-            {
-              backgroundColor: theme.notification + "10",
-              borderColor: theme.notification + "30",
-            },
-          ]}
-        >
-          <Text style={[styles.statVal, { color: theme.notification }]}>
-            {criticalCount}
-          </Text>
-          <Text
-            style={{
-              color: theme.notification,
-              fontSize: 10,
-              fontWeight: "700",
-            }}
-          >
-            CRITICAL
-          </Text>
-        </View>
-      </View>
-
-      <Text
-        style={[styles.sectionTitle, { color: theme.text, marginBottom: 15 }]}
-      >
-        {searchQuery
-          ? `Results (${filteredProducts.length})`
-          : "Inventory List"}
-      </Text>
-    </View>
-  );
+  const handleLoadMore = () => {
+    if (displayLimit < products.length) {
+      setDisplayLimit((prev) => prev + 6);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -230,44 +69,15 @@ export default function Dashboard() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* SEARCH BAR MOVED OUTSIDE FLATLIST HEADER TO PREVENT KEYBOARD DISMISSAL */}
-      <View style={styles.topFixedSearch}>
-        <View
-          style={[
-            styles.searchBar,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
-          <Ionicons name="search" size={20} color={theme.subtext} />
-          <TextInput
-            placeholder="Search name or category..."
-            placeholderTextColor={theme.subtext}
-            style={[styles.input, { color: theme.text }]}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCorrect={false}
-          />
-          {searchQuery !== "" && (
-            <Pressable onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={20} color={theme.subtext} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
       <FlatList
-        data={loading ? Array(6).fill({}) : filteredProducts}
+        data={loading ? Array(6).fill({}) : visibleData}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
         keyExtractor={(item, index) =>
           loading ? `skeleton-${index}` : item._id
         }
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        ListHeaderComponent={ListHeader}
-        renderItem={({ item }) =>
-          loading ? <SkeletonItem theme={theme} /> : <ProductCard item={item} />
-        }
-        contentContainerStyle={styles.listPadding}
-        showsVerticalScrollIndicator={false}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
             refreshing={loading}
@@ -275,27 +85,373 @@ export default function Dashboard() {
             tintColor={theme.primary}
           />
         }
+        contentContainerStyle={styles.listPadding}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.headerContainer}>
+            {/* TOP BAR */}
+            <View style={styles.header}>
+              <View>
+                <Text style={[styles.greet, { color: theme.subtext }]}>
+                  Staff Frontline
+                </Text>
+                <Text style={[styles.title, { color: theme.text }]}>
+                  InventiEase
+                </Text>
+              </View>
+              <View style={styles.headerRight}>
+                <Pressable
+                  onPress={() => router.push("/alerts")}
+                  style={[styles.iconBtn, { backgroundColor: theme.surface }]}
+                >
+                  <Ionicons
+                    name="notifications-outline"
+                    size={20}
+                    color={theme.text}
+                  />
+                  <View
+                    style={[
+                      styles.dot,
+                      { backgroundColor: theme.notification },
+                    ]}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push("/settings" as any)}
+                  style={[
+                    styles.iconBtn,
+                    { backgroundColor: theme.surface, marginLeft: 10 },
+                  ]}
+                >
+                  <Ionicons
+                    name="settings-outline"
+                    size={20}
+                    color={theme.text}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* STATS HUD */}
+            <View style={styles.statGrid}>
+              <View
+                style={[styles.mainStat, { backgroundColor: theme.primary }]}
+              >
+                <Text style={styles.statLabelMain}>TOTAL_RECORDS</Text>
+                <Text style={styles.statValueMain}>
+                  {inventoryStats.totalUnits}
+                </Text>
+              </View>
+              <View style={styles.smallStatsCol}>
+                <View
+                  style={[
+                    styles.smallStat,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.smallStatVal, { color: theme.text }]}>
+                    {inventoryStats.expiringSoonCount}
+                  </Text>
+                  <Text
+                    style={[styles.smallStatLabel, { color: theme.subtext }]}
+                  >
+                    EXPIRING SOON
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.smallStat,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.smallStatVal, { color: theme.text }]}>
+                    {inventoryStats.lowStockCount}
+                  </Text>
+                  <Text
+                    style={[styles.smallStatLabel, { color: theme.subtext }]}
+                  >
+                    LOW_STOCK
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* QUICK ACTIONS SECTION */}
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: theme.text, marginBottom: 15 },
+              ]}
+            >
+              Quick Actions
+            </Text>
+            <View style={styles.actionGrid}>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/scan",
+                    params: { initialTab: "registry" },
+                  })
+                }
+                style={[
+                  styles.actionCard,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={[styles.actionIcon, { backgroundColor: "#4C6FFF20" }]}
+                >
+                  <Ionicons name="scan-outline" size={22} color="#4C6FFF" />
+                </View>
+                <Text style={[styles.actionText, { color: theme.text }]}>
+                  Scan
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push("/inventory")}
+                style={[
+                  styles.actionCard,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={[styles.actionIcon, { backgroundColor: "#FF950020" }]}
+                >
+                  <Ionicons name="search-outline" size={22} color="#FF9500" />
+                </View>
+                <Text style={[styles.actionText, { color: theme.text }]}>
+                  Search
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push("/add-products")}
+                style={[
+                  styles.actionCard,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={[styles.actionIcon, { backgroundColor: "#34C75920" }]}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color="#34C759"
+                  />
+                </View>
+                <Text style={[styles.actionText, { color: theme.text }]}>
+                  Manual
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push("/FEFO")}
+                style={[
+                  styles.actionCard,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={[styles.actionIcon, { backgroundColor: "#FF2D5520" }]}
+                >
+                  <Ionicons
+                    name="bar-chart-outline"
+                    size={22}
+                    color="#FF2D55"
+                  />
+                </View>
+                <Text style={[styles.actionText, { color: theme.text }]}>
+                  Reports
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* FEFO SECTION */}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                FEFO Priority
+              </Text>
+              <Pressable onPress={() => router.push("/FEFO")}>
+                <Text
+                  style={{
+                    color: theme.primary,
+                    fontWeight: "700",
+                    fontSize: 13,
+                  }}
+                >
+                  Show more
+                </Text>
+              </Pressable>
+            </View>
+
+            {fefoItems.length > 0 ? (
+              fefoItems.map((item) => (
+                <Pressable
+                  key={item._id}
+                  onPress={() => router.push(`/product/${item._id}` as Href)}
+                  style={[
+                    styles.fefoItem,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.indicator,
+                        { backgroundColor: theme.notification },
+                      ]}
+                    />
+                    <Text style={{ color: theme.text, fontWeight: "700" }}>
+                      {item.name}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: theme.notification,
+                      fontSize: 12,
+                      fontWeight: "800",
+                    }}
+                  >
+                    Exp:{" "}
+                    {new Date(
+                      item.batches?.[0]?.expiryDate || ""
+                    ).toLocaleDateString()}
+                  </Text>
+                </Pressable>
+              ))
+            ) : (
+              <View style={[styles.emptyFefo, { borderColor: theme.border }]}>
+                <Text style={{ color: theme.subtext }}>No urgent items</Text>
+              </View>
+            )}
+
+            {/* ACTIVITY TABS */}
+            <View style={styles.tabContainer}>
+              <Pressable
+                onPress={() => {
+                  setActiveTab("stocked");
+                  setDisplayLimit(6);
+                }}
+                style={[
+                  styles.tab,
+                  activeTab === "stocked" && {
+                    borderBottomColor: theme.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color:
+                        activeTab === "stocked" ? theme.text : theme.subtext,
+                    },
+                  ]}
+                >
+                  Recently Stocked
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setActiveTab("sold");
+                  setDisplayLimit(6);
+                }}
+                style={[
+                  styles.tab,
+                  activeTab === "sold" && { borderBottomColor: theme.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color: activeTab === "sold" ? theme.text : theme.subtext,
+                    },
+                  ]}
+                >
+                  Recently Sold
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        }
+        renderItem={({ item }) =>
+          loading ? <ProductCardSkeleton /> : <ProductCard item={item} />
+        }
+        ListFooterComponent={
+          displayLimit < products.length && !loading ? (
+            <ActivityIndicator
+              style={{ marginVertical: 20 }}
+              color={theme.primary}
+            />
+          ) : null
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  topFixedSearch: { paddingTop: 60, paddingHorizontal: 20, zIndex: 10 },
+  actionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 25,
+  },
+  actionCard: {
+    flex: 1,
+    height: "45%",
+    minWidth: "48%",
+    padding: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  actionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actionText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
   listPadding: { paddingHorizontal: 20, paddingBottom: 120 },
-  headerContainer: { marginTop: 10, marginBottom: 10 },
+  headerContainer: { paddingTop: 60, marginBottom: 10 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 25,
   },
-  greet: { fontSize: 14, fontWeight: "600" },
-  title: { fontSize: 32, fontWeight: "900" },
+  headerRight: { flexDirection: "row" },
+  greet: { fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
+  title: { fontSize: 28, fontWeight: "900" },
   iconBtn: {
-    height: 48,
-    width: 48,
-    borderRadius: 16,
+    height: 44,
+    width: 44,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
@@ -305,28 +461,43 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 12,
     right: 14,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderColor: "#FFF",
-    borderWidth: 1.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
+  statGrid: { flexDirection: "row", gap: 12, marginBottom: 25 },
+  mainStat: {
+    flex: 1.2,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    justifyContent: "center",
+    minHeight: 110,
+  },
+  statLabelMain: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  statValueMain: { color: "#FFF", fontSize: 36, fontWeight: "900" },
+  smallStatsCol: { flex: 1, gap: 10 },
+  smallStat: {
+    flex: 1,
+    height: "30%",
     borderRadius: 18,
+    padding: 12,
     borderWidth: 1,
-    paddingHorizontal: 15,
+    justifyContent: "center",
   },
-  input: { marginLeft: 10, flex: 1, fontSize: 16, height: 25, padding: 0 },
+  smallStatVal: { fontSize: 18, fontWeight: "800" },
+  smallStatLabel: { fontSize: 9, fontWeight: "700" },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 15,
+    marginTop: 10,
   },
-  sectionTitle: { fontSize: 20, fontWeight: "800" },
+  sectionTitle: { fontSize: 18, fontWeight: "800" },
   fefoItem: {
     padding: 16,
     borderRadius: 20,
@@ -343,32 +514,21 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderWidth: 1,
     alignItems: "center",
-  },
-  statRow: { flexDirection: "row", gap: 12, marginVertical: 20 },
-  statCard: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 22,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  statVal: { fontSize: 22, fontWeight: "900" },
-  row: { justifyContent: "space-between" },
-  skeletonBox: {
-    flex: 0.48,
-    height: 210,
-    borderRadius: 24,
-    marginBottom: 15,
-    padding: 12,
-    borderWidth: 1,
-  },
-  skeletonImage: {
-    width: "100%",
-    height: 110,
-    borderRadius: 18,
     marginBottom: 10,
-    justifyContent: "center",
-    alignItems: "center",
   },
-  skeletonText: { height: 12, borderRadius: 6, marginBottom: 8 },
+  tabContainer: {
+    flexDirection: "row",
+    marginTop: 20,
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
+  },
+  tab: {
+    paddingVertical: 10,
+    marginRight: 20,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabText: { fontSize: 14, fontWeight: "800" },
+  row: { justifyContent: "space-between" },
 });

@@ -17,7 +17,7 @@ exports.addProduct = async (req, res) => {
       isPerishable 
     } = req.body;
 
-    // 1. Check if product already exists (by barcode or internal code)
+    //Check if product already exists (by barcode or internal code)
     let product = null;
     if (barcode || internalCode) {
       product = await Product.findOne({ 
@@ -28,7 +28,7 @@ exports.addProduct = async (req, res) => {
       });
     }
 
-    // 2. Prepare the new batch object
+    //Prepare the new batch object
     const newBatch = {
       batchNumber: `BN-${Date.now()}`,
       quantity: Number(quantity),
@@ -39,8 +39,6 @@ exports.addProduct = async (req, res) => {
     if (expiryDate && expiryDate.trim() !== "") {
       newBatch.expiryDate = new Date(expiryDate);
     } 
-    // Do NOT set it to null; leaving it undefined prevents validation trigger 
-    // if your schema has required: false but the validator is picky.
 
     if (product) {
       // SCENARIO A: Product exists, add a new batch to it
@@ -99,7 +97,7 @@ exports.getProducts = async (req, res) => {
       return {
         ...p._doc,
         id: p._id, 
-        quantity: p.totalQuantity, // Uses the virtual/getter in your model
+        quantity: p.totalQuantity,
         expiryDate: sortedBatches.length > 0 ? sortedBatches[0].expiryDate : 'N/A',
         receivedDate: p.createdAt,
         hasBarcode: p.hasBarcode ?? !!p.barcode 
@@ -107,6 +105,84 @@ exports.getProducts = async (req, res) => {
     });
 
     res.status(200).json({ success: true, data: products });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Get single product by ID or Barcode
+// @route   GET /api/products/:id
+exports.getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let product;
+
+    //Check if the 'id' looks like a MongoDB ObjectID
+    const isMongoId = id.match(/^[0-9a-fA-F]{24}$/);
+
+    if (isMongoId) {
+      product = await Product.findById(id);
+    }
+
+    //Fallback: Search by Barcode if not found by ID
+    if (!product) {
+      product = await Product.findOne({ barcode: id });
+    }
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      data: {
+        ...product._doc,
+        quantity: product.totalQuantity
+      } 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Process a sale (FEFO Stock Deduction)
+// @route   POST /api/products/process-sale
+exports.processSale = async (req, res) => {
+  try {
+    const { items } = req.body; // Array of { productId, quantitySold }
+
+    for (const item of items) {
+      const product = await Product.findById(item.id);
+      if (!product) continue;
+
+      let remainingToDeduct = item.quantitySold;
+
+      // FEFO Logic: Sort batches by expiry date (Oldest/Soonest first)
+      // Non-perishables/No-expiry batches are handled last
+      product.batches.sort((a, b) => {
+        if (!a.expiryDate) return 1;
+        if (!b.expiryDate) return -1;
+        return new Date(a.expiryDate) - new Date(b.expiryDate);
+      });
+
+      for (let batch of product.batches) {
+        if (remainingToDeduct <= 0) break;
+
+        if (batch.quantity >= remainingToDeduct) {
+          batch.quantity -= remainingToDeduct;
+          remainingToDeduct = 0;
+        } else {
+          remainingToDeduct -= batch.quantity;
+          batch.quantity = 0;
+        }
+      }
+
+      // Optional: Remove batches that hit 0 to keep DB clean
+      product.batches = product.batches.filter(b => b.quantity > 0);
+      await product.save();
+    }
+
+    res.status(200).json({ success: true, message: 'Inventory updated via FEFO' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

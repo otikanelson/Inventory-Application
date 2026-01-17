@@ -54,27 +54,31 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: "Dashboard",
-            tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="grid-outline" size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="inventory"
           options={{
             title: "Inventory",
-            tabBarIcon: ({ color }) => <Ionicons name="cube-outline" size={24} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="cube-outline" size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="scan"
           options={{
-            tabBarStyle: { display: 'none' },
+            tabBarStyle: { display: "none" },
             title: "",
             tabBarIcon: ({ focused }) => (
               <View style={styles.scanIconWrapper}>
-                <Ionicons 
-                  name="scan-circle-outline" 
-                  size={32} 
-                  color={focused ? theme.primary : theme.text} 
+                <Ionicons
+                  name="scan-circle-outline"
+                  size={32}
+                  color={focused ? theme.primary : theme.text}
                 />
               </View>
             ),
@@ -84,14 +88,18 @@ export default function TabsLayout() {
           name="add-products"
           options={{
             title: "Add",
-            tabBarIcon: ({ color }) => <Ionicons name="add-circle-outline" size={24} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="add-circle-outline" size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="FEFO"
           options={{
-            title: "stats",
-            tabBarIcon: ({ color }) => <Ionicons name="stats-chart-outline" size={24} color={color} />,
+            title: "FEFO",
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="hourglass" size={24} color={color} />
+            ),
           }}
         />
       </Tabs>
@@ -106,12 +114,10 @@ const styles = StyleSheet.create({
     width: width,
   },
   scanIconWrapper: {
-    // No background color or border here to keep it transparent
     justifyContent: "center",
     alignItems: "center",
     width: 60,
     height: 60,
-    // Adjust this to sit perfectly in the "U" dip
-    marginTop: Platform.OS === "ios" ? 10 : 5, 
+    marginTop: Platform.OS === "ios" ? 10 : 5,
   },
 });

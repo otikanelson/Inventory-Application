@@ -14,6 +14,7 @@ const ProductSchema = new mongoose.Schema(
     barcode: { type: String, unique: true, sparse: true },
     internalCode: { type: String, unique: true, sparse: true, trim: true },
     category: { type: String, required: true },
+    isPerishable: {type: Boolean,default: false},
 
     imageUrl: { type: String, default: "https://via.placeholder.com/150" },
 
