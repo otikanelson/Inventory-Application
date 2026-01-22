@@ -3,7 +3,8 @@ Enterprise-Grade Stock Management with Intelligent Expiry Alerts
 ## 🚀 Overview
 SmartInventory is a robust inventory management solution built to solve the "hidden waste" problem in retail and pharmacy. It features a high-performance Smart Scanner, real-time Expiry Alerts, and a secure Admin Control Suite.
 
-✨ Key Features
+### ✨ Key Features
+
 🔍 Smart Scanner: Instant barcode recognition and automatic product registry lookups.
 
 🔔 Alerts System: Color-coded urgency levels (Critical, High, Early) based on custom date thresholds.
@@ -27,7 +28,7 @@ Database: MongoDB via Mongoose
 
 Styling: StyleSheet with Dynamic Theme Injection
 
-⚙️ Installation & Setup
+### ⚙️ Installation & Setup
 Follow these steps to get a local copy up and running.
 
 1. Prerequisites
@@ -60,7 +61,7 @@ Scan the QR Code using your phone’s camera (iOS) or the Expo Go app (Android).
 
 The app will bundle and open on your device!
 
-📱 Folder Structure
+## 📱 Folder Structure
 Plaintext
 
 .
@@ -73,8 +74,9 @@ Plaintext
 ├── context/             # Theme & Global State
 ├── hooks/               # useAlerts, useInventory, etc.
 └── utils/               # Formatter & Validation helpers
-🛡️ Security Note
-The Admin Panel is protected by a 4-digit PIN system.
+
+## 🛡️ Security Note
+A 4-digit PIN system protects the Admin Panel.
 
 Default PIN: 1234 (Can be updated in Admin Settings)
 
