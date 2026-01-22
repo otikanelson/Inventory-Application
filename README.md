@@ -1,78 +1,95 @@
-📦 InventiEase: Smart Inventory & FEFO Management
-InventiEase is a robust cross-platform mobile application built to modernize inventory tracking. Unlike traditional systems, InventiEase focuses on perishability management, ensuring that items nearing expiry are prioritized for sale or use, significantly reducing operational waste.
+## 📦 SmartInventory & Expiry Tracker
+Enterprise-Grade Stock Management with Intelligent Expiry Alerts
+## 🚀 Overview
+SmartInventory is a robust inventory management solution built to solve the "hidden waste" problem in retail and pharmacy. It features a high-performance Smart Scanner, real-time Expiry Alerts, and a secure Admin Control Suite.
 
 ✨ Key Features
-Smart Batch Tracking: Manage multiple batches of the same product with unique expiry dates and quantities.
+🔍 Smart Scanner: Instant barcode recognition and automatic product registry lookups.
 
-FEFO Priority Dashboard: Automatically identifies and highlights items that need to be cleared first based on the "First-Expired-First-Out" principle.
+🔔 Alerts System: Color-coded urgency levels (Critical, High, Early) based on custom date thresholds.
 
-Image Capture: Integrated camera functionality to snap product photos for instant visual identification.
+🏗️ Bento Dashboard: High-level analytics showing total records vs. unique product types.
 
-Barcode Integration: Quick-scan capabilities for rapid inventory audits (supports EAN/UPC).
+🔐 Admin Security: PIN-protected inventory management and sales data visualization.
 
-Real-time Analytics: Track "Critical" stock levels and total inventory value via a bento-style dashboard.
+🌓 Dynamic Theme: Full support for high-contrast Dark Mode and elegant Light Mode.
 
-Dark Mode Support: Fully responsive UI that adapts to user system preferences.
+## 🛠️ Tech Stack
+Frontend: React Native (Expo SDK 51)
 
-🛠 Tech Stack
-Frontend:
+Navigation: Expo Router (File-based routing)
 
-React Native (Expo) - Cross-platform mobile framework.
+State & Logic: Custom Hooks & Context API
 
-Axios - For asynchronous API communication.
+Backend: Node.js with Express
 
-Context API - Global state and theme management.
+Database: MongoDB via Mongoose
 
-Backend:
+Styling: StyleSheet with Dynamic Theme Injection
 
-Node.js & Express - Scalable RESTful API architecture.
+⚙️ Installation & Setup
+Follow these steps to get a local copy up and running.
 
-MongoDB Atlas - Cloud-based NoSQL database for flexible product schemas.
+1. Prerequisites
+Install Node.js (LTS version)
 
-Mongoose - Advanced data modeling and middleware for batch calculations.
+Install Git
 
-🚀 Getting Started
-Prerequisites
-Node.js (v18+)
+Install the Expo Go app on your iOS or Android device.
 
-Expo Go app (for physical device testing)
-
-MongoDB Atlas Account
-
-Installation
-Clone the Repository:
-
+2. Clone the Repository
 Bash
 
-git clone https://github.com/yourusername/inventiease.git
-cd inventiease
-Setup Backend:
-
+git clone https://github.com/yourusername/smart-inventory.git
+cd smart-inventory
+3. Install Dependencies
 Bash
 
-cd backend
 npm install
-# Create a .env file with your MONGO_URI and PORT
-npm run dev
-Setup Frontend:
+4. Environment Configuration
+Create a .env file in the root directory and add your backend URL:
 
+Code snippet
+
+EXPO_PUBLIC_API_URL=https://your-api-endpoint.com/api
+5. Launch the App
 Bash
 
-cd frontend
-npm install
-# Create a .env file with EXPO_PUBLIC_API_URL=http://YOUR_IP:5000/api
 npx expo start
-📊 Database Schema (FEFO Optimized)
-The system utilizes a nested Batch Schema within the Product model. This allows the system to calculate totalQuantity and nearestExpiry dynamically without redundant data entry.
+Scan the QR Code using your phone’s camera (iOS) or the Expo Go app (Android).
 
-JavaScript
+The app will bundle and open on your device!
 
-// Example Batch Logic
-{
-  name: "Whole Milk",
-  totalQuantity: 50,
-  batches: [
-    { qty: 20, expiry: "2026-02-10" }, // Targeted first
-    { qty: 30, expiry: "2026-03-15" }
-  ]
-}
+📱 Folder Structure
+Plaintext
+
+.
+├── app/                 # Expo Router (Pages)
+│   ├── (tabs)/          # Main user navigation
+│   ├── (admin)/         # Protected admin sector
+│   └── _layout.tsx      # Root configuration
+├── assets/              # Images, Fonts, Icons
+├── components/          # Reusable UI elements
+├── context/             # Theme & Global State
+├── hooks/               # useAlerts, useInventory, etc.
+└── utils/               # Formatter & Validation helpers
+🛡️ Security Note
+The Admin Panel is protected by a 4-digit PIN system.
+
+Default PIN: 1234 (Can be updated in Admin Settings)
+
+Session Guard: Navigating away from the Admin sector automatically locks the session.
+
+🤝 Contributing
+Fork the Project
+
+Create your Feature Branch (git checkout -b feature/AmazingFeature)
+
+Commit your Changes (git commit -m 'Add some AmazingFeature')
+
+Push to the Branch (git push origin feature/AmazingFeature)
+
+Open a Pull Request
+
+📄 License
+Distributed under the MIT License. See LICENSE for more information.
