@@ -13,9 +13,9 @@ const app = express();
 app.use(express.json());
 
 // Middleware
-app.use(express.json()); // Allows the server to read JSON from the frontend
-app.use(cors());         // Allows your Expo app to communicate with this server
-app.use(morgan('dev'));  // Logs API requests to the terminal
+app.use(express.json());
+app.use(cors());
+app.use(morgan('dev'));
 
 // Basic Route for testing
 app.get('/', (req, res) => {
@@ -24,7 +24,9 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+// Routes
 app.use('/api/products', require('./routes/productRoutes'));
-
+app.use('/api/analytics', require('./routes/analyticsRoutes'));
+app.use('/api/alerts', require('./routes/alertsRoutes'));
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`.yellow.bold));

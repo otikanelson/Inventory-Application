@@ -14,21 +14,20 @@ const ProductSchema = new mongoose.Schema(
     barcode: { type: String, unique: true, sparse: true },
     internalCode: { type: String, unique: true, sparse: true, trim: true },
     category: { type: String, required: true },
-    isPerishable: {type: Boolean,default: false},
+    isPerishable: { type: Boolean, default: false },
 
-    imageUrl: { type: String, default: "https://via.placeholder.com/150" },
+    imageUrl: { type: String, default: "cube" },
 
     batches: [BatchSchema],
 
-    // These fields help the frontend stats
     totalQuantity: { type: Number, default: 0 },
-    hasBarcode: { type: Boolean, default: false }, // Useful for UI logic
+    hasBarcode: { type: Boolean, default: false },
 
     thresholdValue: { type: Number, default: 10 },
     demandRate: { type: Number, default: 0 },
     lastRestocked: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 ProductSchema.pre("save", async function () {

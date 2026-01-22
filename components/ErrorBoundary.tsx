@@ -1,7 +1,6 @@
 import React, { Component, ReactNode, ErrorInfo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
 
 interface Props {
   children: ReactNode;
@@ -47,40 +46,51 @@ class ErrorBoundaryClass extends Component<Props, State> {
   }
 }
 
-// Functional component for the error UI (uses hooks)
+// Functional component for the error UI (uses hooks but NOT useTheme)
 const ErrorFallback: React.FC<{ error: Error | null; onReset: () => void }> = ({ 
   error, 
   onReset 
 }) => {
-  const { theme } = useTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  // Use inline colors instead of theme since ThemeProvider might not be available
+  const colors = {
+    background: isDark ? '#0E0F13' : '#dcdddfff',
+    text: isDark ? '#F9FAFB' : '#1A1C1E',
+    subtext: isDark ? '#9CA3AF' : '#6C727F',
+    primary: '#6366F1',
+    notification: '#EF4444',
+    surface: isDark ? '#111E36' : '#e2e2e2ff',
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.iconBox, { backgroundColor: theme.notification + '20' }]}>
-        <Ionicons name="warning-outline" size={64} color={theme.notification} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.iconBox, { backgroundColor: colors.notification + '20' }]}>
+        <Ionicons name="warning-outline" size={64} color={colors.notification} />
       </View>
 
-      <Text style={[styles.title, { color: theme.text }]}>
+      <Text style={[styles.title, { color: colors.text }]}>
         Something Went Wrong
       </Text>
 
-      <Text style={[styles.message, { color: theme.subtext }]}>
+      <Text style={[styles.message, { color: colors.subtext }]}>
         {error?.message || 'An unexpected error occurred'}
       </Text>
 
       {__DEV__ && (
-        <View style={[styles.debugBox, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.debugTitle, { color: theme.primary }]}>
+        <View style={[styles.debugBox, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.debugTitle, { color: colors.primary }]}>
             Debug Info:
           </Text>
-          <Text style={[styles.debugText, { color: theme.text }]}>
+          <Text style={[styles.debugText, { color: colors.text }]}>
             {error?.stack || 'No stack trace available'}
           </Text>
         </View>
       )}
 
       <Pressable 
-        style={[styles.button, { backgroundColor: theme.primary }]}
+        style={[styles.button, { backgroundColor: colors.primary }]}
         onPress={onReset}
       >
         <Text style={styles.buttonText}>Try Again</Text>

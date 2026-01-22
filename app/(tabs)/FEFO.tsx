@@ -56,7 +56,7 @@ export default function FEFOScreen() {
 
   const getStatusColor = (days: number) => {
     if (days < 0) return "#FF4444";     // Expired (Red)
-    if (days < 7) return "#FF8C00";     // Critical (Dark Orange)
+    if (days < 7) return "#ff3700ff";     // Critical (Dark Orange)
     if (days < 30) return "#FFD700";    // Warning (Yellow/Gold)
     return "#4CAF50";                   // Stable (Green)
   };
@@ -88,7 +88,7 @@ export default function FEFOScreen() {
           
           return (
             <Pressable 
-              onPress={() => router.push(`/product/${item.parentId}` as Href)}
+              onPress={() => router.push(`/product/${item.parentId}`)}
               style={[styles.technicalRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
             >
               {/* Vertical Urgency Indicator (Heat Map) */}
@@ -97,7 +97,7 @@ export default function FEFOScreen() {
               <View style={styles.mainInfo}>
                 <View style={styles.topLine}>
                   <Text style={[styles.batchId, { color: theme.subtext }]}>
-                    BATCH_#{item.batchNumber?.slice(-6).toUpperCase() || "MANUAL"}
+                    BATCH_#{item.batchNumber?.slice(-7).toUpperCase() || "MANUAL"}
                   </Text>
                   <Text style={[styles.daysCounter, { color: statusColor }]}>
                     {item.daysLeft < 0 ? 'EXPIRED' : `${item.daysLeft}d_REMAINING`}

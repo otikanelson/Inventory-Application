@@ -24,8 +24,8 @@ export default function Dashboard() {
   const [displayLimit, setDisplayLimit] = useState(6);
 
   const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
+  ? require("../../assets/images/Background7.png")
+  : require("../../assets/images/Background9.png");
 
   const fefoItems = useMemo(() => {
     return products
@@ -51,7 +51,7 @@ export default function Dashboard() {
               new Date(b.updatedAt || 0).getTime() -
               new Date(a.updatedAt || 0).getTime()
           )
-        : products.filter((p) => p.quantity === 0);
+        : products.filter((p) => p.totalQuantity === 0);
 
     return baseData.slice(0, displayLimit);
   }, [products, activeTab, displayLimit]);
@@ -69,7 +69,7 @@ export default function Dashboard() {
         style={StyleSheet.absoluteFill}
       />
 
-      <FlatList
+        <FlatList
         data={loading ? Array(6).fill({}) : visibleData}
         numColumns={2}
         columnWrapperStyle={styles.row}

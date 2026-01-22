@@ -182,7 +182,7 @@ export const ProductCard = ({ item }: { item: Product }) => {
       <View style={styles.footer}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.quantityLabel, { color: theme.subtext }]}>
-            {item.quantity} Items
+            {item.totalQuantity} Items
           </Text>
           <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
             {item.name}

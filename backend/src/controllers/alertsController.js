@@ -1,0 +1,324 @@
+// backend/src/controllers/alertsController.js
+// Multi-threshold alert system controller
+
+const Product = require('../models/Product');
+const AlertSettings = require('../models/AlertSettings');
+
+/**
+ * Helper: Determine alert level based on days until expiry
+ */
+const getAlertLevel = (daysLeft, thresholds) => {
+  if (daysLeft < 0) {
+    return { level: 'expired', color: '#8B0000', priority: 4 };
+  } else if (daysLeft <= thresholds.critical) {
+    return { level: 'critical', color: '#FF4444', priority: 3 };
+  } else if (daysLeft <= thresholds.highUrgency) {
+    return { level: 'high', color: '#FF9500', priority: 2 };
+  } else if (daysLeft <= thresholds.earlyWarning) {
+    return { level: 'early', color: '#FFCC00', priority: 1 };
+  }
+  return { level: 'normal', color: '#34C759', priority: 0 };
+};
+
+/**
+ * Helper: Generate recommended actions based on alert level
+ */
+const getRecommendedActions = (alertLevel, daysLeft, quantity) => {
+  const actions = [];
+  
+  switch (alertLevel) {
+    case 'expired':
+      actions.push({
+        type: 'remove',
+        label: 'Remove Immediately',
+        icon: 'trash',
+        description: 'Product has expired',
+        urgent: true
+      });
+      break;
+      
+    case 'critical':
+      actions.push({
+        type: 'markdown',
+        label: 'Discount 30-50%',
+        icon: 'pricetag',
+        description: `Only ${daysLeft} days left`,
+        urgent: true
+      });
+      if (quantity > 5) {
+        actions.push({
+          type: 'transfer',
+          label: 'Transfer Stock',
+          icon: 'swap-horizontal',
+          description: 'Move to faster location',
+          urgent: false
+        });
+      }
+      break;
+      
+    case 'high':
+      actions.push({
+        type: 'markdown',
+        label: 'Discount 15-25%',
+        icon: 'pricetag',
+        description: 'Boost sales velocity',
+        urgent: false
+      });
+      actions.push({
+        type: 'promote',
+        label: 'Feature Item',
+        icon: 'megaphone',
+        description: 'Add to promotions',
+        urgent: false
+      });
+      break;
+      
+    case 'early':
+      actions.push({
+        type: 'monitor',
+        label: 'Monitor Sales',
+        icon: 'eye',
+        description: 'Track daily movement',
+        urgent: false
+      });
+      actions.push({
+        type: 'adjust',
+        label: 'Adjust Reorder',
+        icon: 'refresh',
+        description: 'Reduce next order',
+        urgent: false
+      });
+      break;
+  }
+  
+  return actions;
+};
+
+/**
+ * @desc    Get all alerts with multi-threshold categorization
+ * @route   GET /api/alerts
+ * @query   ?level=critical&category=dairy&sortBy=urgency
+ */
+exports.getAlerts = async (req, res) => {
+  try {
+    const { level, category, sortBy = 'urgency' } = req.query;
+    
+    // Get or create default settings
+    let settings = await AlertSettings.findOne({ userId: 'default' });
+    if (!settings) {
+      settings = await AlertSettings.create({
+        userId: 'default',
+        thresholds: { critical: 7, highUrgency: 14, earlyWarning: 30 }
+      });
+    }
+    
+    const thresholds = settings.thresholds;
+    const now = new Date();
+    
+    // Get all perishable products with batches
+    const products = await Product.find({
+      isPerishable: true,
+      'batches.0': { $exists: true }
+    });
+    
+    const alerts = [];
+    
+    // Generate alerts from each batch
+    for (const product of products) {
+      for (const batch of product.batches) {
+        if (!batch.expiryDate) continue;
+        
+        const expiryDate = new Date(batch.expiryDate);
+        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+        
+        // Only include items within earlyWarning threshold or expired
+        if (daysLeft <= thresholds.earlyWarning || daysLeft < 0) {
+          const alertInfo = getAlertLevel(daysLeft, thresholds);
+          const actions = getRecommendedActions(alertInfo.level, daysLeft, batch.quantity);
+          
+          alerts.push({
+            alertId: `${product._id}_${batch.batchNumber}`,
+            productId: product._id,
+            productName: product.name,
+            category: product.category,
+            batchNumber: batch.batchNumber,
+            quantity: batch.quantity,
+            expiryDate: batch.expiryDate,
+            daysLeft,
+            level: alertInfo.level,
+            color: alertInfo.color,
+            priority: alertInfo.priority,
+            actions,
+            imageUrl: product.imageUrl,
+            barcode: product.barcode
+          });
+        }
+      }
+    }
+    
+    // Apply filters
+    let filtered = alerts;
+    
+    if (level && level !== 'all') {
+      filtered = filtered.filter(a => a.level === level);
+    }
+    
+    if (category && category !== 'all') {
+      filtered = filtered.filter(a => 
+        a.category?.toLowerCase() === category.toLowerCase()
+      );
+    }
+    
+    // Sort alerts
+    filtered.sort((a, b) => {
+      if (sortBy === 'urgency') {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return a.daysLeft - b.daysLeft;
+      } else if (sortBy === 'expiry') {
+        return a.daysLeft - b.daysLeft;
+      } else if (sortBy === 'quantity') {
+        return b.quantity - a.quantity;
+      }
+      return 0;
+    });
+    
+    // Calculate summary
+    const summary = {
+      total: alerts.length,
+      expired: alerts.filter(a => a.level === 'expired').length,
+      critical: alerts.filter(a => a.level === 'critical').length,
+      high: alerts.filter(a => a.level === 'high').length,
+      early: alerts.filter(a => a.level === 'early').length,
+      totalUnits: alerts.reduce((sum, a) => sum + a.quantity, 0),
+      urgentCount: alerts.filter(a => a.priority >= 3).length
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        alerts: filtered,
+        summary,
+        thresholds,
+        filters: { level, category, sortBy }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get Alerts Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get alert threshold settings
+ * @route   GET /api/alerts/settings
+ */
+exports.getSettings = async (req, res) => {
+  try {
+    let settings = await AlertSettings.findOne({ userId: 'default' });
+    
+    if (!settings) {
+      settings = await AlertSettings.create({
+        userId: 'default',
+        thresholds: { critical: 7, highUrgency: 14, earlyWarning: 30 }
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: settings
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Update alert threshold settings
+ * @route   PUT /api/alerts/settings
+ */
+exports.updateSettings = async (req, res) => {
+  try {
+    const { thresholds, notificationSettings } = req.body;
+    
+    let settings = await AlertSettings.findOne({ userId: 'default' });
+    
+    if (!settings) {
+      settings = new AlertSettings({ userId: 'default' });
+    }
+    
+    if (thresholds) {
+      // Validate threshold ordering
+      const { critical, highUrgency, earlyWarning } = thresholds;
+      
+      if (critical >= highUrgency) {
+        return res.status(400).json({
+          success: false,
+          error: 'Critical threshold must be less than High Urgency threshold'
+        });
+      }
+      
+      if (highUrgency >= earlyWarning) {
+        return res.status(400).json({
+          success: false,
+          error: 'High Urgency threshold must be less than Early Warning threshold'
+        });
+      }
+      
+      settings.thresholds = { ...settings.thresholds, ...thresholds };
+    }
+    
+    if (notificationSettings) {
+      settings.notificationSettings = {
+        ...settings.notificationSettings,
+        ...notificationSettings
+      };
+    }
+    
+    await settings.save();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Settings updated successfully',
+      data: settings
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Acknowledge an alert
+ * @route   POST /api/alerts/acknowledge
+ */
+exports.acknowledgeAlert = async (req, res) => {
+  try {
+    const { alertId, action, notes } = req.body;
+    
+    // Log acknowledgment (in production, save to AuditLog model)
+    console.log(`Alert ${alertId} acknowledged with action: ${action}`, notes);
+    
+    res.status(200).json({
+      success: true,
+      message: `Alert acknowledged: ${action}`,
+      data: { alertId, action, timestamp: new Date() }
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};

@@ -1,14 +1,3 @@
-// Goal: Create an "Add Products" screen in React Native with the following features.
-// Features:
-// - Dynamic Modes: Handle 'Registry' (master product creation) and 'Inventory' (batch stock addition) based on navigation params.
-// - Smart Pre-fill: Automatically populate barcode, name, and category when coming from the Scanner.
-// - Locked State: Prevent modification of product identity (name/category) when adding a batch to an existing product.
-// - Image Management: Support camera/gallery selection for product photos with a removal option.
-// - Perishable Logic: Toggle visibility of the Expiry Date field only if the product is marked as perishable.
-// - Centralized Mutations: Utilize useInventoryActions hook for all backend interactions to maintain consistency.
-// - Validation: Ensure required fields (name, barcode, quantity for inventory) are filled before submission.
-// - Navigation Safety: Clear form state and redirect to dashboard upon successful save with toast feedback.
-
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -27,19 +16,21 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../../context/ThemeContext";
-import { useInventoryActions } from "../../hooks/useInventoryActions";
 import Toast from "react-native-toast-message";
+import axios from "axios";
 
 export default function AddProducts() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { addProduct, addBatch, isSubmitting } = useInventoryActions();
+
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
 
   /** State Management **/
   const [image, setImage] = useState<string | null>(null);
   const [isPerishable, setIsPerishable] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     quantity: "",
@@ -89,42 +80,110 @@ export default function AddProducts() {
 
   /** Form Submission Logic **/
   const handleSave = async () => {
-    if (!formData.barcode || !formData.name) {
-      return Toast.show({ type: "error", text1: "Missing Identity", text2: "Barcode and Name are required." });
+    // Trim and validate inputs
+    const cleanBarcode = formData.barcode.trim();
+    const cleanName = formData.name.trim();
+    
+    if (!cleanBarcode || !cleanName) {
+      return Toast.show({ 
+        type: "error", 
+        text1: "Missing Identity", 
+        text2: "Barcode and Name are required." 
+      });
     }
+
+    setIsSubmitting(true);
 
     try {
       if (mode === "registry") {
-        /** Case 1: Create Master Entry in Global Registry **/
-        await addProduct({
-          name: formData.name,
-          barcode: formData.barcode,
-          category: formData.category,
+        /** REGISTRY MODE: Create entry in GlobalProduct database ONLY **/
+        await axios.post(`${API_URL}/registry/add`, {
+          barcode: cleanBarcode,
+          name: cleanName,
+          category: formData.category.trim(),
           isPerishable: isPerishable,
+          imageUrl: image || ""
+        });
+        
+        Toast.show({ 
+          type: "success", 
+          text1: "Global Registry Updated", 
+          text2: `${cleanName} is now registered. Add stock to begin tracking.` 
+        });
+      } else {
+        /** INVENTORY/MANUAL MODE: Ensure product exists in registry, then add stock **/
+        
+        // First, check if product exists in GlobalProduct registry
+        let productInRegistry = false;
+        try {
+          const lookupResponse = await axios.get(`${API_URL}/registry/lookup/${cleanBarcode}`);
+          productInRegistry = lookupResponse.data.found;
+        } catch (err) {
+          // If lookup fails, assume not in registry
+          productInRegistry = false;
+        }
+        
+        // If not in registry, create it first (critical for manual entry)
+        if (!productInRegistry) {
+          try {
+            await axios.post(`${API_URL}/registry/add`, {
+              barcode: cleanBarcode,
+              name: cleanName,
+              category: formData.category.trim(),
+              isPerishable: isPerishable,
+              imageUrl: image || ""
+            });
+          } catch (registryError: any) {
+            // If product already exists error, that's fine - continue
+            if (!registryError.response?.data?.message?.includes("already in registry")) {
+              throw registryError;
+            }
+          }
+        }
+        
+        // Now validate quantity for inventory
+        if (!formData.quantity || Number(formData.quantity) <= 0) {
+          setIsSubmitting(false);
+          return Toast.show({ 
+            type: "error", 
+            text1: "Qty Required", 
+            text2: "Enter stock amount greater than 0." 
+          });
+        }
+        
+        // Finally, add batch to Product collection
+        await axios.post(API_URL, {
+          barcode: cleanBarcode,
+          name: cleanName,
+          category: formData.category.trim(),
+          quantity: Number(formData.quantity),
+          expiryDate: formData.expiryDate || undefined,
+          price: Number(formData.price) || 0,
           imageUrl: image || "",
           hasBarcode: params.hasBarcode !== "false",
-          // Convert strings to numbers here
-          quantity: formData.quantity ? Number(formData.quantity) : 0,
-          // If your Product type supports price, convert it too
-          // price: Number(formData.price) 
+          isPerishable: isPerishable
         });
         
-        Toast.show({ type: "success", text1: "Global Registry Updated", text2: `${formData.name} is now registered.` });
-      } else {
-        /** Case 2: Add specific stock batch to existing product **/
-        if (!formData.quantity) return Toast.show({ type: "error", text1: "Qty Required", text2: "Enter stock amount." });
-        
-        await addBatch(formData.barcode, {
-          batchNumber: `BN-${Date.now().toString().slice(-6)}`,
-          quantity: Number(formData.quantity), // Fixed: Convert to number
-          expiryDate: formData.expiryDate || "N/A",
+        Toast.show({ 
+          type: "success", 
+          text1: "Stock Added", 
+          text2: `${cleanName} registered and stocked successfully.` 
         });
-        Toast.show({ type: "success", text1: "Stock Added", text2: "New batch pushed to inventory." });
       }
 
       setTimeout(() => router.replace("/(tabs)"), 1000);
-    } catch (err) {
-      Toast.show({ type: "error", text1: "Save Failed", text2: "Check backend connection." });
+    } catch (err: any) {
+      console.error("Save Error:", err);
+      
+      // Better error messaging
+      const errorMsg = err.response?.data?.message || err.message || "Unknown error";
+      Toast.show({
+        type: "error",
+        text1: "Save Failed",
+        text2: errorMsg
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -226,18 +285,6 @@ export default function AddProducts() {
               onChangeText={(t) => setFormData({ ...formData, category: t })}
             />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>UNIT PRICE</Text>
-            <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1,  color: theme.text },
-              ]}
-              keyboardType="numeric"
-              value={formData.price}
-              onChangeText={(t) => setFormData({ ...formData, price: t })}
-            />
-          </View>
         </View>
 
         {mode === "registry" && (
@@ -255,6 +302,18 @@ export default function AddProducts() {
 
         {mode !== "registry" && (
           <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>UNIT PRICE</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1,  color: theme.text },
+                ]}
+                keyboardType="numeric"
+                value={formData.price}
+                onChangeText={(t) => setFormData({ ...formData, price: t })}
+              />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>QUANTITY *</Text>
               <TextInput

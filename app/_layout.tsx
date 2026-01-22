@@ -10,7 +10,9 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="alerts" />
+          <Stack.Screen name="settings" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="product/[id]" />
         </Stack>
         <Toast />
       </ThemeProvider>

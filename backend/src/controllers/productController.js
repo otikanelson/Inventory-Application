@@ -83,26 +83,31 @@ exports.addProduct = async (req, res) => {
 
 // @desc    Get all products with FEFO expiry and total quantity
 // @route   GET /api/products
+// @access  Public
+// NOTE: Only returns products with stock (totalQuantity > 0)
 exports.getProducts = async (req, res) => {
   try {
     const rawProducts = await Product.find().sort({ updatedAt: -1 });
 
-    const products = rawProducts.map(p => {
-      // FEFO: Find the batch that is expiring soonest
-      // We filter out batches without expiry dates first
-      const sortedBatches = [...p.batches]
-        .filter(b => b.expiryDate)
-        .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+    const products = rawProducts
+      // CRITICAL FIX: Filter out products with no batches or 0 total quantity
+      .filter(p => p.batches && p.batches.length > 0 && p.totalQuantity > 0)
+      .map(p => {
+        // FEFO: Find the batch that is expiring soonest
+        // We filter out batches without expiry dates first
+        const sortedBatches = [...p.batches]
+          .filter(b => b.expiryDate)
+          .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-      return {
-        ...p._doc,
-        id: p._id, 
-        quantity: p.totalQuantity,
-        expiryDate: sortedBatches.length > 0 ? sortedBatches[0].expiryDate : 'N/A',
-        receivedDate: p.createdAt,
-        hasBarcode: p.hasBarcode ?? !!p.barcode 
-      };
-    });
+        return {
+          ...p._doc,
+          id: p._id, 
+          quantity: p.totalQuantity,
+          expiryDate: sortedBatches.length > 0 ? sortedBatches[0].expiryDate : 'N/A',
+          receivedDate: p.createdAt,
+          hasBarcode: p.hasBarcode ?? !!p.barcode 
+        };
+      });
 
     res.status(200).json({ success: true, data: products });
   } catch (error) {
