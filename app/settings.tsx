@@ -168,6 +168,78 @@ export default function SettingsScreen() {
         </SettingRow>
       </View>
 
+            {/* ADMINISTRATION SECTION */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+          ADMINISTRATION
+        </Text>
+        <SettingRow
+          icon="shield"
+          label="Admin Dashboard"
+          description="Manage inventory, sales, and security"
+          onPress={() => setPinModal(true)}
+        >
+          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+        </SettingRow>
+      </View>
+
+      {/* Admin Login Modal */}
+      <Modal visible={pinModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+          >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Admin Login
+            </Text>
+            <TextInput
+              style={[
+                styles.pinInput,
+                { color: theme.text, borderColor: theme.border },
+              ]}
+              placeholder="Enter PIN"
+              secureTextEntry
+              keyboardType="numeric"
+              value={pin}
+              onChangeText={setPin}
+            />
+            <Pressable
+              style={[
+                styles.saveBtn,
+                { backgroundColor: theme.primary, width: "100%" },
+              ]}
+              onPress={handleAdminAuth}
+            >
+              <Text style={styles.saveBtnText}>ACCESS DASHBOARD</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setPinModal(false)}
+              style={{ marginTop: 15 }}
+            >
+              <Text style={{ color: theme.subtext }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+            {/* OPERATIONS SECTION */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+          OPERATIONS
+        </Text>
+        <SettingRow
+          icon="barcode-outline"
+          label="Rapid Scan"
+          description="Skip confirmation modals after scanning"
+        >
+          <Switch
+            value={rapidScan}
+            onValueChange={setRapidScan}
+            trackColor={{ true: theme.primary }}
+          />
+        </SettingRow>
+      </View>
+
       {/* ALERT THRESHOLDS SECTION */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
@@ -290,78 +362,6 @@ export default function SettingsScreen() {
             <Text style={styles.saveBtnText}>SAVE THRESHOLDS</Text>
           </Pressable>
         </View>
-      </View>
-
-      {/* ADMINISTRATION SECTION */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          ADMINISTRATION
-        </Text>
-        <SettingRow
-          icon="shield"
-          label="Admin Dashboard"
-          description="Manage inventory, sales, and security"
-          onPress={() => setPinModal(true)}
-        >
-          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-        </SettingRow>
-      </View>
-
-      {/* Admin Login Modal */}
-      <Modal visible={pinModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
-          >
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Admin Login
-            </Text>
-            <TextInput
-              style={[
-                styles.pinInput,
-                { color: theme.text, borderColor: theme.border },
-              ]}
-              placeholder="Enter PIN"
-              secureTextEntry
-              keyboardType="numeric"
-              value={pin}
-              onChangeText={setPin}
-            />
-            <Pressable
-              style={[
-                styles.saveBtn,
-                { backgroundColor: theme.primary, width: "100%" },
-              ]}
-              onPress={handleAdminAuth}
-            >
-              <Text style={styles.saveBtnText}>ACCESS DASHBOARD</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setPinModal(false)}
-              style={{ marginTop: 15 }}
-            >
-              <Text style={{ color: theme.subtext }}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* OPERATIONS SECTION */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          OPERATIONS
-        </Text>
-        <SettingRow
-          icon="barcode-outline"
-          label="Rapid Scan"
-          description="Skip confirmation modals after scanning"
-        >
-          <Switch
-            value={rapidScan}
-            onValueChange={setRapidScan}
-            trackColor={{ true: theme.primary }}
-          />
-        </SettingRow>
       </View>
 
         <Text style={styles.versionText}>

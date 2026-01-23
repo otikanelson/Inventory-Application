@@ -56,7 +56,7 @@ export default function FEFOScreen() {
 
   const getStatusColor = (days: number) => {
     if (days < 0) return "#FF4444";     // Expired (Red)
-    if (days < 7) return "#ff3700ff";     // Critical (Dark Orange)
+    if (days < 7) return "#ff6a00ff";     // Critical (Dark Orange)
     if (days < 30) return "#FFD700";    // Warning (Yellow/Gold)
     return "#4CAF50";                   // Stable (Green)
   };

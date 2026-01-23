@@ -58,12 +58,6 @@ export default function AdminStats() {
               AI-Driven Insights & Forecasting
             </Text>
           </View>
-          <Pressable
-            onPress={() => router.push("../(tabs)/")}
-            style={[styles.backBtn, { backgroundColor: theme.surface }]}
-          >
-            <Ionicons name="home-outline" size={22} color={theme.text} />
-          </Pressable>
         </View>
 
         {/* Risk Overview Cards */}
@@ -127,7 +121,7 @@ export default function AdminStats() {
             <View style={styles.summaryItem}>
               <Ionicons name="cash-outline" size={24} color={theme.primary} />
               <Text style={[styles.summaryValue, { color: theme.text }]}>
-                â‚¦{(summary?.totalSales || 0).toLocaleString()}
+                {(summary?.totalSales || 0).toLocaleString()}
               </Text>
               <Text style={[styles.summaryLabel, { color: theme.subtext }]}>
                 Total Revenue
@@ -173,7 +167,7 @@ export default function AdminStats() {
         <View style={styles.listSection}>
           <View style={styles.listHeader}>
             <Text style={[styles.listTitle, { color: theme.text }]}>
-              ðŸš¨ High Risk Products
+              High Risk Products
             </Text>
             <Text style={[styles.listCount, { color: theme.subtext }]}>
               {topRisk.length} items
@@ -200,7 +194,7 @@ export default function AdminStats() {
                   {item.productName}
                 </Text>
                 <Text style={[styles.productMeta, { color: theme.subtext }]}>
-                  Stock: {item.currentStock} â€¢ Velocity:{" "}
+                  Stock: {item.currentStock}  •  Velocity:{" "}
                   {item.velocity.toFixed(1)}/day
                 </Text>
               </View>
@@ -225,7 +219,7 @@ export default function AdminStats() {
         <View style={styles.listSection}>
           <View style={styles.listHeader}>
             <Text style={[styles.listTitle, { color: theme.text }]}>
-              ðŸ“ˆ Top Selling Products
+              Top Selling Products
             </Text>
             <Text style={[styles.listCount, { color: theme.subtext }]}>
               {topSelling.length} items
@@ -256,7 +250,7 @@ export default function AdminStats() {
                   {item.productName}
                 </Text>
                 <Text style={[styles.productMeta, { color: theme.subtext }]}>
-                  {item.velocity.toFixed(1)} units/day â€¢ {item.trend} trend
+                  {item.velocity.toFixed(1)} units/day  •  {item.trend} trend
                 </Text>
               </View>
               <Ionicons
@@ -285,19 +279,19 @@ export default function AdminStats() {
             </Text>
           </View>
           <Text style={[styles.insightsText, { color: theme.text }]}>
-            â€¢ Apply 30-50% discount on {summary?.highRiskProducts || 0} high
+            • Apply 30-50% discount on {summary?.highRiskProducts || 0} high
             risk items
           </Text>
           <Text style={[styles.insightsText, { color: theme.text }]}>
-            â€¢ Monitor {summary?.mediumRiskProducts || 0} medium risk items
+            • Monitor {summary?.mediumRiskProducts || 0} medium risk items
             closely
           </Text>
           <Text style={[styles.insightsText, { color: theme.text }]}>
-            â€¢ Restock top {topSelling.length} fast-moving products within 7
+            • Restock top {topSelling.length} fast-moving products within 7
             days
           </Text>
           <Text style={[styles.insightsText, { color: theme.text }]}>
-            â€¢ Average demand velocity:{" "}
+            • Average demand velocity:{" "}
             {(summary?.averageVelocity || 0).toFixed(1)} units/day
           </Text>
         </View>
