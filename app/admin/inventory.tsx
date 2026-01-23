@@ -200,7 +200,10 @@ export default function AdminInventory() {
           renderItem={({ item }) => (
             <Pressable
               onPress={() =>
-                router.push(`/(admin)/product/${item._id || item.barcode}`)
+                router.push({
+                  pathname: "/admin/product/[id]",
+                  params: { id: item._id || item.barcode },
+                })
               }
               style={[
                 styles.itemCard,

@@ -72,7 +72,6 @@ export default function ScanScreen() {
     ).start();
   }, []);
 
-  // CRITICAL FIX: Reset scanner state AND remount camera when screen regains focus
   useFocusEffect(
     React.useCallback(() => {
       // Reset all state when returning to scanner
@@ -111,7 +110,7 @@ export default function ScanScreen() {
       );
 
       // DEBUG: Log the lookup response
-      console.log("ðŸ” Lookup Response:", {
+      console.log("Lookup Response:", {
         barcode: data,
         found: response.data.found,
         productData: response.data.productData,
@@ -120,12 +119,12 @@ export default function ScanScreen() {
 
       if (tab === "lookup") {
         if (response.data.found) {
-          RegPlayer.play();
+          BatchPlayer.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setScanned(false);
           router.replace(`/product/${response.data.productData._id}`);
         } else {
-          BatchPlayer.play();
+          RegPlayer.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Toast.show({
             type: "info",
@@ -139,19 +138,19 @@ export default function ScanScreen() {
 
       // Registry Logic
       if (response.data.found) {
-        RegPlayer.play();
+        BatchPlayer.play();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setIsNewProduct(false);
         setPendingData(response.data.productData);
       } else {
-        BatchPlayer.play();
+        RegPlayer.play();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setIsNewProduct(true);
         setPendingData({ barcode: data });
       }
       setConfirmModal(true);
     } catch (err) {
-      console.error("âŒ Scan Error:", err);
+      console.error(" Scan Error:", err);
       Toast.show({ type: "error", text1: "Error", text2: "Check connection" });
       setScanned(false);
     } finally {
@@ -159,7 +158,7 @@ export default function ScanScreen() {
     }
   };
 
-  // CRITICAL FIX: Dedicated handlers that reset state before navigation
+  // Dedicated handlers that reset state before navigation
   const handleModalProceed = () => {
     setConfirmModal(false);
     if (isNewProduct) {

@@ -4,8 +4,6 @@ import {
   Text,
   View,
   Pressable,
-  Modal,
-  TextInput,
   Animated,
   Dimensions,
 } from "react-native";
@@ -51,6 +49,7 @@ export default function AdminScanScreen() {
     ).start();
   }, []);
 
+  // Reset scanner state when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       setScanned(false);
@@ -66,33 +65,66 @@ export default function AdminScanScreen() {
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scanned || loading) return;
+    
     setScanned(true);
     setLoading(true);
 
+    // Find product in inventory
     const foundProduct = products.find((p) => p.barcode === data);
 
     if (foundProduct) {
+      if (foundProduct.totalQuantity === 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Toast.show({
+          type: "error",
+          text1: "Out of Stock",
+          text2: `${foundProduct.name} has no available units`,
+          position: "bottom",
+        });
+        
+        setTimeout(() => {
+          setScanned(false);
+          setLoading(false);
+        }, 2000);
+        return;
+      }
+
       scanBeep.play();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setScanned(false);
-      setLoading(false);
-      router.push(`/(admin)/product/${foundProduct._id}`);
+      
+      // Navigate back to sales page with product data
+      router.push({
+        pathname: "./sales",
+        params: {
+          scannedProduct: JSON.stringify({
+            _id: foundProduct._id,
+            name: foundProduct.name,
+            barcode: foundProduct.barcode,
+            quantityInStock: foundProduct.totalQuantity,
+            imageUrl: foundProduct.imageUrl,
+          })
+        }
+      });
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Toast.show({
-        type: "info",
-        text1: "Not Found",
-        text2: "Product not in inventory",
+        type: "error",
+        text1: "Product Not Found",
+        text2: "This product is not in your inventory",
+        position: "bottom",
       });
-      setScanned(false);
-      setLoading(false);
+      
+      setTimeout(() => {
+        setScanned(false);
+        setLoading(false);
+      }, 2000);
     }
   };
 
   if (!permission) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.permissionText}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Text style={[styles.permissionText, { color: theme.text }]}>
           Requesting camera permission...
         </Text>
       </View>
@@ -101,11 +133,19 @@ export default function AdminScanScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.permissionContainer}>
-          <Ionicons name="camera-outline" size={64} color="#666" />
-          <Text style={styles.permissionText}>Camera permission required</Text>
-          <Pressable style={styles.permissionBtn} onPress={requestPermission}>
+          <Ionicons name="camera-outline" size={80} color={theme.subtext} />
+          <Text style={[styles.permissionTitle, { color: theme.text }]}>
+            Camera Access Required
+          </Text>
+          <Text style={[styles.permissionText, { color: theme.subtext }]}>
+            Allow camera access to scan product barcodes for sales
+          </Text>
+          <Pressable
+            onPress={requestPermission}
+            style={[styles.permissionBtn, { backgroundColor: theme.primary }]}
+          >
             <Text style={styles.permissionBtnText}>Grant Permission</Text>
           </Pressable>
         </View>
@@ -117,43 +157,64 @@ export default function AdminScanScreen() {
     <View style={styles.container}>
       <CameraView
         key={cameraKey}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         facing="back"
+        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         enableTorch={torch}
-        onBarcodeScanned={loading ? undefined : handleBarCodeScanned}
         barcodeScannerSettings={{
-          barcodeTypes: ["ean13", "upc_a", "code128", "qr"],
+          barcodeTypes: [
+            "ean13",
+            "ean8",
+            "upc_a",
+            "upc_e",
+            "code128",
+            "code39",
+            "qr",
+          ],
         }}
       />
 
-      <View style={styles.overlay}>
-        <View style={styles.topBar}>
-          <Pressable onPress={() => router.back()} style={styles.iconCircle}>
-            <Ionicons name="close" size={28} color="#FFF" />
-          </Pressable>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.headerBtn, { backgroundColor: "rgba(0,0,0,0.6)" }]}
+        >
+          <Ionicons name="chevron-back" size={24} color="#FFF" />
+        </Pressable>
 
-          <Text style={styles.headerLabel}>ADMIN SCAN</Text>
+        <Pressable
+          onPress={() => setTorch(!torch)}
+          style={[
+            styles.headerBtn,
+            {
+              backgroundColor: torch ? theme.primary : "rgba(0,0,0,0.6)",
+            },
+          ]}
+        >
+          <Ionicons
+            name={torch ? "flash" : "flash-outline"}
+            size={24}
+            color="#FFF"
+          />
+        </Pressable>
+      </View>
 
-          <Pressable
-            onPress={() => setTorch(!torch)}
-            style={styles.iconCircle}
-          >
-            <Ionicons
-              name={torch ? "flash" : "flash-off"}
-              size={24}
-              color={torch ? "#FFD700" : "#FFF"}
-            />
-          </Pressable>
-        </View>
+      {/* Scanning Frame - Technical Style */}
+      <View style={styles.scanningArea}>
+        <View style={styles.frameContainer}>
+          {/* Corner Brackets */}
+          <View style={[styles.corner, styles.topLeft]} />
+          <View style={[styles.corner, styles.topRight]} />
+          <View style={[styles.corner, styles.bottomLeft]} />
+          <View style={[styles.corner, styles.bottomRight]} />
 
-        <View style={styles.viewfinderContainer}>
-          <View style={styles.viewfinder}>
+          {/* Animated Scan Line */}
+          {!scanned && (
             <Animated.View
               style={[
                 styles.scanLine,
                 {
-                  backgroundColor: theme.primary,
-                  shadowColor: theme.primary,
                   transform: [
                     {
                       translateY: scanAnim.interpolate({
@@ -165,20 +226,52 @@ export default function AdminScanScreen() {
                 },
               ]}
             />
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-            {loading && (
-              <View style={styles.loadingOverlay}>
-                <Text style={styles.loadingText}>Processing...</Text>
-              </View>
-            )}
+          )}
+        </View>
+
+        {/* Technical Instructions */}
+        <View style={styles.instructionsContainer}>
+          <View style={styles.instructionCard}>
+            <Text style={styles.systemLabel}>
+              {scanned ? "PROCESSING..." : "SCANNER_ACTIVE"}
+            </Text>
+            <Text style={styles.instructionText}>
+              {scanned
+                ? "VERIFYING_INVENTORY_STATUS"
+                : "ALIGN_BARCODE_WITHIN_FRAME"}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.bottomBar}>
-          <Text style={styles.hintText}>Scan product barcode</Text>
+        {/* Status Indicator */}
+        {scanned && (
+          <View style={styles.statusContainer}>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: loading ? theme.primary : "#34C759" },
+              ]}
+            >
+              <Ionicons
+                name={loading ? "hourglass-outline" : "checkmark-circle"}
+                size={20}
+                color="#FFF"
+              />
+              <Text style={styles.statusText}>
+                {loading ? "VERIFYING" : "SCANNED"}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Footer Info - Technical Style */}
+      <View style={styles.footer}>
+        <View style={styles.footerCard}>
+          <Ionicons name="cart-outline" size={20} color={theme.primary} />
+          <Text style={[styles.footerText, { color: theme.text }]}>
+            SCAN_TO_ADD_TO_SALES_LEDGER
+          </Text>
         </View>
       </View>
     </View>
@@ -186,128 +279,177 @@ export default function AdminScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  overlay: {
+  container: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
   },
-  topBar: {
+
+  header: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    right: 20,
     flexDirection: "row",
     justifyContent: "space-between",
-    width: "90%",
-    alignSelf: "center",
-    alignItems: "center",
-    paddingTop: 60,
-    marginBottom: 20,
+    zIndex: 10,
   },
-  headerLabel: {
-    color: "#FFF",
-    fontWeight: "900",
-    letterSpacing: 2,
-    fontSize: 12,
-  },
-  iconCircle: {
-    width: 45,
-    height: 45,
-    borderRadius: 23,
-    backgroundColor: "rgba(255,255,255,0.2)",
+  headerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
-  viewfinderContainer: {
+
+  scanningArea: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  viewfinder: {
+  frameContainer: {
     width: 280,
-    height: 250,
+    height: 280,
     position: "relative",
-    overflow: "hidden",
-    borderRadius: 20,
   },
-  scanLine: {
-    height: 3,
-    width: "100%",
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 5,
-  },
+
   corner: {
     position: "absolute",
     width: 40,
     height: 40,
-    borderColor: "#FFF",
-    borderWidth: 5,
+    borderColor: "#00FF00",
   },
   topLeft: {
     top: 0,
     left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 20,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
   },
   topRight: {
     top: 0,
     right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 20,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
   },
   bottomLeft: {
     bottom: 0,
     left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 20,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
   },
   bottomRight: {
     bottom: 0,
     right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 20,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
+
+  scanLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "#00FF00",
+    shadowColor: "#00FF00",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+
+  instructionsContainer: {
+    marginTop: 40,
+    paddingHorizontal: 20,
+  },
+  instructionCard: {
+    backgroundColor: "rgba(0,0,0,0.8)",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,255,0,0.3)",
     alignItems: "center",
   },
-  loadingText: {
-    color: "#FFF",
-    fontSize: 16,
+  systemLabel: {
+    color: "#00FF00",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 2,
+    fontFamily: "monospace",
+    marginBottom: 4,
+  },
+  instructionText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 10,
     fontWeight: "700",
+    letterSpacing: 1,
+    fontFamily: "monospace",
   },
-  bottomBar: {
-    paddingBottom: 60,
+
+  statusContainer: {
+    position: "absolute",
+    bottom: 100,
+  },
+  statusBadge: {
+    flexDirection: "row",
     alignItems: "center",
-    width: "100%",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 2,
   },
-  hintText: {
+  statusText: {
     color: "#FFF",
-    marginBottom: 20,
-    fontWeight: "600",
-    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 1,
+    fontFamily: "monospace",
   },
+
+  footer: {
+    position: "absolute",
+    bottom: 40,
+    left: 20,
+    right: 20,
+  },
+  footerCard: {
+    backgroundColor: "rgba(0,0,0,0.8)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "rgba(150,150,150,0.3)",
+  },
+  footerText: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+    fontFamily: "monospace",
+    flex: 1,
+  },
+
   permissionContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 40,
+  },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: 20,
+    marginBottom: 10,
   },
   permissionText: {
-    color: "#FFF",
-    fontSize: 16,
-    marginVertical: 20,
+    fontSize: 14,
     textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 30,
   },
   permissionBtn: {
-    backgroundColor: "#6366F1",
-    paddingVertical: 15,
     paddingHorizontal: 30,
-    borderRadius: 20,
-    marginTop: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
   },
   permissionBtnText: {
     color: "#FFF",

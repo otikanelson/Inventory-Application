@@ -81,33 +81,28 @@ exports.addProduct = async (req, res) => {
   }
 };
 
-// @desc    Get all products with FEFO expiry and total quantity
+// @desc    Get all products
 // @route   GET /api/products
 // @access  Public
-// NOTE: Only returns products with stock (totalQuantity > 0)
 exports.getProducts = async (req, res) => {
   try {
     const rawProducts = await Product.find().sort({ updatedAt: -1 });
 
-    const products = rawProducts
-      // CRITICAL FIX: Filter out products with no batches or 0 total quantity
-      .filter(p => p.batches && p.batches.length > 0 && p.totalQuantity > 0)
-      .map(p => {
-        // FEFO: Find the batch that is expiring soonest
-        // We filter out batches without expiry dates first
-        const sortedBatches = [...p.batches]
-          .filter(b => b.expiryDate)
-          .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+    const products = rawProducts.map(p => {
+      // FEFO: Find the batch that is expiring soonest
+      const sortedBatches = [...p.batches]
+        .filter(b => b.expiryDate)
+        .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-        return {
-          ...p._doc,
-          id: p._id, 
-          quantity: p.totalQuantity,
-          expiryDate: sortedBatches.length > 0 ? sortedBatches[0].expiryDate : 'N/A',
-          receivedDate: p.createdAt,
-          hasBarcode: p.hasBarcode ?? !!p.barcode 
-        };
-      });
+      return {
+        ...p._doc,
+        id: p._id, 
+        quantity: p.totalQuantity,
+        expiryDate: sortedBatches.length > 0 ? sortedBatches[0].expiryDate : 'N/A',
+        receivedDate: p.createdAt,
+        hasBarcode: p.hasBarcode ?? !!p.barcode 
+      };
+    });
 
     res.status(200).json({ success: true, data: products });
   } catch (error) {
@@ -146,7 +141,123 @@ exports.getProductById = async (req, res) => {
       } 
     });
   } catch (error) {
+    console.error("GetProductById Error:", error);
     res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Update product details (name, category, image)
+// @route   PATCH /api/products/:id
+// @access  Admin
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, category, imageUrl } = req.body;
+
+    const product = await Product.findByIdAndUpdate(
+      id,
+      { 
+        name, 
+        category, 
+        imageUrl,
+        updatedAt: Date.now()
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      data: product
+    });
+  } catch (error) {
+    console.error("UpdateProduct Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Delete entire product
+// @route   DELETE /api/products/:id
+// @access  Admin
+exports.deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findByIdAndDelete(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product deleted successfully",
+      data: product
+    });
+  } catch (error) {
+    console.error("DeleteProduct Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Delete specific batch from product
+// @route   DELETE /api/products/:id/batches/:batchNumber
+// @access  Admin
+exports.deleteBatch = async (req, res) => {
+  try {
+    const { id, batchNumber } = req.params;
+
+    const product = await Product.findById(id);
+    
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Find and remove the batch
+    const initialLength = product.batches.length;
+    product.batches = product.batches.filter(
+      b => b.batchNumber !== batchNumber
+    );
+
+    if (product.batches.length === initialLength) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found"
+      });
+    }
+
+    await product.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Batch deleted successfully",
+      data: product
+    });
+  } catch (error) {
+    console.error("DeleteBatch Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
@@ -154,16 +265,15 @@ exports.getProductById = async (req, res) => {
 // @route   POST /api/products/process-sale
 exports.processSale = async (req, res) => {
   try {
-    const { items } = req.body; // Array of { productId, quantitySold }
+    const { items } = req.body; // Array of { productId, quantity }
 
     for (const item of items) {
-      const product = await Product.findById(item.id);
+      const product = await Product.findById(item.productId);
       if (!product) continue;
 
-      let remainingToDeduct = item.quantitySold;
+      let remainingToDeduct = item.quantity;
 
       // FEFO Logic: Sort batches by expiry date (Oldest/Soonest first)
-      // Non-perishables/No-expiry batches are handled last
       product.batches.sort((a, b) => {
         if (!a.expiryDate) return 1;
         if (!b.expiryDate) return -1;
@@ -182,13 +292,20 @@ exports.processSale = async (req, res) => {
         }
       }
 
-      // Optional: Remove batches that hit 0 to keep DB clean
+      // Remove batches that hit 0 to keep DB clean
       product.batches = product.batches.filter(b => b.quantity > 0);
       await product.save();
     }
 
-    res.status(200).json({ success: true, message: 'Inventory updated via FEFO' });
+    res.status(200).json({ 
+      success: true, 
+      message: 'Sale processed successfully via FEFO' 
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("ProcessSale Error:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
   }
 };

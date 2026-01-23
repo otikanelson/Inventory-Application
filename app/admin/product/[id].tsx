@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   ImageBackground,
+  FlatList,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,20 +24,23 @@ export default function AdminProductDetails() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { theme, isDark } = useTheme();
-  const { getProductById } = useProducts();
+  const { getProductById, refresh } = useProducts();
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  
+  const [isSaving, setIsSaving] = useState(false);
+
   // Edit state
   const [editedName, setEditedName] = useState("");
   const [editedCategory, setEditedCategory] = useState("");
   const [editedImage, setEditedImage] = useState("");
 
-  // Delete modals
-  const [showSellModal, setShowSellModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  // Delete state
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"batch" | "global" | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<any>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
   const [deletePin, setDeletePin] = useState("");
 
   const backgroundImage = isDark
@@ -71,7 +75,7 @@ export default function AdminProductDetails() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.5,
+      quality: 0.7,
       allowsEditing: true,
       aspect: [1, 1],
     });
@@ -82,12 +86,31 @@ export default function AdminProductDetails() {
   };
 
   const handleSaveEdit = async () => {
+    if (!editedName.trim()) {
+      Toast.show({
+        type: "error",
+        text1: "Validation Error",
+        text2: "Product name is required",
+      });
+      return;
+    }
+
+    if (!editedCategory.trim()) {
+      Toast.show({
+        type: "error",
+        text1: "Validation Error",
+        text2: "Category is required",
+      });
+      return;
+    }
+
+    setIsSaving(true);
     try {
       await axios.patch(
         `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}`,
         {
-          name: editedName,
-          category: editedCategory,
+          name: editedName.trim(),
+          category: editedCategory.trim(),
           imageUrl: editedImage,
         }
       );
@@ -99,23 +122,37 @@ export default function AdminProductDetails() {
       });
 
       setIsEditing(false);
-      loadProduct();
+      await loadProduct();
+      refresh();
     } catch (error) {
       Toast.show({
         type: "error",
         text1: "Update Failed",
         text2: "Could not save changes",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteAttempt = () => {
-    setShowSellModal(true);
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedName(product.name);
+    setEditedCategory(product.category || "");
+    setEditedImage(product.imageUrl || "");
   };
 
-  const handleConfirmSell = () => {
-    setShowSellModal(false);
-    setShowConfirmModal(true);
+  const handleDeleteBatch = (batch: any) => {
+    setSelectedBatch(batch);
+    setDeleteMode("batch");
+    setShowDeleteMenu(false);
+    setShowPinModal(true);
+  };
+
+  const handleDeleteGlobal = () => {
+    setDeleteMode("global");
+    setShowDeleteMenu(false);
+    setShowPinModal(true);
   };
 
   const handleFinalDelete = async () => {
@@ -123,33 +160,53 @@ export default function AdminProductDetails() {
       Toast.show({
         type: "error",
         text1: "Access Denied",
-        text2: "Incorrect PIN",
+        text2: "Incorrect admin PIN",
       });
       setDeletePin("");
       return;
     }
 
     try {
-      await axios.delete(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}`
-      );
+      if (deleteMode === "batch" && selectedBatch) {
+        // Delete specific batch
+        await axios.delete(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}/batches/${selectedBatch.batchNumber}`
+        );
 
-      Toast.show({
-        type: "success",
-        text1: "Product Deleted",
-        text2: `${product.name} removed from inventory`,
-      });
+        Toast.show({
+          type: "success",
+          text1: "Batch Deleted",
+          text2: `Batch #${selectedBatch.batchNumber.slice(-6)} removed`,
+        });
 
-      router.back();
+        await loadProduct();
+        refresh();
+      } else if (deleteMode === "global") {
+        // Delete entire product
+        await axios.delete(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}`
+        );
+
+        Toast.show({
+          type: "success",
+          text1: "Product Deleted",
+          text2: `${product.name} removed from system`,
+        });
+
+        refresh();
+        router.back();
+      }
     } catch (error) {
       Toast.show({
         type: "error",
         text1: "Deletion Failed",
-        text2: "Could not delete product",
+        text2: "Could not complete operation",
       });
     } finally {
-      setShowConfirmModal(false);
+      setShowPinModal(false);
       setDeletePin("");
+      setDeleteMode(null);
+      setSelectedBatch(null);
     }
   };
 
@@ -164,15 +221,15 @@ export default function AdminProductDetails() {
   if (!product) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Ionicons name="alert-circle-outline" size={64} color={theme.subtext} />
-        <Text style={[styles.errorTitle, { color: theme.text }]}>
-          Product Not Found
+        <Ionicons name="alert-circle-outline" size={80} color={theme.subtext} />
+        <Text style={[styles.errorText, { color: theme.text }]}>
+          PRODUCT_NOT_FOUND
         </Text>
         <Pressable
           onPress={() => router.back()}
-          style={[styles.backBtn, { backgroundColor: theme.primary }]}
+          style={[styles.button, { backgroundColor: theme.primary }]}
         >
-          <Text style={styles.backBtnText}>GO BACK</Text>
+          <Text style={styles.buttonText}>GO_BACK</Text>
         </Pressable>
       </View>
     );
@@ -182,10 +239,11 @@ export default function AdminProductDetails() {
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.headerActionRow}>
+      {/* Header Actions */}
+      <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
-          style={[styles.floatingBtn, { backgroundColor: theme.surface }]}
+          style={[styles.headerBtn, { backgroundColor: theme.surface }]}
         >
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
@@ -196,49 +254,43 @@ export default function AdminProductDetails() {
               <Pressable
                 onPress={() => setIsEditing(true)}
                 style={[
-                  styles.floatingBtn,
-                  {
-                    backgroundColor: theme.primary,
-                    marginRight: 10,
-                  },
+                  styles.headerBtn,
+                  { backgroundColor: theme.primary, marginRight: 10 },
                 ]}
               >
-                <Ionicons name="pencil" size={20} color="#FFF" />
+                <Ionicons name="create-outline" size={22} color="#FFF" />
               </Pressable>
               <Pressable
-                onPress={handleDeleteAttempt}
-                style={[
-                  styles.floatingBtn,
-                  { backgroundColor: theme.notification },
-                ]}
+                onPress={() => setShowDeleteMenu(true)}
+                style={[styles.headerBtn, { backgroundColor: "#FF3B30" }]}
               >
-                <Ionicons name="trash" size={20} color="#FFF" />
+                <Ionicons name="trash-outline" size={22} color="#FFF" />
               </Pressable>
             </>
           ) : (
             <>
               <Pressable
-                onPress={() => {
-                  setIsEditing(false);
-                  setEditedName(product.name);
-                  setEditedCategory(product.category || "");
-                  setEditedImage(product.imageUrl || "");
-                }}
+                onPress={handleCancelEdit}
                 style={[
-                  styles.floatingBtn,
-                  { backgroundColor: theme.background, marginRight: 10 },
+                  styles.headerBtn,
+                  { backgroundColor: theme.surface, marginRight: 10 },
                 ]}
               >
-                <Ionicons name="close" size={20} color={theme.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </Pressable>
               <Pressable
                 onPress={handleSaveEdit}
                 style={[
-                  styles.floatingBtn,
-                  { backgroundColor: "#34C759" },
+                  styles.headerBtn,
+                  { backgroundColor: "#34C759", opacity: isSaving ? 0.6 : 1 },
                 ]}
+                disabled={isSaving}
               >
-                <Ionicons name="checkmark" size={20} color="#FFF" />
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Ionicons name="checkmark" size={24} color="#FFF" />
+                )}
               </Pressable>
             </>
           )}
@@ -247,12 +299,14 @@ export default function AdminProductDetails() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={styles.scrollContent}
       >
+        {/* Hero Card - Technical Style */}
         <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
           <Pressable
             onPress={isEditing ? handleImagePick : undefined}
             style={styles.imageContainer}
+            disabled={!isEditing}
           >
             {editedImage ? (
               <Image
@@ -276,7 +330,7 @@ export default function AdminProductDetails() {
             {isEditing ? (
               <>
                 <Text style={[styles.fieldLabel, { color: theme.subtext }]}>
-                  PRODUCT NAME
+                  PRODUCT_NAME
                 </Text>
                 <TextInput
                   style={[
@@ -314,7 +368,7 @@ export default function AdminProductDetails() {
                     ]}
                   >
                     <Text style={[styles.badgeText, { color: theme.primary }]}>
-                      {product.category || "General"}
+                      {product.category || "GENERAL"}
                     </Text>
                   </View>
                 </View>
@@ -331,7 +385,7 @@ export default function AdminProductDetails() {
                       color={theme.subtext}
                     />
                     <Text style={[styles.metaText, { color: theme.subtext }]}>
-                      {product.barcode || "No Barcode"}
+                      {product.barcode || "NO_BARCODE"}
                     </Text>
                   </View>
                   {product.isPerishable && (
@@ -342,7 +396,7 @@ export default function AdminProductDetails() {
                         color="#FF9500"
                       />
                       <Text style={[styles.metaText, { color: theme.subtext }]}>
-                        Perishable
+                        PERISHABLE
                       </Text>
                     </View>
                   )}
@@ -360,7 +414,7 @@ export default function AdminProductDetails() {
               {product.totalQuantity || 0}
             </Text>
             <Text style={[styles.statLabel, { color: theme.subtext }]}>
-              Total Units
+              TOTAL_UNITS
             </Text>
           </View>
 
@@ -370,69 +424,167 @@ export default function AdminProductDetails() {
               {product.batches?.length || 0}
             </Text>
             <Text style={[styles.statLabel, { color: theme.subtext }]}>
-              Batches
+              BATCHES
             </Text>
           </View>
         </View>
+
+        {/* Batches List with Delete */}
+        {product.batches && product.batches.length > 0 && (
+          <View style={[styles.batchesCard, { backgroundColor: theme.surface }]}>
+            <View style={styles.batchHeader}>
+              <Ionicons name="layers-outline" size={20} color={theme.primary} />
+              <Text style={[styles.batchHeaderText, { color: theme.primary }]}>
+                BATCH_REGISTRY
+              </Text>
+            </View>
+
+            {product.batches.map((batch: any, index: number) => (
+              <View
+                key={index}
+                style={[
+                  styles.batchItem,
+                  { backgroundColor: theme.background + "80", borderColor: theme.border },
+                ]}
+              >
+                <View style={styles.batchLeft}>
+                  <Text style={[styles.batchNumber, { color: theme.text }]}>
+                    BATCH_#{batch.batchNumber?.slice(-6) || "MANUAL"}
+                  </Text>
+                  <View style={styles.batchMeta}>
+                    <Ionicons name="cube-outline" size={12} color={theme.subtext} />
+                    <Text style={[styles.batchMetaText, { color: theme.subtext }]}>
+                      {batch.quantity} units
+                    </Text>
+                    {batch.expiryDate && batch.expiryDate !== "N/A" && (
+                      <>
+                        <Text style={[styles.batchMetaText, { color: theme.subtext }]}>
+                          •
+                        </Text>
+                        <Ionicons name="calendar-outline" size={12} color={theme.subtext} />
+                        <Text style={[styles.batchMetaText, { color: theme.subtext }]}>
+                          {new Date(batch.expiryDate).toLocaleDateString()}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+
+                <Pressable
+                  onPress={() => handleDeleteBatch(batch)}
+                  style={[styles.batchDeleteBtn, { backgroundColor: theme.notification + "20" }]}
+                >
+                  <Ionicons name="trash-outline" size={16} color={theme.notification} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Sell Confirmation Modal */}
-      <Modal visible={showSellModal} transparent animationType="fade">
+      {/* Delete Menu Modal */}
+      <Modal visible={showDeleteMenu} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
-          >
-            <Ionicons name="help-circle" size={48} color={theme.primary} />
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Delete Product?
+          <View style={[styles.menuContent, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.menuTitle, { color: theme.text }]}>
+              DELETE_OPTIONS
             </Text>
-            <Text style={[styles.modalText, { color: theme.subtext }]}>
-              Did you mean to sell this product instead of deleting it?
+            <Text style={[styles.menuSubtitle, { color: theme.subtext }]}>
+              Select deletion scope
             </Text>
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.background }]}
-                onPress={() => setShowSellModal(false)}
-              >
-                <Text style={{ color: theme.text }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.notification }]}
-                onPress={handleConfirmSell}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  Yes, Delete
+
+            <Pressable
+              style={[styles.menuOption, { borderColor: theme.border }]}
+              onPress={handleDeleteGlobal}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: "#FF3B30" + "20" }]}>
+                <Ionicons name="nuclear-outline" size={24} color="#FF3B30" />
+              </View>
+              <View style={styles.menuOptionText}>
+                <Text style={[styles.menuOptionTitle, { color: theme.text }]}>
+                  Delete Global Product
                 </Text>
-              </Pressable>
-            </View>
+                <Text style={[styles.menuOptionDesc, { color: theme.subtext }]}>
+                  Remove entire product from registry
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.menuOption, { borderColor: theme.border }]}
+              onPress={() => {
+                setShowDeleteMenu(false);
+                Toast.show({
+                  type: "info",
+                  text1: "Select Batch",
+                  text2: "Tap the delete icon next to a batch",
+                });
+              }}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: "#FF9500" + "20" }]}>
+                <Ionicons name="layers-outline" size={24} color="#FF9500" />
+              </View>
+              <View style={styles.menuOptionText}>
+                <Text style={[styles.menuOptionTitle, { color: theme.text }]}>
+                  Delete Specific Batch
+                </Text>
+                <Text style={[styles.menuOptionDesc, { color: theme.subtext }]}>
+                  Remove individual batch from product
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.cancelBtn, { backgroundColor: theme.background }]}
+              onPress={() => setShowDeleteMenu(false)}
+            >
+              <Text style={[styles.cancelBtnText, { color: theme.text }]}>
+                CANCEL
+              </Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
 
-      {/* Final Confirmation with PIN */}
-      <Modal visible={showConfirmModal} transparent animationType="fade">
+      {/* PIN Confirmation Modal */}
+      <Modal visible={showPinModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
-          >
-            <Ionicons name="shield-checkmark" size={48} color={theme.notification} />
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <Ionicons 
+              name="shield-checkmark-outline" 
+              size={60} 
+              color={deleteMode === "global" ? "#FF3B30" : "#FF9500"} 
+            />
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Confirm Deletion
+              CONFIRM_DELETION
             </Text>
             <Text style={[styles.modalText, { color: theme.subtext }]}>
-              This action cannot be undone. Enter admin PIN to confirm.
+              {deleteMode === "global"
+                ? `This will permanently remove "${product?.name}" and all its batches from the system.`
+                : `This will remove batch #${selectedBatch?.batchNumber?.slice(-6)} (${selectedBatch?.quantity} units).`}
+            </Text>
+            <Text style={[styles.modalWarning, { color: theme.notification }]}>
+              THIS_ACTION_CANNOT_BE_UNDONE
             </Text>
             <TextInput
               style={[
                 styles.pinInput,
-                { color: theme.text, borderColor: theme.border },
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
               ]}
               secureTextEntry
               keyboardType="numeric"
               maxLength={4}
               value={deletePin}
               onChangeText={setDeletePin}
-              placeholder="Enter PIN"
+              placeholder="ENTER_ADMIN_PIN"
               placeholderTextColor={theme.subtext}
               autoFocus
             />
@@ -440,18 +592,25 @@ export default function AdminProductDetails() {
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: theme.background }]}
                 onPress={() => {
-                  setShowConfirmModal(false);
+                  setShowPinModal(false);
                   setDeletePin("");
+                  setDeleteMode(null);
+                  setSelectedBatch(null);
                 }}
               >
-                <Text style={{ color: theme.text }}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>
+                  CANCEL
+                </Text>
               </Pressable>
               <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.notification }]}
+                style={[
+                  styles.modalBtn, 
+                  { backgroundColor: deleteMode === "global" ? "#FF3B30" : "#FF9500" }
+                ]}
                 onPress={handleFinalDelete}
               >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  Delete Product
+                <Text style={[styles.modalBtnText, { color: "#FFF" }]}>
+                  DELETE
                 </Text>
               </Pressable>
             </View>
@@ -463,12 +622,31 @@ export default function AdminProductDetails() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  errorTitle: { fontSize: 20, fontWeight: "800", marginVertical: 15 },
-  backBtn: { paddingHorizontal: 30, paddingVertical: 15, borderRadius: 15 },
-  backBtnText: { color: "#FFF", fontWeight: "bold" },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginVertical: 20,
+    letterSpacing: 2,
+  },
+  button: {
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 12,
+  },
+  buttonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
 
-  headerActionRow: {
+  header: {
     position: "absolute",
     top: 50,
     left: 20,
@@ -477,7 +655,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     zIndex: 10,
   },
-  floatingBtn: {
+  headerBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -489,29 +667,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  headerRight: { flexDirection: "row" },
+  headerRight: {
+    flexDirection: "row",
+  },
+
+  scrollContent: {
+    paddingTop: 110,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
 
   heroCard: {
-    marginTop: 110,
-    marginHorizontal: 20,
     borderRadius: 28,
-    padding: 20,
+    overflow: "hidden",
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
-    elevation: 5,
+    elevation: 4,
   },
   imageContainer: {
     width: "100%",
     height: 200,
-    borderRadius: 20,
-    overflow: "hidden",
     backgroundColor: "rgba(150,150,150,0.05)",
-    marginBottom: 20,
     position: "relative",
   },
-  productImage: { width: "100%", height: "100%" },
+  productImage: {
+    width: "100%",
+    height: "100%",
+  },
   imagePlaceholder: {
     flex: 1,
     justifyContent: "center",
@@ -523,18 +708,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  productInfo: { gap: 12 },
-  badgeRow: { flexDirection: "row", gap: 8 },
+
+  productInfo: {
+    padding: 20,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
   categoryBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
-  badgeText: { fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
-  productName: { fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
-  metaRow: { flexDirection: "row", gap: 15 },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  metaText: { fontSize: 13, fontWeight: "600" },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  productName: {
+    fontSize: 26,
+    fontWeight: "900",
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  metaRow: {
+    flexDirection: "row",
+    gap: 15,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
   fieldLabel: {
     fontSize: 11,
@@ -553,8 +764,7 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: "row",
     gap: 12,
-    paddingHorizontal: 20,
-    marginTop: 20,
+    marginBottom: 16,
   },
   statBox: {
     flex: 1,
@@ -562,9 +772,76 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  statValue: { fontSize: 20, fontWeight: "900" },
-  statLabel: { fontSize: 11, fontWeight: "600" },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+
+  batchesCard: {
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  batchHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  batchHeaderText: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+  batchItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  batchLeft: {
+    flex: 1,
+  },
+  batchNumber: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  batchMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  batchMetaText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  batchDeleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   modalOverlay: {
     flex: 1,
@@ -572,30 +849,95 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  menuContent: {
+    width: "85%",
+    padding: 24,
+    borderRadius: 24,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  menuSubtitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 20,
+  },
+  menuOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+    gap: 12,
+  },
+  menuIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuOptionText: {
+    flex: 1,
+  },
+  menuOptionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  menuOptionDesc: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  cancelBtn: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+
   modalContent: {
     width: "85%",
-    padding: 25,
+    padding: 30,
     borderRadius: 28,
     alignItems: "center",
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
+    letterSpacing: 2,
     marginTop: 15,
     marginBottom: 10,
   },
   modalText: {
-    fontSize: 14,
+    fontSize: 13,
     textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  modalWarning: {
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1,
     marginBottom: 20,
   },
   pinInput: {
     width: "100%",
-    height: 50,
+    height: 56,
     borderWidth: 1,
     borderRadius: 12,
     textAlign: "center",
-    fontSize: 20,
+    fontSize: 24,
+    fontWeight: "700",
     marginBottom: 20,
   },
   modalActions: {
@@ -605,8 +947,13 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
+  },
+  modalBtnText: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
 });

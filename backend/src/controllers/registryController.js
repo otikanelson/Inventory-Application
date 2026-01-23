@@ -22,7 +22,7 @@ exports.lookupBarcode = async (req, res) => {
       found: true,
       productData: globalData,
       inventoryStatus: existingStock ? {
-        currentQuantity: existingStock.totalQuantity, // Updated to match your schema's totalQuantity
+        currentQuantity: existingStock.totalQuantity,
         lastAdded: existingStock.updatedAt
       } : null
     });
@@ -34,7 +34,6 @@ exports.lookupBarcode = async (req, res) => {
 
 exports.addToRegistry = async (req, res) => {
   try {
-    // 1. Extract imageUrl from the request body
     const { barcode, name, category, isPerishable, imageUrl } = req.body;
 
     const existing = await GlobalProduct.findOne({ barcode });
@@ -46,7 +45,7 @@ exports.addToRegistry = async (req, res) => {
       barcode,
       name,
       category,
-      imageUrl: imageUrl || "", // 2. Save the image path to the registry
+      imageUrl: imageUrl || "",
       isPerishable: isPerishable === true || isPerishable === 'true'
     });
 
@@ -54,5 +53,23 @@ exports.addToRegistry = async (req, res) => {
     res.status(201).json({ success: true, message: "Added to Global Registry" });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+// NEW: Get all global products
+exports.getAllGlobalProducts = async (req, res) => {
+  try {
+    const globalProducts = await GlobalProduct.find().sort({ createdAt: -1 });
+    
+    res.status(200).json({
+      success: true,
+      data: globalProducts
+    });
+  } catch (error) {
+    console.error('Get All Global Products Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };

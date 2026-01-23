@@ -4,7 +4,11 @@ const router = express.Router();
 const { 
   addProduct, 
   getProducts, 
-  getProductById 
+  getProductById,
+  updateProduct,
+  deleteProduct,
+  deleteBatch,
+  processSale
 } = require('../controllers/productController');
 
 const registryController = require('../controllers/registryController');
@@ -14,11 +18,20 @@ router.route('/')
   .post(addProduct)
   .get(getProducts);
 
-// Route for /api/products/:id (This handles BOTH mongo ID and Barcode)
-router.route('/:id').get(getProductById);
+// Process sale (must come before /:id to avoid conflict)
+router.post('/process-sale', processSale);
 
-// External Registry routes
+// External Registry routes (must come before /:id)
 router.get('/registry/lookup/:barcode', registryController.lookupBarcode);
 router.post('/registry/add', registryController.addToRegistry);
+
+// Route for /api/products/:id (CRUD operations)
+router.route('/:id')
+  .get(getProductById)
+  .patch(updateProduct)
+  .delete(deleteProduct);
+
+// Delete specific batch
+router.delete('/:id/batches/:batchNumber', deleteBatch);
 
 module.exports = router;
