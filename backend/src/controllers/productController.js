@@ -1,30 +1,30 @@
-const Product = require('../models/Product');
+const Product = require("../models/Product");
 
 // @desc    Add a new product or new batch
 // @route   POST /api/products
 exports.addProduct = async (req, res) => {
   try {
-    const { 
-      name, 
-      barcode, 
-      internalCode, 
-      category, 
-      quantity, 
-      expiryDate, 
-      price, 
-      imageUrl, 
-      hasBarcode, 
-      isPerishable 
+    const {
+      name,
+      barcode,
+      internalCode,
+      category,
+      quantity,
+      expiryDate,
+      price,
+      imageUrl,
+      hasBarcode,
+      isPerishable,
     } = req.body;
 
     //Check if product already exists (by barcode or internal code)
     let product = null;
     if (barcode || internalCode) {
-      product = await Product.findOne({ 
+      product = await Product.findOne({
         $or: [
           ...(barcode ? [{ barcode }] : []),
-          ...(internalCode ? [{ internalCode }] : [])
-        ] 
+          ...(internalCode ? [{ internalCode }] : []),
+        ],
       });
     }
 
@@ -32,47 +32,47 @@ exports.addProduct = async (req, res) => {
     const newBatch = {
       batchNumber: `BN-${Date.now()}`,
       quantity: Number(quantity),
-      price: Number(price) || 0
+      price: Number(price) || 0,
     };
 
     // Only add expiryDate if it's a valid non-empty string
     if (expiryDate && expiryDate.trim() !== "") {
       newBatch.expiryDate = new Date(expiryDate);
-    } 
+    }
 
     if (product) {
       // SCENARIO A: Product exists, add a new batch to it
       product.batches.push(newBatch);
-      
+
       // Update metadata if provided
-      if (imageUrl) product.imageUrl = imageUrl; 
+      if (imageUrl) product.imageUrl = imageUrl;
       if (category) product.category = category;
-      
+
       await product.save();
-      
-      return res.status(200).json({ 
-        success: true, 
-        message: 'New batch added to existing product', 
-        data: product 
+
+      return res.status(200).json({
+        success: true,
+        message: "New batch added to existing product",
+        data: product,
       });
     } else {
       // SCENARIO B: New product entirely
       // Use "|| undefined" so MongoDB doesn't save a null key into unique indexes
       const newProduct = await Product.create({
         name,
-        barcode: barcode || undefined, 
+        barcode: barcode || undefined,
         internalCode: internalCode || undefined,
         category,
-        isPerishable: isPerishable === true || isPerishable === 'true',
-        hasBarcode: hasBarcode ?? !!barcode, 
-        imageUrl: imageUrl || 'https://via.placeholder.com/150',
-        batches: [newBatch]
+        isPerishable: isPerishable === true || isPerishable === "true",
+        hasBarcode: hasBarcode ?? !!barcode,
+        imageUrl: imageUrl || "https://via.placeholder.com/150",
+        batches: [newBatch],
       });
 
-      return res.status(201).json({ 
-        success: true, 
-        message: 'Product and first batch created',
-        data: newProduct 
+      return res.status(201).json({
+        success: true,
+        message: "Product and first batch created",
+        data: newProduct,
       });
     }
   } catch (error) {
@@ -88,19 +88,20 @@ exports.getProducts = async (req, res) => {
   try {
     const rawProducts = await Product.find().sort({ updatedAt: -1 });
 
-    const products = rawProducts.map(p => {
+    const products = rawProducts.map((p) => {
       // FEFO: Find the batch that is expiring soonest
       const sortedBatches = [...p.batches]
-        .filter(b => b.expiryDate)
+        .filter((b) => b.expiryDate)
         .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
       return {
         ...p._doc,
-        id: p._id, 
+        id: p._id,
         quantity: p.totalQuantity,
-        expiryDate: sortedBatches.length > 0 ? sortedBatches[0].expiryDate : 'N/A',
+        expiryDate:
+          sortedBatches.length > 0 ? sortedBatches[0].expiryDate : "N/A",
         receivedDate: p.createdAt,
-        hasBarcode: p.hasBarcode ?? !!p.barcode 
+        hasBarcode: p.hasBarcode ?? !!p.barcode,
       };
     });
 
@@ -130,15 +131,17 @@ exports.getProductById = async (req, res) => {
     }
 
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       data: {
         ...product._doc,
-        quantity: product.totalQuantity
-      } 
+        quantity: product.totalQuantity,
+      },
     });
   } catch (error) {
     console.error("GetProductById Error:", error);
@@ -156,32 +159,32 @@ exports.updateProduct = async (req, res) => {
 
     const product = await Product.findByIdAndUpdate(
       id,
-      { 
-        name, 
-        category, 
+      {
+        name,
+        category,
         imageUrl,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found"
+        message: "Product not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Product updated successfully",
-      data: product
+      data: product,
     });
   } catch (error) {
     console.error("UpdateProduct Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -198,20 +201,20 @@ exports.deleteProduct = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found"
+        message: "Product not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Product deleted successfully",
-      data: product
+      data: product,
     });
   } catch (error) {
     console.error("DeleteProduct Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -224,24 +227,24 @@ exports.deleteBatch = async (req, res) => {
     const { id, batchNumber } = req.params;
 
     const product = await Product.findById(id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found"
+        message: "Product not found",
       });
     }
 
     // Find and remove the batch
     const initialLength = product.batches.length;
     product.batches = product.batches.filter(
-      b => b.batchNumber !== batchNumber
+      (b) => b.batchNumber !== batchNumber,
     );
 
     if (product.batches.length === initialLength) {
       return res.status(404).json({
         success: false,
-        message: "Batch not found"
+        message: "Batch not found",
       });
     }
 
@@ -250,13 +253,13 @@ exports.deleteBatch = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Batch deleted successfully",
-      data: product
+      data: product,
     });
   } catch (error) {
     console.error("DeleteBatch Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -293,19 +296,123 @@ exports.processSale = async (req, res) => {
       }
 
       // Remove batches that hit 0 to keep DB clean
-      product.batches = product.batches.filter(b => b.quantity > 0);
+      product.batches = product.batches.filter((b) => b.quantity > 0);
       await product.save();
     }
 
-    res.status(200).json({ 
-      success: true, 
-      message: 'Sale processed successfully via FEFO' 
+    res.status(200).json({
+      success: true,
+      message: "Sale processed successfully via FEFO",
     });
   } catch (error) {
     console.error("ProcessSale Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
+  }
+};
+
+// Update product (for admin edits)
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, category, imageUrl } = req.body;
+
+    const product = await Product.findByIdAndUpdate(
+      id,
+      {
+        name,
+        category,
+        imageUrl,
+        updatedAt: Date.now(),
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: product,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Delete product (for admin)
+exports.deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findByIdAndDelete(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Update generic price for a product
+// @route   PUT /api/products/:id/generic-price
+// @access  Admin
+exports.updateGenericPrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { genericPrice } = req.body;
+
+    // Allow null to clear the generic price
+    const update = { updatedAt: Date.now() };
+    if (genericPrice === null || genericPrice === undefined) {
+      update.genericPrice = null;
+    } else {
+      const priceNum = Number(genericPrice);
+      if (isNaN(priceNum) || priceNum < 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid genericPrice" });
+      }
+      update.genericPrice = priceNum;
+    }
+
+    const product = await Product.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    res
+      .status(200)
+      .json({ success: true, message: "Generic price updated", data: product });
+  } catch (error) {
+    console.error("UpdateGenericPrice Error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };

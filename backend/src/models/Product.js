@@ -18,6 +18,9 @@ const ProductSchema = new mongoose.Schema(
 
     imageUrl: { type: String, default: "cube" },
 
+    // Optional generic price that can be set by admin. Null indicates not set.
+    genericPrice: { type: Number, default: null },
+
     batches: [BatchSchema],
 
     totalQuantity: { type: Number, default: 0 },

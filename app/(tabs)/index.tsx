@@ -39,7 +39,7 @@ export default function Dashboard() {
       })
       .filter(({ product, earliest }) => product.isPerishable && earliest)
       .sort((a, b) => a.earliest!.getTime() - b.earliest!.getTime())
-      .slice(0, 2)
+      .slice(0, 3)
       .map(({ product }) => product);
   }, [products]);
 
@@ -92,11 +92,11 @@ export default function Dashboard() {
             {/* TOP BAR */}
             <View style={styles.header}>
               <View>
-                <Text style={[styles.greet, { color: theme.subtext }]}>
-                  Staff Frontline
+                <Text style={[styles.greet, { color: theme.primary }]}>
+                  STAFF_FRONTLINE
                 </Text>
                 <Text style={[styles.title, { color: theme.text }]}>
-                  InventiEase
+                  STOCKQ
                 </Text>
               </View>
               <View style={styles.headerRight}>
@@ -446,8 +446,8 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   headerRight: { flexDirection: "row" },
-  greet: { fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
-  title: { fontSize: 28, fontWeight: "900" },
+  greet: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  title: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
   iconBtn: {
     height: 44,
     width: 44,

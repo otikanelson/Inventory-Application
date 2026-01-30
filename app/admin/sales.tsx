@@ -8,7 +8,7 @@ import {
   ImageBackground,
   Modal,
   ActivityIndicator,
-  Image,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
@@ -19,11 +19,13 @@ import { useAudioPlayer } from "expo-audio";
 import axios from "axios";
 import Toast from "react-native-toast-message";
 
+const { width } = Dimensions.get("window");
+
 export default function AdminSales() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams();
   const { products, refresh } = useProducts();
+  const { cartData } = useLocalSearchParams();
 
   // State
   const [cart, setCart] = useState<any[]>([]);
@@ -33,57 +35,28 @@ export default function AdminSales() {
   // Audio
   const scanBeep = useAudioPlayer(require("../../assets/sounds/beep.mp3"));
 
-  // Handle scanned product from scanner
+  // Initialize cart from scanner if data is passed
   useEffect(() => {
-    if (params.scannedProduct) {
+    if (cartData && typeof cartData === 'string') {
       try {
-        const product = JSON.parse(params.scannedProduct as string);
-        
-        // Check if already in cart
-        const existingItem = cart.find(item => item._id === product._id);
-        
-        if (existingItem) {
-          // Increment quantity
-          setCart(cart.map(item => 
-            item._id === product._id 
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          ));
-          Toast.show({
-            type: "success",
-            text1: "Quantity Updated",
-            text2: `${product.name} quantity increased`,
-          });
-        } else {
-          // Add new item with quantity 1
-          setCart([...cart, { ...product, quantity: 1 }]);
-          scanBeep.play();
-          Toast.show({
-            type: "success",
-            text1: "Added to Cart",
-            text2: `${product.name} added to sales ledger`,
-          });
-        }
-        
-        // Clear the param
-        router.setParams({ scannedProduct: undefined });
-      } catch (err) {
-        console.error("Error parsing scanned product:", err);
+        const parsedCart = JSON.parse(cartData);
+        setCart(parsedCart);
+        Toast.show({
+          type: 'success',
+          text1: 'Cart Loaded',
+          text2: `${parsedCart.length} items ready for checkout`
+        });
+      } catch (error) {
+        console.error('Error parsing cart data:', error);
       }
     }
-  }, [params.scannedProduct]);
+  }, [cartData]);
 
-  // Remove item from cart
-  const removeItem = (productId: string) => {
-    setCart(cart.filter(item => item._id !== productId));
-    Toast.show({
-      type: "info",
-      text1: "Item Removed",
-      text2: "Product removed from cart",
-    });
-  };
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
 
-  // Logic: Process FEFO Sale
+  // Process FEFO Sale
   const finalizeSale = async () => {
     setIsSyncing(true);
     try {
@@ -102,207 +75,237 @@ export default function AdminSales() {
       refresh();
       Toast.show({
         type: "success",
-        text1: "Sale Completed",
-        text2: "Inventory updated via FEFO",
+        text1: "Transaction Complete",
+        text2: "Inventory updated via FEFO logic",
       });
     } catch (err) {
       console.error("Sale Error:", err);
       Toast.show({
         type: "error",
-        text1: "Sale Failed",
-        text2: "Could not process sale. Check backend.",
+        text1: "Transaction Failed",
+        text2: "Could not process sale",
       });
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const updateQuantity = (productId: string, delta: number) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => {
+        if (item._id === productId) {
+          const newQty = Math.max(1, item.quantity + delta);
+          const maxStock = item.quantityInStock || item.totalQuantity || 0;
+          // Don't exceed available stock
+          return {
+            ...item,
+            quantity: Math.min(newQty, maxStock),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart((prevCart) => prevCart.filter((item) => item._id !== productId));
+  };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ImageBackground
-        source={
-          isDark
-            ? require("../../assets/images/Background7.png")
-            : require("../../assets/images/Background9.png")
-        }
+        source={backgroundImage}
         style={StyleSheet.absoluteFill}
       />
 
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.systemTag, { color: theme.primary }]}>
-              ADMIN_PANEL_v2.0
-            </Text>
-            <Text style={[styles.title, { color: theme.text }]}>
-              Sales Ledger
-            </Text>
-          </View>
-          
-          <Pressable
-            onPress={() => router.push("./scan")}
-            style={[styles.scanBtn, { backgroundColor: theme.primary }]}
-          >
-            <Ionicons name="scan" size={20} color="#FFF" />
-            <Text style={styles.scanBtnText}>SCAN</Text>
-          </Pressable>
+      {/* Technical Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.systemLabel, { color: theme.primary }]}>
+            ADMIN//SALES_TERMINAL
+          </Text>
+          <Text style={[styles.title, { color: theme.text }]}>
+            Transaction Log
+          </Text>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollPadding}
-          showsVerticalScrollIndicator={false}
+        <Pressable
+          onPress={() => router.push("/admin/scan")}
+          style={[styles.scanButton, { backgroundColor: theme.primary }]}
         >
-          {/* Active Session Card */}
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.border,
-              },
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardTitle, { color: theme.primary }]}>
-                ACTIVE_SESSION
+          <Ionicons name="scan" size={20} color="#FFF" />
+          <Text style={styles.scanButtonText}>SCAN</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Sales Session Panel */}
+        <View
+          style={[
+            styles.sessionPanel,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <View style={styles.panelHeader}>
+            <View style={styles.statusRow}>
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: cart.length > 0 ? "#34C759" : theme.border },
+                ]}
+              />
+              <Text style={[styles.panelTitle, { color: theme.text }]}>
+                ACTIVE SESSION
               </Text>
-              <View style={[styles.itemCount, { backgroundColor: theme.primary + "20" }]}>
-                <Text style={[styles.itemCountText, { color: theme.primary }]}>
-                  {totalItems} ITEM{totalItems !== 1 ? 'S' : ''}
-                </Text>
-              </View>
             </View>
-
-            {cart.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="cart-outline" size={60} color={theme.subtext + "40"} />
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                  NO_ITEMS_LOGGED
-                </Text>
-                <Text style={[styles.emptyText, { color: theme.subtext }]}>
-                  Scan products to add to session
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.cartList}>
-                {cart.map((item) => (
-                  <View
-                    key={item._id}
-                    style={[
-                      styles.cartItem,
-                      { 
-                        backgroundColor: theme.background + "80",
-                        borderColor: theme.border 
-                      },
-                    ]}
-                  >
-                    {/* Product Image */}
-                    <View style={[styles.productThumb, { backgroundColor: theme.background }]}>
-                      {item.imageUrl ? (
-                        <Image 
-                          source={{ uri: item.imageUrl }} 
-                          style={styles.thumbImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Ionicons name="cube-outline" size={24} color={theme.subtext} />
-                      )}
-                    </View>
-
-                    {/* Product Info */}
-                    <View style={styles.itemInfo}>
-                      <Text style={[styles.itemName, { color: theme.text }]}>
-                        {item.name}
-                      </Text>
-                      <View style={styles.itemMeta}>
-                        <Ionicons name="barcode-outline" size={12} color={theme.subtext} />
-                        <Text style={[styles.itemBarcode, { color: theme.subtext }]}>
-                          {item.barcode}
-                        </Text>
-                        <Text style={[styles.itemStock, { color: theme.subtext }]}>
-                          • {item.quantityInStock} available
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Quantity Controls */}
-                    <View style={styles.qtySection}>
-                      <View style={styles.qtyControls}>
-                        <Pressable
-                          style={[styles.qtyBtn, { backgroundColor: theme.background }]}
-                          onPress={() => {
-                            if (item.quantity === 1) {
-                              removeItem(item._id);
-                            } else {
-                              setCart(cart.map(i =>
-                                i._id === item._id
-                                  ? { ...i, quantity: i.quantity - 1 }
-                                  : i
-                              ));
-                            }
-                          }}
-                        >
-                          <Ionicons 
-                            name={item.quantity === 1 ? "trash-outline" : "remove"} 
-                            size={16} 
-                            color={item.quantity === 1 ? theme.notification : theme.text} 
-                          />
-                        </Pressable>
-
-                        <Text style={[styles.qtyValue, { color: theme.text }]}>
-                          {item.quantity}
-                        </Text>
-
-                        <Pressable
-                          style={[
-                            styles.qtyBtn, 
-                            { 
-                              backgroundColor: theme.background,
-                              opacity: item.quantity >= item.quantityInStock ? 0.5 : 1
-                            }
-                          ]}
-                          onPress={() => {
-                            if (item.quantity < item.quantityInStock) {
-                              setCart(cart.map(i =>
-                                i._id === item._id
-                                  ? { ...i, quantity: i.quantity + 1 }
-                                  : i
-                              ));
-                            } else {
-                              Toast.show({
-                                type: "error",
-                                text1: "Stock Limit",
-                                text2: "Cannot exceed available quantity",
-                              });
-                            }
-                          }}
-                          disabled={item.quantity >= item.quantityInStock}
-                        >
-                          <Ionicons name="add" size={16} color={theme.text} />
-                        </Pressable>
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
+            <Text style={[styles.itemCount, { color: theme.subtext }]}>
+              {cart.length} {cart.length === 1 ? "ITEM" : "ITEMS"}
+            </Text>
           </View>
+
+          {/* Product List - Professional Table Style */}
+          {cart.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="cart-outline" size={64} color={theme.subtext + "40"} />
+              <Text style={[styles.emptyText, { color: theme.subtext }]}>
+                NO ITEMS IN SESSION
+              </Text>
+              <Text style={[styles.emptyHint, { color: theme.subtext }]}>
+                Scan products to begin transaction
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.productList}>
+              {/* Table Header */}
+              <View
+                style={[
+                  styles.tableHeader,
+                  { borderBottomColor: theme.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tableHeaderText,
+                    { color: theme.subtext, flex: 1 },
+                  ]}
+                >
+                  PRODUCT
+                </Text>
+                <Text
+                  style={[
+                    styles.tableHeaderText,
+                    { color: theme.subtext, width: 120, textAlign: "center" },
+                  ]}
+                >
+                  QUANTITY
+                </Text>
+                <Text
+                  style={[
+                    styles.tableHeaderText,
+                    { color: theme.subtext, width: 40 },
+                  ]}
+                >
+                  {" "}
+                </Text>
+              </View>
+
+              {/* Product Rows */}
+              {cart.map((item, index) => (
+                <View
+                  key={item._id}
+                  style={[
+                    styles.productRow,
+                    {
+                      borderBottomColor: theme.border,
+                      borderBottomWidth: index < cart.length - 1 ? 1 : 0,
+                    },
+                  ]}
+                >
+                  {/* Product Info */}
+                  <View style={styles.productInfo}>
+                    <Text
+                      style={[styles.productName, { color: theme.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.productMeta, { color: theme.subtext }]}>
+                      Available: {item.quantityInStock || item.totalQuantity || 0} units
+                    </Text>
+                  </View>
+
+                  {/* Quantity Controls */}
+                  <View style={styles.quantityControls}>
+                    <Pressable
+                      style={[
+                        styles.qtyButton,
+                        { backgroundColor: theme.background },
+                      ]}
+                      onPress={() => updateQuantity(item._id, -1)}
+                    >
+                      <Ionicons name="remove" size={16} color={theme.text} />
+                    </Pressable>
+
+                    <View style={styles.qtyDisplay}>
+                      <Text style={[styles.qtyText, { color: theme.text }]}>
+                        {item.quantity}
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      style={[
+                        styles.qtyButton,
+                        { backgroundColor: theme.background },
+                      ]}
+                      onPress={() => updateQuantity(item._id, 1)}
+                    >
+                      <Ionicons name="add" size={16} color={theme.text} />
+                    </Pressable>
+                  </View>
+
+                  {/* Remove Button */}
+                  <Pressable
+                    style={styles.removeButton}
+                    onPress={() => removeFromCart(item._id)}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Complete Transaction Button */}
           {cart.length > 0 && (
             <Pressable
-              style={[styles.finalizeBtn, { backgroundColor: theme.primary }]}
+              style={[styles.completeButton, { backgroundColor: theme.primary }]}
               onPress={() => setShowFefoModal(true)}
             >
-              <Ionicons name="checkmark-done-outline" size={22} color="#FFF" />
-              <Text style={styles.finalizeText}>COMPLETE_TRANSACTION</Text>
+              <Ionicons name="checkmark-done" size={20} color="#FFF" />
+              <Text style={styles.completeButtonText}>
+                COMPLETE TRANSACTION
+              </Text>
             </Pressable>
           )}
-        </ScrollView>
-      </View>
+        </View>
+
+        {/* Info Panel */}
+        <View
+          style={[
+            styles.infoPanel,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <Ionicons name="information-circle-outline" size={20} color={theme.primary} />
+          <Text style={[styles.infoText, { color: theme.subtext }]}>
+            All sales use FEFO (First-Expired-First-Out) logic to automatically
+            deduct from batches closest to expiry
+          </Text>
+        </View>
+      </ScrollView>
 
       {/* FEFO Confirmation Modal */}
       <Modal visible={showFefoModal} transparent animationType="fade">
@@ -312,62 +315,47 @@ export default function AdminSales() {
           >
             <Ionicons
               name="shield-checkmark-outline"
-              size={60}
+              size={64}
               color={theme.primary}
             />
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Confirm Sale
+              CONFIRM TRANSACTION
             </Text>
-            <Text style={[styles.modalSub, { color: theme.subtext }]}>
-              Inventory will be deducted using First-Expired, First-Out (FEFO)
-              logic. This ensures stock freshness and proper rotation.
+            <Text style={[styles.modalText, { color: theme.subtext }]}>
+              Inventory will be deducted using FEFO logic to ensure stock
+              freshness. This action cannot be undone.
             </Text>
-
-            <View style={styles.modalStats}>
-              <View style={styles.modalStat}>
-                <Text style={[styles.modalStatValue, { color: theme.primary }]}>
-                  {cart.length}
-                </Text>
-                <Text style={[styles.modalStatLabel, { color: theme.subtext }]}>
-                  Products
-                </Text>
-              </View>
-              <View style={styles.modalDivider} />
-              <View style={styles.modalStat}>
-                <Text style={[styles.modalStatValue, { color: theme.primary }]}>
-                  {totalItems}
-                </Text>
-                <Text style={[styles.modalStatLabel, { color: theme.subtext }]}>
-                  Total Units
-                </Text>
-              </View>
-            </View>
 
             {isSyncing ? (
               <ActivityIndicator
                 size="large"
                 color={theme.primary}
-                style={{ margin: 20 }}
+                style={{ marginVertical: 20 }}
               />
             ) : (
               <View style={styles.modalActions}>
                 <Pressable
-                  style={[styles.modalBtn, { backgroundColor: theme.background }]}
+                  style={[
+                    styles.modalButton,
+                    { backgroundColor: theme.background, borderColor: theme.border },
+                  ]}
                   onPress={() => setShowFefoModal(false)}
                 >
-                  <Text style={[styles.modalBtnText, { color: theme.text }]}>
+                  <Text style={[styles.modalButtonText, { color: theme.text }]}>
                     Cancel
                   </Text>
                 </Pressable>
                 <Pressable
                   style={[
-                    styles.modalBtn,
+                    styles.modalButton,
                     { backgroundColor: theme.primary },
                   ]}
                   onPress={finalizeSale}
                 >
-                  <Text style={[styles.modalBtnText, { color: "#FFF" }]}>
-                    Confirm Sale
+                  <Text
+                    style={[styles.modalButtonText, { color: "#FFF" }]}
+                  >
+                    Confirm
                   </Text>
                 </Pressable>
               </View>
@@ -380,168 +368,190 @@ export default function AdminSales() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60 },
-  
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    paddingTop: 60,
     paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingBottom: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
-  systemTag: {
+  systemLabel: {
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     marginBottom: 4,
   },
-  title: { 
-    fontSize: 32, 
+  title: {
+    fontSize: 28,
     fontWeight: "900",
-    letterSpacing: -1,
+    letterSpacing: -0.5,
   },
-  scanBtn: {
+  scanButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 18,
+    gap: 8,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    gap: 8,
   },
-  scanBtnText: { 
-    color: "#FFF", 
-    fontWeight: "900", 
-    fontSize: 14,
-    letterSpacing: 1,
+  scanButtonText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
 
-  scrollPadding: { paddingHorizontal: 20, paddingBottom: 100 },
-  
-  card: { 
-    padding: 20, 
-    borderRadius: 24, 
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+
+  sessionPanel: {
+    padding: 20,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 16,
   },
-  cardHeader: {
+  panelHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
   },
-  cardTitle: { 
-    fontSize: 12, 
-    fontWeight: "900", 
-    letterSpacing: 2,
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  panelTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
   itemCount: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  itemCountText: {
     fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
 
-  emptyContainer: { 
-    alignItems: "center", 
+  emptyState: {
+    alignItems: "center",
     paddingVertical: 60,
   },
-  emptyTitle: {
-    fontSize: 18,
+  emptyText: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 16,
+    letterSpacing: 0.5,
+  },
+  emptyHint: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+
+  productList: {},
+  tableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderStyle: "dashed",
+  },
+  tableHeaderText: {
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 13,
-    fontWeight: "600",
   },
 
-  cartList: {
-    gap: 12,
-  },
-  cartItem: {
+  productRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
+    paddingVertical: 16,
   },
-  productThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  thumbImage: {
-    width: "100%",
-    height: "100%",
-  },
-  itemInfo: { 
+  productInfo: {
     flex: 1,
-    gap: 4,
+    marginRight: 12,
   },
-  itemName: { 
-    fontSize: 15, 
+  productName: {
+    fontSize: 15,
     fontWeight: "800",
+    marginBottom: 4,
+    letterSpacing: -0.2,
   },
-  itemMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  itemBarcode: {
-    fontSize: 11,
-    fontWeight: "700",
-    fontFamily: "monospace",
-  },
-  itemStock: {
+  productMeta: {
     fontSize: 11,
     fontWeight: "600",
   },
 
-  qtySection: {
-    alignItems: "flex-end",
+  quantityControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    width: 120,
   },
-  qtyControls: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    gap: 12,
-  },
-  qtyBtn: {
+  qtyButton: {
     width: 32,
     height: 32,
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
   },
-  qtyValue: {
-    fontSize: 18,
+  qtyDisplay: {
+    flex: 1,
+    alignItems: "center",
+  },
+  qtyText: {
+    fontSize: 16,
     fontWeight: "900",
-    minWidth: 30,
-    textAlign: "center",
+    fontFamily: "monospace",
   },
 
-  finalizeBtn: {
-    height: 60,
-    borderRadius: 16,
-    flexDirection: "row",
-    justifyContent: "center",
+  removeButton: {
+    width: 40,
     alignItems: "center",
-    gap: 12,
+    justifyContent: "center",
   },
-  finalizeText: { 
-    color: "#FFF", 
-    fontWeight: "900", 
-    fontSize: 15,
-    letterSpacing: 1,
+
+  completeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  completeButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+
+  infoPanel: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
   },
 
   modalOverlay: {
@@ -549,68 +559,43 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
   },
   modalContent: {
-    width: "85%",
+    width: "100%",
+    maxWidth: 400,
     padding: 30,
-    borderRadius: 28,
+    borderRadius: 24,
     alignItems: "center",
   },
-  modalTitle: { 
-    fontSize: 24, 
-    fontWeight: "900", 
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "900",
     marginTop: 16,
-    marginBottom: 12,
+    marginBottom: 10,
+    letterSpacing: 1,
   },
-  modalSub: {
+  modalText: {
+    fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
-    marginBottom: 20,
-    fontSize: 13,
-  },
-  modalStats: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
     marginBottom: 24,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "rgba(150,150,150,0.2)",
   },
-  modalStat: {
-    flex: 1,
-    alignItems: "center",
-  },
-  modalStatValue: {
-    fontSize: 28,
-    fontWeight: "900",
-    marginBottom: 4,
-  },
-  modalStatLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  modalDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: "rgba(150,150,150,0.2)",
-  },
-  modalActions: { 
-    flexDirection: "row", 
+  modalActions: {
+    flexDirection: "row",
     gap: 12,
     width: "100%",
   },
-  modalBtn: {
+  modalButton: {
     flex: 1,
-    height: 52,
-    borderRadius: 14,
-    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
+    borderWidth: 1,
   },
-  modalBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
 });

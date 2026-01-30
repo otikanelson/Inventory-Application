@@ -55,7 +55,8 @@ export default function InventoryScreen() {
 
       <View style={styles.container}>
         <View style={styles.topSection}>
-          <Text style={[styles.title, { color: theme.text }]}>Inventory</Text>
+          <Text style={[styles.subtitle, { color: theme.primary }]}>STOCK_MANAGEMENT</Text>
+          <Text style={[styles.title, { color: theme.text }]}>INVENTORY</Text>
 
           <View style={styles.searchRow}>
             <View
@@ -197,7 +198,7 @@ export default function InventoryScreen() {
               >
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
-                    {item.imageUrl ? (
+                    {item.imageUrl && item.imageUrl !== "cube" ? (
                       <ImageBackground
                         source={{ uri: item.imageUrl }}
                         style={styles.image}
@@ -253,7 +254,8 @@ export default function InventoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60 },
   topSection: { paddingHorizontal: 20, marginBottom: 10 },
-  title: { fontSize: 32, fontWeight: "900", marginBottom: 20 },
+  subtitle: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  title: { fontSize: 32, fontWeight: "900", letterSpacing: -1 },
   searchRow: { flexDirection: "row", gap: 10, marginBottom: 15 },
   searchBar: {
     flex: 1,

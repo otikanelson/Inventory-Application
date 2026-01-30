@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   TextInput,
   Modal,
   ImageBackground,
-  FlatList,
+  Dimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,7 +18,31 @@ import { useTheme } from "../../../context/ThemeContext";
 import { useProducts } from "../../../hooks/useProducts";
 import * as ImagePicker from "expo-image-picker";
 import Toast from "react-native-toast-message";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useImageUpload } from "../../../hooks/useImageUpload";
 import axios from "axios";
+
+const { width } = Dimensions.get("window");
+
+interface Batch {
+  batchNumber: string;
+  quantity: number;
+  expiryDate: string;
+  receivedDate?: string;
+  price?: number;
+}
+
+interface PredictionData {
+  nextWeekDemand?: number;
+  stockoutRisk?: number;
+  optimalOrderQty?: number;
+  trend?: string;
+  demandVelocity?: number;
+  averageSalesPerDay?: number;
+  daysUntilStockout?: number;
+  reorderPoint?: number;
+  turnoverRate?: number;
+}
 
 export default function AdminProductDetails() {
   const { id } = useLocalSearchParams();
@@ -30,16 +54,25 @@ export default function AdminProductDetails() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [prediction, setPrediction] = useState<PredictionData | null>(null);
 
   // Edit state
   const [editedName, setEditedName] = useState("");
   const [editedCategory, setEditedCategory] = useState("");
   const [editedImage, setEditedImage] = useState("");
+  const [editedGenericPrice, setEditedGenericPrice] = useState("");
+  // Initialize Cloudinary upload hook
+  const { 
+    uploadImage, 
+    isUploading: isUploadingImage 
+  } = useImageUpload(process.env.EXPO_PUBLIC_API_URL!);
 
-  // Delete state
-  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<"batch" | "global" | null>(null);
-  const [selectedBatch, setSelectedBatch] = useState<any>(null);
+  // Price edit modal
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [tempPrice, setTempPrice] = useState("");
+
+  // Delete modals
+  const [showDeleteWarning, setShowDeleteWarning] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [deletePin, setDeletePin] = useState("");
 
@@ -59,6 +92,19 @@ export default function AdminProductDetails() {
       setEditedName(data.name);
       setEditedCategory(data.category || "");
       setEditedImage(data.imageUrl || "");
+      setEditedGenericPrice(data.genericPrice?.toString() || "");
+
+      // Fetch AI predictions
+      try {
+        const response = await axios.get(
+          `${process.env.EXPO_PUBLIC_API_URL}/analytics/predictions/${id}`
+        );
+        if (response.data && response.data.success) {
+          setPrediction(response.data.data);
+        }
+      } catch (err) {
+        console.log("Predictions not available");
+      }
     }
     setLoading(false);
   };
@@ -75,7 +121,7 @@ export default function AdminProductDetails() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.7,
+      quality: 0.5,
       allowsEditing: true,
       aspect: [1, 1],
     });
@@ -85,7 +131,7 @@ export default function AdminProductDetails() {
     }
   };
 
-  const handleSaveEdit = async () => {
+  const handleSave = async () => {
     if (!editedName.trim()) {
       Toast.show({
         type: "error",
@@ -95,23 +141,67 @@ export default function AdminProductDetails() {
       return;
     }
 
-    if (!editedCategory.trim()) {
-      Toast.show({
-        type: "error",
-        text1: "Validation Error",
-        text2: "Category is required",
-      });
-      return;
-    }
-
     setIsSaving(true);
+    
     try {
+      let finalImageUrl = editedImage;
+
+      // If image is a local file (user changed it), upload to Cloudinary
+      if (editedImage && editedImage.startsWith("file://")) {
+        Toast.show({
+          type: "info",
+          text1: "Uploading Image...",
+          text2: "Please wait",
+        });
+
+        // Temporarily set the image for upload
+        const tempImageState = editedImage;
+        
+        // Create a temporary FileSystem read to pass to the hook
+        // Since the hook needs the image in its state, we'll do a direct upload here
+        try {
+          const FileSystem = require('expo-file-system');
+          const base64 = await FileSystem.readAsStringAsync(editedImage, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          const uploadResponse = await axios.post(
+            `${process.env.EXPO_PUBLIC_API_URL}/upload/image`,
+            {
+              image: `data:image/jpeg;base64,${base64}`,
+              folder: 'inventiease',
+            }
+          );
+
+          if (uploadResponse.data.success) {
+            finalImageUrl = uploadResponse.data.imageUrl;
+            Toast.show({
+              type: "success",
+              text1: "Image Uploaded",
+              text2: "Saving product...",
+            });
+          } else {
+            throw new Error("Upload failed");
+          }
+        } catch (uploadError: any) {
+          console.error("Image upload error:", uploadError);
+          Toast.show({
+            type: "error",
+            text1: "Upload Failed",
+            text2: "Could not upload image. Product not saved.",
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      // Save product with final image URL (either Cloudinary or existing URL)
       await axios.patch(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}`,
+        `${process.env.EXPO_PUBLIC_API_URL}/products/${id}`,
         {
           name: editedName.trim(),
           category: editedCategory.trim(),
-          imageUrl: editedImage,
+          imageUrl: finalImageUrl,
         }
       );
 
@@ -122,9 +212,10 @@ export default function AdminProductDetails() {
       });
 
       setIsEditing(false);
+      await refresh();
       await loadProduct();
-      refresh();
     } catch (error) {
+      console.error("Save error:", error);
       Toast.show({
         type: "error",
         text1: "Update Failed",
@@ -135,79 +226,159 @@ export default function AdminProductDetails() {
     }
   };
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditedName(product.name);
-    setEditedCategory(product.category || "");
-    setEditedImage(product.imageUrl || "");
-  };
+  const handlePriceUpdate = async () => {
+    const priceValue = parseFloat(tempPrice);
 
-  const handleDeleteBatch = (batch: any) => {
-    setSelectedBatch(batch);
-    setDeleteMode("batch");
-    setShowDeleteMenu(false);
-    setShowPinModal(true);
-  };
-
-  const handleDeleteGlobal = () => {
-    setDeleteMode("global");
-    setShowDeleteMenu(false);
-    setShowPinModal(true);
-  };
-
-  const handleFinalDelete = async () => {
-    if (deletePin !== "1234") {
+    if (isNaN(priceValue) || priceValue < 0) {
       Toast.show({
         type: "error",
-        text1: "Access Denied",
-        text2: "Incorrect admin PIN",
+        text1: "Invalid Price",
+        text2: "Please enter a valid number",
       });
-      setDeletePin("");
       return;
     }
 
     try {
-      if (deleteMode === "batch" && selectedBatch) {
-        // Delete specific batch
-        await axios.delete(
-          `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}/batches/${selectedBatch.batchNumber}`
-        );
+      await axios.put(
+        `${process.env.EXPO_PUBLIC_API_URL}/products/${id}/generic-price`,
+        { genericPrice: priceValue }
+      );
 
-        Toast.show({
-          type: "success",
-          text1: "Batch Deleted",
-          text2: `Batch #${selectedBatch.batchNumber.slice(-6)} removed`,
-        });
+      setEditedGenericPrice(priceValue.toString());
+      setShowPriceModal(false);
+      setTempPrice("");
 
-        await loadProduct();
-        refresh();
-      } else if (deleteMode === "global") {
-        // Delete entire product
-        await axios.delete(
-          `${process.env.EXPO_PUBLIC_API_URL}/products/${product._id}`
-        );
+      Toast.show({
+        type: "success",
+        text1: "Price Updated",
+        text2: `Generic price set to ₦${priceValue.toFixed(2)}`,
+      });
 
-        Toast.show({
-          type: "success",
-          text1: "Product Deleted",
-          text2: `${product.name} removed from system`,
-        });
+      await loadProduct();
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Update Failed",
+        text2: "Could not update price",
+      });
+    }
+  };
 
-        refresh();
-        router.back();
+  const handleDelete = async () => {
+    try {
+      const requirePin = await AsyncStorage.getItem('admin_require_pin_delete');
+      
+      if (requirePin === 'true') {
+        setShowDeleteWarning(false);
+        setShowPinModal(true);
+      } else {
+        await performDelete();
       }
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: "Deletion Failed",
-        text2: "Could not complete operation",
+        text1: "Error",
+        text2: "Could not check security settings",
       });
-    } finally {
-      setShowPinModal(false);
-      setDeletePin("");
-      setDeleteMode(null);
-      setSelectedBatch(null);
     }
+  };
+
+  const performDelete = async () => {
+    try {
+      await axios.delete(
+        `${process.env.EXPO_PUBLIC_API_URL}/products/${id}`
+      );
+
+      Toast.show({
+        type: "success",
+        text1: "Product Deleted",
+        text2: "Product removed from inventory",
+      });
+
+      await refresh();
+      router.back();
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Delete Failed",
+        text2: "Could not delete product",
+      });
+    }
+  };
+
+  const handlePinSubmit = async () => {
+    try {
+      const storedPin = await AsyncStorage.getItem('admin_pin');
+      
+      if (deletePin === storedPin) {
+        setShowPinModal(false);
+        setDeletePin("");
+        await performDelete();
+      } else {
+        Toast.show({
+          type: "error",
+          text1: "Access Denied",
+          text2: "Incorrect PIN",
+        });
+        setDeletePin("");
+      }
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Authentication Error",
+      });
+    }
+  };
+
+  // Price analytics
+  const priceAnalytics = useMemo(() => {
+    if (!product) return null;
+
+    const genericPrice = product.genericPrice || null;
+    const batches = product.batches || [];
+    
+    const batchesWithPrice = batches.filter((b: Batch) => b.price && b.price > 0);
+    
+    if (batchesWithPrice.length === 0) {
+      return {
+        genericPrice,
+        hasBatchPrices: false,
+        avgBatchPrice: null,
+        minBatchPrice: null,
+        maxBatchPrice: null,
+      };
+    }
+
+    const prices: number[] = batchesWithPrice.map((b: Batch) => b.price!);
+    const avgBatchPrice = prices.reduce((sum: number, p: number) => sum + p, 0) / prices.length;
+    const minBatchPrice = Math.min(...prices);
+    const maxBatchPrice = Math.max(...prices);
+
+    return {
+      genericPrice,
+      hasBatchPrices: true,
+      avgBatchPrice,
+      minBatchPrice,
+      maxBatchPrice,
+      priceVariance: maxBatchPrice - minBatchPrice,
+    };
+  }, [product]);
+
+  const getRiskLevel = () => {
+    const stockoutRisk = prediction?.stockoutRisk || 0;
+    if (stockoutRisk > 0.7) return { label: "CRITICAL", color: "#FF3B30", icon: "alert-circle" };
+    if (stockoutRisk > 0.4) return { label: "HIGH", color: "#FF9500", icon: "warning" };
+    if (stockoutRisk > 0.2) return { label: "MODERATE", color: "#FFD60A", icon: "alert" };
+    return { label: "LOW", color: "#34C759", icon: "checkmark-circle" };
+  };
+
+  const getDemandVelocityLabel = () => {
+    const velocity = prediction?.demandVelocity || 0;
+    if (velocity > 10) return { label: "Very High", color: "#FF3B30" };
+    if (velocity > 5) return { label: "High", color: "#FF9500" };
+    if (velocity > 2) return { label: "Moderate", color: "#FFD60A" };
+    if (velocity > 0.5) return { label: "Low", color: "#34C759" };
+    return { label: "Very Low", color: theme.subtext };
   };
 
   if (loading) {
@@ -221,397 +392,594 @@ export default function AdminProductDetails() {
   if (!product) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Ionicons name="alert-circle-outline" size={80} color={theme.subtext} />
+        <Ionicons name="cube-outline" size={80} color={theme.subtext} />
         <Text style={[styles.errorText, { color: theme.text }]}>
-          PRODUCT_NOT_FOUND
+          Product Not Found
         </Text>
         <Pressable
           onPress={() => router.back()}
           style={[styles.button, { backgroundColor: theme.primary }]}
         >
-          <Text style={styles.buttonText}>GO_BACK</Text>
+          <Text style={styles.buttonText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
 
+  const riskLevel = getRiskLevel();
+  const velocityInfo = getDemandVelocityLabel();
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
-
-      {/* Header Actions */}
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={[styles.headerBtn, { backgroundColor: theme.surface }]}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </Pressable>
-
-        <View style={styles.headerRight}>
-          {!isEditing ? (
-            <>
-              <Pressable
-                onPress={() => setIsEditing(true)}
-                style={[
-                  styles.headerBtn,
-                  { backgroundColor: theme.primary, marginRight: 10 },
-                ]}
-              >
-                <Ionicons name="create-outline" size={22} color="#FFF" />
-              </Pressable>
-              <Pressable
-                onPress={() => setShowDeleteMenu(true)}
-                style={[styles.headerBtn, { backgroundColor: "#FF3B30" }]}
-              >
-                <Ionicons name="trash-outline" size={22} color="#FFF" />
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Pressable
-                onPress={handleCancelEdit}
-                style={[
-                  styles.headerBtn,
-                  { backgroundColor: theme.surface, marginRight: 10 },
-                ]}
-              >
-                <Ionicons name="close" size={24} color={theme.text} />
-              </Pressable>
-              <Pressable
-                onPress={handleSaveEdit}
-                style={[
-                  styles.headerBtn,
-                  { backgroundColor: "#34C759", opacity: isSaving ? 0.6 : 1 },
-                ]}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Ionicons name="checkmark" size={24} color="#FFF" />
-                )}
-              </Pressable>
-            </>
-          )}
-        </View>
-      </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Hero Card - Technical Style */}
-        <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
+        {/* Header with Back Button */}
+        <View style={styles.header}>
           <Pressable
-            onPress={isEditing ? handleImagePick : undefined}
-            style={styles.imageContainer}
-            disabled={!isEditing}
+            onPress={() => router.push("../inventory")}
+            style={[styles.headerBtn, { backgroundColor: theme.surface }]}
           >
-            {editedImage ? (
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
+          </Pressable>
+
+          <View style={styles.headerActions}>
+            {!isEditing ? (
+              <>
+                <Pressable
+                  onPress={() => setIsEditing(true)}
+                  style={[styles.headerBtn, { backgroundColor: theme.primary }]}
+                >
+                  <Ionicons name="create-outline" size={20} color="#FFF" />
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowDeleteWarning(true)}
+                  style={[styles.headerBtn, { backgroundColor: "#FF3B30" }]}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#FFF" />
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable
+                  onPress={() => {
+                    setIsEditing(false);
+                    setEditedName(product.name);
+                    setEditedCategory(product.category || "");
+                    setEditedImage(product.imageUrl || "");
+                  }}
+                  style={[styles.headerBtn, { backgroundColor: theme.surface }]}
+                >
+                  <Ionicons name="close" size={20} color={theme.text} />
+                </Pressable>
+                <Pressable
+                  onPress={handleSave}
+                  disabled={isSaving || isUploadingImage}
+                  style={[styles.headerBtn, { backgroundColor: theme.primary }]}
+                >
+                  {isSaving || isUploadingImage ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Save Changes</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* Product Header Section */}
+        <View style={[styles.productHeader, { backgroundColor: theme.surface }]}>
+          {/* Compact Image Container */}
+          <Pressable
+            disabled={!isEditing}
+            onPress={handleImagePick}
+            style={[styles.imageContainer, { backgroundColor: theme.background }]}
+          >
+            {editedImage && editedImage !== "cube" ? (
               <Image
                 source={{ uri: editedImage }}
                 style={styles.productImage}
                 resizeMode="contain"
               />
             ) : (
-              <View style={styles.imagePlaceholder}>
-                <Ionicons name="cube-outline" size={80} color={theme.subtext} />
-              </View>
+              <Ionicons name="cube-outline" size={60} color={theme.subtext} />
             )}
             {isEditing && (
-              <View style={styles.editImageOverlay}>
-                <Ionicons name="camera" size={32} color="#FFF" />
+              <View style={styles.imageEditBadge}>
+                <Ionicons name="camera" size={14} color="#FFF" />
               </View>
             )}
           </Pressable>
 
+          {/* Product Info */}
           <View style={styles.productInfo}>
             {isEditing ? (
               <>
-                <Text style={[styles.fieldLabel, { color: theme.subtext }]}>
-                  PRODUCT_NAME
-                </Text>
                 <TextInput
                   style={[
-                    styles.editField,
-                    { color: theme.text, borderColor: theme.border },
+                    styles.editInput,
+                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                   ]}
                   value={editedName}
                   onChangeText={setEditedName}
+                  placeholder="Product Name"
+                  placeholderTextColor={theme.subtext}
                 />
-
-                <Text
-                  style={[
-                    styles.fieldLabel,
-                    { color: theme.subtext, marginTop: 15 },
-                  ]}
-                >
-                  CATEGORY
-                </Text>
                 <TextInput
                   style={[
-                    styles.editField,
-                    { color: theme.text, borderColor: theme.border },
+                    styles.editInputSmall,
+                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                   ]}
                   value={editedCategory}
                   onChangeText={setEditedCategory}
+                  placeholder="Category"
+                  placeholderTextColor={theme.subtext}
                 />
               </>
             ) : (
               <>
-                <View style={styles.badgeRow}>
-                  <View
-                    style={[
-                      styles.categoryBadge,
-                      { backgroundColor: theme.primary + "20" },
-                    ]}
-                  >
-                    <Text style={[styles.badgeText, { color: theme.primary }]}>
-                      {product.category || "GENERAL"}
-                    </Text>
-                  </View>
-                </View>
-
                 <Text style={[styles.productName, { color: theme.text }]}>
                   {product.name}
                 </Text>
-
                 <View style={styles.metaRow}>
-                  <View style={styles.metaItem}>
-                    <Ionicons
-                      name="barcode-outline"
-                      size={14}
-                      color={theme.subtext}
-                    />
-                    <Text style={[styles.metaText, { color: theme.subtext }]}>
-                      {product.barcode || "NO_BARCODE"}
+                  <View style={[styles.categoryBadge, { backgroundColor: theme.primary + "15" }]}>
+                    <Text style={[styles.categoryText, { color: theme.primary }]}>
+                      {product.category || "Uncategorized"}
                     </Text>
                   </View>
                   {product.isPerishable && (
-                    <View style={styles.metaItem}>
-                      <Ionicons
-                        name="warning-outline"
-                        size={14}
-                        color="#FF9500"
-                      />
-                      <Text style={[styles.metaText, { color: theme.subtext }]}>
-                        PERISHABLE
+                    <View style={[styles.perishableBadge, { backgroundColor: "#FF9500" + "15" }]}>
+                      <Ionicons name="timer-outline" size={10} color="#FF9500" />
+                      <Text style={[styles.perishableText, { color: "#FF9500" }]}>
+                        Perishable
                       </Text>
                     </View>
                   )}
+                </View>
+                <View style={styles.barcodeRow}>
+                  <Ionicons name="barcode-outline" size={14} color={theme.subtext} />
+                  <Text style={[styles.barcodeText, { color: theme.subtext }]}>
+                    {product.barcode}
+                  </Text>
                 </View>
               </>
             )}
           </View>
         </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statBox, { backgroundColor: theme.surface }]}>
-            <Ionicons name="cube-outline" size={24} color={theme.primary} />
-            <Text style={[styles.statValue, { color: theme.text }]}>
-              {product.totalQuantity || 0}
+        {/* Quick Stats Grid */}
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.statValue, { color: theme.primary }]}>
+              {product.totalQuantity}
             </Text>
             <Text style={[styles.statLabel, { color: theme.subtext }]}>
-              TOTAL_UNITS
+              Total Units
             </Text>
           </View>
 
-          <View style={[styles.statBox, { backgroundColor: theme.surface }]}>
-            <Ionicons name="layers-outline" size={24} color={theme.primary} />
-            <Text style={[styles.statValue, { color: theme.text }]}>
+          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.statValue, { color: theme.primary }]}>
               {product.batches?.length || 0}
             </Text>
             <Text style={[styles.statLabel, { color: theme.subtext }]}>
-              BATCHES
+              Batches
             </Text>
+          </View>
+
+          <View style={[styles.statCard, { backgroundColor: theme.surface }]}>
+            <Pressable
+              onPress={() => {
+                setTempPrice(editedGenericPrice);
+                setShowPriceModal(true);
+              }}
+              style={styles.statPressable}
+            >
+              <Text style={[styles.statValue, { color: theme.primary }]}>
+                {priceAnalytics?.genericPrice ? `₦${priceAnalytics.genericPrice.toFixed(0)}` : "N/A"}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>
+                Generic Price
+              </Text>
+              <Ionicons name="create-outline" size={12} color={theme.primary} style={styles.editIcon} />
+            </Pressable>
           </View>
         </View>
 
-        {/* Batches List with Delete */}
-        {product.batches && product.batches.length > 0 && (
-          <View style={[styles.batchesCard, { backgroundColor: theme.surface }]}>
-            <View style={styles.batchHeader}>
-              <Ionicons name="layers-outline" size={20} color={theme.primary} />
-              <Text style={[styles.batchHeaderText, { color: theme.primary }]}>
-                BATCH_REGISTRY
+        {/* Status Banner */}
+        <View
+          style={[
+            styles.statusBanner,
+            {
+              backgroundColor:
+                product.totalQuantity === 0 ? "#FF3B30" + "15"
+                : product.totalQuantity < 10 ? "#FF9500" + "15"
+                : "#34C759" + "15",
+              borderColor:
+                product.totalQuantity === 0 ? "#FF3B30"
+                : product.totalQuantity < 10 ? "#FF9500"
+                : "#34C759",
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  product.totalQuantity === 0 ? "#FF3B30"
+                  : product.totalQuantity < 10 ? "#FF9500"
+                  : "#34C759",
+              },
+            ]}
+          />
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color:
+                  product.totalQuantity === 0 ? "#FF3B30"
+                  : product.totalQuantity < 10 ? "#FF9500"
+                  : "#34C759",
+              },
+            ]}
+          >
+            {product.totalQuantity === 0 ? "OUT OF STOCK"
+              : product.totalQuantity < 10 ? "LOW STOCK"
+              : "IN STOCK"}
+          </Text>
+        </View>
+
+        {/* AI Analytics Section */}
+        {prediction && (
+          <View style={[styles.section, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="analytics-outline" size={18} color={theme.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                AI Analytics
               </Text>
             </View>
 
-            {product.batches.map((batch: any, index: number) => (
+            {/* Risk & Velocity Row */}
+            <View style={styles.analyticsRow}>
+              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: riskLevel.color }]}>
+                <Ionicons name={riskLevel.icon as any} size={20} color={riskLevel.color} />
+                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
+                  Stockout Risk
+                </Text>
+                <Text style={[styles.analyticsValue, { color: riskLevel.color }]}>
+                  {riskLevel.label}
+                </Text>
+                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
+                  {prediction.stockoutRisk ? `${(prediction.stockoutRisk * 100).toFixed(0)}%` : "N/A"}
+                </Text>
+              </View>
+
+              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: velocityInfo.color }]}>
+                <Ionicons name="speedometer-outline" size={20} color={velocityInfo.color} />
+                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
+                  Demand Velocity
+                </Text>
+                <Text style={[styles.analyticsValue, { color: velocityInfo.color }]}>
+                  {velocityInfo.label}
+                </Text>
+                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
+                  {prediction.demandVelocity?.toFixed(1) || "0.0"} units/day
+                </Text>
+              </View>
+            </View>
+
+            {/* Predictions Grid */}
+            <View style={styles.predictionsGrid}>
+              <View style={styles.predictionItem}>
+                <Text style={[styles.predictionValue, { color: theme.primary }]}>
+                  {prediction.nextWeekDemand || 0}
+                </Text>
+                <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
+                  7-Day Forecast
+                </Text>
+              </View>
+
+              <View style={styles.predictionItem}>
+                <Text style={[styles.predictionValue, { color: theme.primary }]}>
+                  {prediction.optimalOrderQty || 0}
+                </Text>
+                <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
+                  Optimal Order
+                </Text>
+              </View>
+
+              {prediction.reorderPoint !== undefined && (
+                <View style={styles.predictionItem}>
+                  <Text style={[styles.predictionValue, { color: "#FF9500" }]}>
+                    {prediction.reorderPoint}
+                  </Text>
+                  <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
+                    Reorder Point
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Days Until Stockout */}
+            {prediction.daysUntilStockout !== undefined && prediction.daysUntilStockout > 0 && (
               <View
-                key={index}
                 style={[
-                  styles.batchItem,
-                  { backgroundColor: theme.background + "80", borderColor: theme.border },
+                  styles.alertBanner,
+                  {
+                    backgroundColor:
+                      prediction.daysUntilStockout < 7 ? "#FF3B30" + "10"
+                      : prediction.daysUntilStockout < 14 ? "#FF9500" + "10"
+                      : "#34C759" + "10",
+                    borderColor:
+                      prediction.daysUntilStockout < 7 ? "#FF3B30"
+                      : prediction.daysUntilStockout < 14 ? "#FF9500"
+                      : "#34C759",
+                  },
                 ]}
               >
-                <View style={styles.batchLeft}>
-                  <Text style={[styles.batchNumber, { color: theme.text }]}>
-                    BATCH_#{batch.batchNumber?.slice(-6) || "MANUAL"}
+                <Ionicons
+                  name="timer-outline"
+                  size={16}
+                  color={
+                    prediction.daysUntilStockout < 7 ? "#FF3B30"
+                    : prediction.daysUntilStockout < 14 ? "#FF9500"
+                    : "#34C759"
+                  }
+                />
+                <Text
+                  style={[
+                    styles.alertText,
+                    {
+                      color:
+                        prediction.daysUntilStockout < 7 ? "#FF3B30"
+                        : prediction.daysUntilStockout < 14 ? "#FF9500"
+                        : "#34C759",
+                    },
+                  ]}
+                >
+                  Stockout in ~{Math.ceil(prediction.daysUntilStockout)} days
+                </Text>
+              </View>
+            )}
+
+            {/* Turnover Rate */}
+            {prediction.turnoverRate !== undefined && (
+              <View style={[styles.turnoverRow, { backgroundColor: theme.background }]}>
+                <View style={styles.turnoverInfo}>
+                  <Ionicons name="repeat-outline" size={16} color={theme.primary} />
+                  <Text style={[styles.turnoverLabel, { color: theme.subtext }]}>
+                    Turnover Rate
                   </Text>
-                  <View style={styles.batchMeta}>
-                    <Ionicons name="cube-outline" size={12} color={theme.subtext} />
-                    <Text style={[styles.batchMetaText, { color: theme.subtext }]}>
-                      {batch.quantity} units
-                    </Text>
-                    {batch.expiryDate && batch.expiryDate !== "N/A" && (
-                      <>
-                        <Text style={[styles.batchMetaText, { color: theme.subtext }]}>
-                          •
+                </View>
+                <Text style={[styles.turnoverValue, { color: theme.primary }]}>
+                  {prediction.turnoverRate.toFixed(2)}x
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Batch Timeline */}
+        {product.batches && product.batches.length > 0 && (
+          <View style={[styles.section, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="layers-outline" size={18} color={theme.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                Batch Timeline ({product.batches.length})
+              </Text>
+            </View>
+
+            <View style={styles.timeline}>
+              {product.batches.map((batch: Batch, index: number) => (
+                <View key={index} style={styles.timelineItem}>
+                  <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
+                  {index < product.batches.length - 1 && (
+                    <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
+                  )}
+                  
+                  <View style={[styles.batchCard, { backgroundColor: theme.background }]}>
+                    <View style={styles.batchHeader}>
+                      <Text style={[styles.batchTitle, { color: theme.text }]}>
+                        #{batch.batchNumber?.slice(-6) || "N/A"}
+                      </Text>
+                      <View style={[styles.qtyBadge, { backgroundColor: theme.primary + "15" }]}>
+                        <Text style={[styles.qtyText, { color: theme.primary }]}>
+                          {batch.quantity} units
                         </Text>
-                        <Ionicons name="calendar-outline" size={12} color={theme.subtext} />
-                        <Text style={[styles.batchMetaText, { color: theme.subtext }]}>
-                          {new Date(batch.expiryDate).toLocaleDateString()}
-                        </Text>
-                      </>
-                    )}
+                      </View>
+                    </View>
+
+                    <View style={styles.batchDetails}>
+                      {batch.expiryDate && batch.expiryDate !== "N/A" && (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="calendar-outline" size={12} color={theme.subtext} />
+                          <Text style={[styles.detailText, { color: theme.subtext }]}>
+                            Expires: {new Date(batch.expiryDate).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      )}
+                      {batch.price && batch.price > 0 && (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="pricetag-outline" size={12} color={theme.subtext} />
+                          <Text style={[styles.detailText, { color: theme.primary }]}>
+                            ₦{batch.price.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
+              ))}
+            </View>
+          </View>
+        )}
 
-                <Pressable
-                  onPress={() => handleDeleteBatch(batch)}
-                  style={[styles.batchDeleteBtn, { backgroundColor: theme.notification + "20" }]}
-                >
-                  <Ionicons name="trash-outline" size={16} color={theme.notification} />
-                </Pressable>
+        {/* Price Analytics Section */}
+        {priceAnalytics && priceAnalytics.hasBatchPrices && (
+          <View style={[styles.section, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="pricetag-outline" size={18} color={theme.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                Price Analytics
+              </Text>
+            </View>
+
+            <View style={styles.priceRow}>
+              <Text style={[styles.priceLabel, { color: theme.subtext }]}>
+                Average Batch Price
+              </Text>
+              <Text style={[styles.priceValue, { color: theme.text }]}>
+                ₦{priceAnalytics.avgBatchPrice!.toFixed(2)}
+              </Text>
+            </View>
+
+            <View style={styles.priceRow}>
+              <Text style={[styles.priceLabel, { color: theme.subtext }]}>
+                Price Range
+              </Text>
+              <Text style={[styles.priceValue, { color: theme.text }]}>
+                ₦{priceAnalytics.minBatchPrice!.toFixed(2)} - ₦{priceAnalytics.maxBatchPrice!.toFixed(2)}
+              </Text>
+            </View>
+
+            {priceAnalytics.priceVariance! > 0 && (
+              <View style={[styles.alertBanner, { backgroundColor: "#FFD60A" + "10", borderColor: "#FFD60A" }]}>
+                <Ionicons name="trending-up" size={14} color="#FFD60A" />
+                <Text style={[styles.alertText, { color: "#FFD60A" }]}>
+                  Variance: ₦{priceAnalytics.priceVariance!.toFixed(2)}
+                </Text>
               </View>
-            ))}
+            )}
           </View>
         )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Delete Menu Modal */}
-      <Modal visible={showDeleteMenu} transparent animationType="fade">
+      {/* Price Edit Modal */}
+      <Modal visible={showPriceModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.menuContent, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.menuTitle, { color: theme.text }]}>
-              DELETE_OPTIONS
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="pricetag" size={32} color={theme.primary} />
+            </View>
+
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Set Generic Price
             </Text>
-            <Text style={[styles.menuSubtitle, { color: theme.subtext }]}>
-              Select deletion scope
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              This price applies to the product across all batches
             </Text>
 
-            <Pressable
-              style={[styles.menuOption, { borderColor: theme.border }]}
-              onPress={handleDeleteGlobal}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: "#FF3B30" + "20" }]}>
-                <Ionicons name="nuclear-outline" size={24} color="#FF3B30" />
-              </View>
-              <View style={styles.menuOptionText}>
-                <Text style={[styles.menuOptionTitle, { color: theme.text }]}>
-                  Delete Global Product
-                </Text>
-                <Text style={[styles.menuOptionDesc, { color: theme.subtext }]}>
-                  Remove entire product from registry
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-            </Pressable>
+            <View style={styles.priceInputContainer}>
+              <Text style={[styles.currencySymbol, { color: theme.text }]}>₦</Text>
+              <TextInput
+                style={[styles.priceInput, { color: theme.text, borderColor: theme.border }]}
+                value={tempPrice}
+                onChangeText={setTempPrice}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={theme.subtext}
+              />
+            </View>
 
-            <Pressable
-              style={[styles.menuOption, { borderColor: theme.border }]}
-              onPress={() => {
-                setShowDeleteMenu(false);
-                Toast.show({
-                  type: "info",
-                  text1: "Select Batch",
-                  text2: "Tap the delete icon next to a batch",
-                });
-              }}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: "#FF9500" + "20" }]}>
-                <Ionicons name="layers-outline" size={24} color="#FF9500" />
-              </View>
-              <View style={styles.menuOptionText}>
-                <Text style={[styles.menuOptionTitle, { color: theme.text }]}>
-                  Delete Specific Batch
-                </Text>
-                <Text style={[styles.menuOptionDesc, { color: theme.subtext }]}>
-                  Remove individual batch from product
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-            </Pressable>
-
-            <Pressable
-              style={[styles.cancelBtn, { backgroundColor: theme.background }]}
-              onPress={() => setShowDeleteMenu(false)}
-            >
-              <Text style={[styles.cancelBtnText, { color: theme.text }]}>
-                CANCEL
-              </Text>
-            </Pressable>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
+                onPress={() => {
+                  setShowPriceModal(false);
+                  setTempPrice("");
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={handlePriceUpdate}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Update Price</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* PIN Confirmation Modal */}
-      <Modal visible={showPinModal} transparent animationType="fade">
+      {/* Delete Warning Modal */}
+      <Modal visible={showDeleteWarning} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <Ionicons 
-              name="shield-checkmark-outline" 
-              size={60} 
-              color={deleteMode === "global" ? "#FF3B30" : "#FF9500"} 
-            />
+            <Ionicons name="warning-outline" size={48} color="#FF3B30" />
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              CONFIRM_DELETION
+              Delete Product?
             </Text>
-            <Text style={[styles.modalText, { color: theme.subtext }]}>
-              {deleteMode === "global"
-                ? `This will permanently remove "${product?.name}" and all its batches from the system.`
-                : `This will remove batch #${selectedBatch?.batchNumber?.slice(-6)} (${selectedBatch?.quantity} units).`}
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              This will permanently remove the product and all its batches. This action cannot be undone.
             </Text>
-            <Text style={[styles.modalWarning, { color: theme.notification }]}>
-              THIS_ACTION_CANNOT_BE_UNDONE
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
+                onPress={() => setShowDeleteWarning(false)}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: "#FF3B30" }]}
+                onPress={handleDelete}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* PIN Modal */}
+      <Modal visible={showPinModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="shield-checkmark" size={32} color={theme.primary} />
+            </View>
+
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Confirm Deletion
             </Text>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              Enter admin PIN to authorize deletion
+            </Text>
+
             <TextInput
-              style={[
-                styles.pinInput,
-                {
-                  color: theme.text,
-                  borderColor: theme.border,
-                  backgroundColor: theme.background,
-                },
-              ]}
+              style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
               secureTextEntry
               keyboardType="numeric"
               maxLength={4}
               value={deletePin}
               onChangeText={setDeletePin}
-              placeholder="ENTER_ADMIN_PIN"
+              placeholder="Enter PIN"
               placeholderTextColor={theme.subtext}
-              autoFocus
             />
+
             <View style={styles.modalActions}>
               <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.background }]}
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
                 onPress={() => {
                   setShowPinModal(false);
                   setDeletePin("");
-                  setDeleteMode(null);
-                  setSelectedBatch(null);
                 }}
               >
-                <Text style={[styles.modalBtnText, { color: theme.text }]}>
-                  CANCEL
-                </Text>
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[
-                  styles.modalBtn, 
-                  { backgroundColor: deleteMode === "global" ? "#FF3B30" : "#FF9500" }
-                ]}
-                onPress={handleFinalDelete}
+                style={[styles.modalBtn, { backgroundColor: "#FF3B30" }]}
+                onPress={handlePinSubmit}
               >
-                <Text style={[styles.modalBtnText, { color: "#FFF" }]}>
-                  DELETE
-                </Text>
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Confirm</Text>
               </Pressable>
             </View>
           </View>
@@ -630,9 +998,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: "700",
     marginVertical: 20,
-    letterSpacing: 2,
   },
   button: {
     paddingHorizontal: 30,
@@ -641,19 +1008,22 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#FFF",
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 1,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  scrollContent: {
+    paddingTop: 20,
+    paddingBottom: 40,
   },
 
   header: {
-    position: "absolute",
-    top: 50,
-    left: 20,
-    right: 20,
     flexDirection: "row",
     justifyContent: "space-between",
-    zIndex: 10,
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 40,
+    paddingBottom: 20,
   },
   headerBtn: {
     width: 44,
@@ -663,297 +1033,414 @@ const styles = StyleSheet.create({
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  headerRight: {
+  headerActions: {
     flexDirection: "row",
+    gap: 10,
   },
 
-  scrollContent: {
-    paddingTop: 110,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-
-  heroCard: {
-    borderRadius: 28,
-    overflow: "hidden",
+  productHeader: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    padding: 16,
+    borderRadius: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   imageContainer: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "rgba(150,150,150,0.05)",
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
     position: "relative",
   },
   productImage: {
     width: "100%",
     height: "100%",
+    borderRadius: 12,
   },
-  imagePlaceholder: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  editImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
+  imageEditBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
 
   productInfo: {
-    padding: 20,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  categoryBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
+    flex: 1,
+    justifyContent: "center",
   },
   productName: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: "900",
-    marginBottom: 12,
-    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   metaRow: {
     flexDirection: "row",
-    gap: 15,
+    gap: 8,
+    marginBottom: 6,
   },
-  metaItem: {
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  perishableBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  metaText: {
-    fontSize: 13,
+  perishableText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  barcodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  barcodeText: {
+    fontSize: 11,
     fontWeight: "600",
   },
 
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
+  editInput: {
+    fontSize: 16,
+    fontWeight: "700",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
     marginBottom: 8,
   },
-  editField: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
+  editInputSmall: {
+    fontSize: 13,
     fontWeight: "600",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
   },
 
-  statsContainer: {
+  statsGrid: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  statPressable: {
+    alignItems: "center",
+    position: "relative",
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  editIcon: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+  },
+
+  statusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 20,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+
+  section: {
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  analyticsRow: {
     flexDirection: "row",
     gap: 12,
     marginBottom: 16,
   },
-  statBox: {
+  analyticsCard: {
     flex: 1,
-    padding: 16,
-    borderRadius: 20,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
     alignItems: "center",
-    gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  statLabel: {
+  analyticsLabel: {
     fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
+    fontWeight: "600",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  analyticsValue: {
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 2,
+  },
+  analyticsSubtext: {
+    fontSize: 9,
+    fontWeight: "600",
   },
 
-  batchesCard: {
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+  predictionsGrid: {
+    flexDirection: "row",
+    marginBottom: 12,
   },
-  batchHeader: {
+  predictionItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  predictionValue: {
+    fontSize: 20,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  predictionLabel: {
+    fontSize: 9,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+
+  alertBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 16,
-  },
-  batchHeaderText: {
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 2,
-  },
-  batchItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 10,
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
+    marginTop: 8,
   },
-  batchLeft: {
-    flex: 1,
+  alertText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
-  batchNumber: {
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 6,
-    letterSpacing: 0.5,
+
+  turnoverRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
   },
-  batchMeta: {
+  turnoverInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  batchMetaText: {
+  turnoverLabel: {
     fontSize: 11,
     fontWeight: "600",
   },
-  batchDeleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
+  turnoverValue: {
+    fontSize: 16,
+    fontWeight: "900",
   },
 
+  timeline: {
+    position: "relative",
+  },
+  timelineItem: {
+    flexDirection: "row",
+    paddingBottom: 16,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+    marginTop: 4,
+  },
+  timelineLine: {
+    position: "absolute",
+    left: 5.5,
+    top: 16,
+    width: 1,
+    bottom: 0,
+  },
+  batchCard: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+  },
+  batchHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  batchTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  qtyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  qtyText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  batchDetails: {
+    gap: 4,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  detailText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  priceLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
   },
-  menuContent: {
-    width: "85%",
-    padding: 24,
-    borderRadius: 24,
-  },
-  menuTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  menuSubtitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 20,
-  },
-  menuOption: {
-    flexDirection: "row",
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    padding: 30,
+    borderRadius: 30,
     alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 12,
-    gap: 12,
   },
-  menuIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+  modalIconBox: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: "center",
     alignItems: "center",
-  },
-  menuOptionText: {
-    flex: 1,
-  },
-  menuOptionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  menuOptionDesc: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  cancelBtn: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-
-  modalContent: {
-    width: "85%",
-    padding: 30,
-    borderRadius: 28,
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: 2,
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  modalText: {
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  modalWarning: {
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1,
     marginBottom: 20,
   },
-  pinInput: {
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  modalDesc: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 20,
+  },
+  priceInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     width: "100%",
-    height: 56,
+    marginBottom: 20,
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: "900",
+    marginRight: 10,
+  },
+  priceInput: {
+    flex: 1,
+    height: 60,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 15,
+    paddingHorizontal: 20,
     textAlign: "center",
     fontSize: 24,
     fontWeight: "700",
-    marginBottom: 20,
+  },
+  pinInput: {
+    width: "100%",
+    height: 55,
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 20,
+    marginBottom: 15,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "600",
   },
   modalActions: {
     flexDirection: "row",
     gap: 12,
+    marginTop: 10,
     width: "100%",
   },
   modalBtn: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 15,
+    justifyContent: "center",
     alignItems: "center",
-  },
-  modalBtnText: {
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 1,
   },
 });

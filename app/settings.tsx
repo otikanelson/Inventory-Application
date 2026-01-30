@@ -7,7 +7,6 @@ import {
   Pressable,
   Switch,
   TextInput,
-  Alert,
   Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +14,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useRouter } from "expo-router";
 import { useAlerts } from "../hooks/useAlerts";
 import Toast from "react-native-toast-message";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -41,27 +41,76 @@ export default function SettingsScreen() {
         earlyWarning: alertSettings.thresholds.earlyWarning || 30
       });
     }
-  }, [alertSettings]);
+  }, []);
 
   // Admin Login State
   const [pinModal, setPinModal] = useState(false);
   const [pin, setPin] = useState("");
+  const [hasAdminPin, setHasAdminPin] = useState(false);
 
-  const handleAdminAuth = () => {
-    if (pin === "1234") {
-      setPinModal(false);
-      setPin("");
-      router.push("../admin");
-    } else {
-      Alert.alert("Access Denied", "Incorrect Admin PIN");
+  useEffect(() => {
+    checkAdminPinStatus();
+  }, []);
+
+  const checkAdminPinStatus = async () => {
+    try {
+      const adminPin = await AsyncStorage.getItem('admin_pin');
+      setHasAdminPin(!!adminPin);
+    } catch (error) {
+      console.error('Error checking admin PIN:', error);
+    }
+  };
+
+  const handleAdminAuth = async () => {
+    try {
+      const storedPin = await AsyncStorage.getItem('admin_pin');
+      
+      // If no PIN is set, allow entry but prompt them to set one
+      if (!storedPin) {
+        setPinModal(false);
+        setPin("");
+        
+        Toast.show({
+          type: 'info',
+          text1: 'No PIN Set',
+          text2: 'Please set up your admin PIN in Security settings'
+        });
+        
+        router.push("../admin");
+        return;
+      }
+
+      // Validate PIN if it exists
+      if (pin === storedPin) {
+        // Update last auth time
+        await AsyncStorage.setItem('admin_last_auth', Date.now().toString());
+        
+        setPinModal(false);
+        setPin("");
+        router.push("../admin");
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Access Denied',
+          text2: 'Incorrect PIN'
+        });
+        setPin("");
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Authentication Error',
+        text2: 'Could not verify credentials'
+      });
     }
   };
 
   const handleSaveConfig = () => {
-    Alert.alert(
-      "Configuration Saved",
-      "The API endpoint has been updated for this session."
-    );
+    Toast.show({
+      type: 'success',
+      text1: 'Configuration Saved',
+      text2: 'The API endpoint has been updated for this session.'
+    });
   };
 
   // Save alert thresholds
@@ -140,6 +189,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
+      showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: theme.text }]}>
@@ -168,7 +218,7 @@ export default function SettingsScreen() {
         </SettingRow>
       </View>
 
-            {/* ADMINISTRATION SECTION */}
+      {/* ADMINISTRATION SECTION */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
           ADMINISTRATION
@@ -176,10 +226,17 @@ export default function SettingsScreen() {
         <SettingRow
           icon="shield"
           label="Admin Dashboard"
-          description="Manage inventory, sales, and security"
+          description={hasAdminPin ? "Manage inventory, sales, and security" : "Set up admin PIN to secure your dashboard"}
           onPress={() => setPinModal(true)}
         >
-          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {!hasAdminPin && (
+              <View style={[styles.badge, { backgroundColor: '#FF9500' + '20' }]}>
+                <Text style={[styles.badgeText, { color: '#FF9500' }]}>SETUP REQUIRED</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </View>
         </SettingRow>
       </View>
 
@@ -189,48 +246,72 @@ export default function SettingsScreen() {
           <View
             style={[styles.modalContent, { backgroundColor: theme.surface }]}
           >
+            <View style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
+            </View>
+            
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Admin Login
+              {hasAdminPin ? "Admin Access" : "First Time Access"}
             </Text>
-            <TextInput
-              style={[
-                styles.pinInput,
-                { color: theme.text, borderColor: theme.border },
-              ]}
-              placeholder="Enter PIN"
-              secureTextEntry
-              keyboardType="numeric"
-              value={pin}
-              onChangeText={setPin}
-            />
-            <Pressable
-              style={[
-                styles.saveBtn,
-                { backgroundColor: theme.primary, width: "100%" },
-              ]}
-              onPress={handleAdminAuth}
-            >
-              <Text style={styles.saveBtnText}>ACCESS DASHBOARD</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setPinModal(false)}
-              style={{ marginTop: 15 }}
-            >
-              <Text style={{ color: theme.subtext }}>Cancel</Text>
-            </Pressable>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              {hasAdminPin 
+                ? "Enter your admin PIN to continue"
+                : "No PIN set yet. You'll be prompted to create one inside."
+              }
+            </Text>
+
+            {hasAdminPin && (
+              <TextInput
+                style={[
+                  styles.pinInput,
+                  { color: theme.text, borderColor: theme.border },
+                ]}
+                placeholder="Enter PIN"
+                placeholderTextColor={theme.subtext}
+                secureTextEntry
+                keyboardType="numeric"
+                maxLength={4}
+                value={pin}
+                onChangeText={setPin}
+                autoFocus
+              />
+            )}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[
+                  styles.modalBtn,
+                  { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+                ]}
+                onPress={() => {
+                  setPinModal(false);
+                  setPin("");
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={handleAdminAuth}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  {hasAdminPin ? "VERIFY" : "CONTINUE"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
 
-            {/* OPERATIONS SECTION */}
+      {/* SCANNER SECTION */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          OPERATIONS
+          SCANNER
         </Text>
         <SettingRow
-          icon="barcode-outline"
-          label="Rapid Scan"
-          description="Skip confirmation modals after scanning"
+          icon="scan-outline"
+          label="Rapid Scan Mode"
+          description="Faster scanning with reduced validation"
         >
           <Switch
             value={rapidScan}
@@ -240,10 +321,10 @@ export default function SettingsScreen() {
         </SettingRow>
       </View>
 
-      {/* ALERT THRESHOLDS SECTION */}
-      <View style={styles.section}>
+      {/* ALERTS CONFIGURATION */}
+      <View style={[styles.section, {marginBottom: 0}]}>
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          ALERT THRESHOLDS
+          ALERTS CONFIGURATION
         </Text>
 
         <View
@@ -253,16 +334,16 @@ export default function SettingsScreen() {
           ]}
         >
           <Text style={[styles.cardTitle, { color: theme.text }]}>
-            Multi-Threshold Configuration
+            Expiry Thresholds
           </Text>
           <Text style={[styles.cardDesc, { color: theme.subtext }]}>
-            Configure when alerts are triggered based on days until expiry
+            Configure when alerts trigger based on days until expiration
           </Text>
 
-          {/* Critical Threshold */}
+          {/* Critical Alert */}
           <View style={styles.thresholdRow}>
             <View style={styles.thresholdInfo}>
-              <View style={[styles.thresholdDot, { backgroundColor: '#FF4444' }]} />
+              <View style={[styles.thresholdDot, { backgroundColor: "#FF3B30" }]} />
               <View style={styles.thresholdTextContainer}>
                 <Text style={[styles.thresholdLabel, { color: theme.text }]}>
                   Critical Alert
@@ -276,11 +357,10 @@ export default function SettingsScreen() {
               <TextInput
                 style={[
                   styles.numberInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }
+                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                 ]}
-                value={String(thresholds.critical)}
-                keyboardType="number-pad"
-                maxLength={2}
+                keyboardType="numeric"
+                value={thresholds.critical.toString()}
                 onChangeText={(val) =>
                   setThresholds({ ...thresholds, critical: parseInt(val) || 0 })
                 }
@@ -291,16 +371,16 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* High Urgency Threshold */}
+          {/* High Urgency Alert */}
           <View style={styles.thresholdRow}>
             <View style={styles.thresholdInfo}>
-              <View style={[styles.thresholdDot, { backgroundColor: '#FF9500' }]} />
+              <View style={[styles.thresholdDot, { backgroundColor: "#FF9500" }]} />
               <View style={styles.thresholdTextContainer}>
                 <Text style={[styles.thresholdLabel, { color: theme.text }]}>
                   High Urgency
                 </Text>
                 <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
-                  Close monitoring needed
+                  Prioritize for sale
                 </Text>
               </View>
             </View>
@@ -308,11 +388,10 @@ export default function SettingsScreen() {
               <TextInput
                 style={[
                   styles.numberInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }
+                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                 ]}
-                value={String(thresholds.highUrgency)}
-                keyboardType="number-pad"
-                maxLength={2}
+                keyboardType="numeric"
+                value={thresholds.highUrgency.toString()}
                 onChangeText={(val) =>
                   setThresholds({ ...thresholds, highUrgency: parseInt(val) || 0 })
                 }
@@ -323,16 +402,16 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Early Warning Threshold */}
-          <View style={styles.thresholdRow}>
+          {/* Early Warning Alert */}
+          <View style={[styles.thresholdRow, { borderBottomWidth: 0 }]}>
             <View style={styles.thresholdInfo}>
-              <View style={[styles.thresholdDot, { backgroundColor: '#FFCC00' }]} />
+              <View style={[styles.thresholdDot, { backgroundColor: "#FFD60A" }]} />
               <View style={styles.thresholdTextContainer}>
                 <Text style={[styles.thresholdLabel, { color: theme.text }]}>
                   Early Warning
                 </Text>
                 <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
-                  Plan ahead for stock rotation
+                  Plan ahead
                 </Text>
               </View>
             </View>
@@ -340,11 +419,10 @@ export default function SettingsScreen() {
               <TextInput
                 style={[
                   styles.numberInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }
+                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                 ]}
-                value={String(thresholds.earlyWarning)}
-                keyboardType="number-pad"
-                maxLength={2}
+                keyboardType="numeric"
+                value={thresholds.earlyWarning.toString()}
                 onChangeText={(val) =>
                   setThresholds({ ...thresholds, earlyWarning: parseInt(val) || 0 })
                 }
@@ -364,6 +442,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      <View style={{ height: 100 }} />
         <Text style={styles.versionText}>
           Build v2.0.4 - Production Environment
         </Text>
@@ -376,7 +455,7 @@ const styles = StyleSheet.create({
   header: { marginTop: 70, marginBottom: 30 },
   headerTitle: { fontSize: 32, fontWeight: "900" },
   headerSub: { fontSize: 14, marginTop: 4 },
-  section: { marginBottom: 35 },
+  section: { marginBottom: 25 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "800",
@@ -402,17 +481,9 @@ const styles = StyleSheet.create({
   textStack: { flex: 1 },
   settingLabel: { fontSize: 16, fontWeight: "600" },
   settingDesc: { fontSize: 12, marginTop: 2 },
-  configCard: { padding: 15, borderRadius: 20, borderWidth: 1 },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  cardDesc: {
-    fontSize: 12,
-    marginBottom: 20,
-    lineHeight: 18,
-  },
+  configCard: { padding: 20, borderRadius: 20, borderWidth: 1 },
+  cardTitle: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
+  cardDesc: { fontSize: 12, marginBottom: 20, lineHeight: 18 },
   thresholdRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -422,33 +493,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(150,150,150,0.1)",
   },
-  thresholdInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  thresholdDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  thresholdTextContainer: {
-    flex: 1,
-  },
-  thresholdLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  thresholdDesc: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  thresholdInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  thresholdInfo: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  thresholdDot: { width: 12, height: 12, borderRadius: 6 },
+  thresholdTextContainer: { flex: 1 },
+  thresholdLabel: { fontSize: 14, fontWeight: "700" },
+  thresholdDesc: { fontSize: 11, marginTop: 2 },
+  thresholdInput: { flexDirection: "row", alignItems: "center", gap: 8 },
   numberInput: {
     width: 60,
     height: 40,
@@ -458,37 +508,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  thresholdUnit: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  inputLabel: { fontSize: 10, fontWeight: "800", marginBottom: 8 },
-  input: {
-    height: 45,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    marginBottom: 12,
-  },
+  thresholdUnit: { fontSize: 12, fontWeight: "600" },
   saveBtn: {
     height: 45,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 5,
   },
   saveBtnText: { color: "#FFF", fontWeight: "800", fontSize: 12 },
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    padding: 16,
-    borderRadius: 20,
+  apiInput: {
+    width: "100%",
+    height: 50,
     borderWidth: 1,
-    marginTop: 20,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 15,
   },
-  logoutText: { color: "#FF4444", fontWeight: "900", fontSize: 13 },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "85%",
+    padding: 30,
+    borderRadius: 30,
+    alignItems: "center",
+  },
   versionText: {
     textAlign: "center",
     color: "#888",
@@ -496,26 +556,36 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     letterSpacing: 1,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 10,
+    textAlign: "center",
   },
-  modalContent: {
-    width: "80%",
-    padding: 30,
-    borderRadius: 25,
-    alignItems: "center",
+  modalDesc: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 20,
   },
-  modalTitle: { fontSize: 20, fontWeight: "800", marginBottom: 20 },
   pinInput: {
     width: "100%",
-    height: 50,
+    height: 60,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 15,
     textAlign: "center",
-    fontSize: 20,
+    fontSize: 28,
     marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalBtn: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 15,
+    alignItems: "center",
   },
 });

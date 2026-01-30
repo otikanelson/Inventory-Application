@@ -28,7 +28,7 @@ export default function WelcomeScreen() {
 
       {/* Semicircular Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>
-        <Text style={styles.headerTitle}>InventiEase</Text>
+        <Text style={styles.headerTitle}>StockQ</Text>
       </View>
 
       {/* Centered Content */}
@@ -37,7 +37,7 @@ export default function WelcomeScreen() {
           Smart tracking for products & expiry dates
         </Text>
         <Image
-          source={require("../assets/images/Logo.png")}
+          source={require("../assets/images/logo.png")}
           style={styles.logo}
           resizeMode="contain"
         />

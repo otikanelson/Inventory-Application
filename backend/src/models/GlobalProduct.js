@@ -20,6 +20,7 @@ const GlobalProductSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    genericPrice: { type: Number, default: null },
     isPerishable: {
       type: Boolean,
       default: true,
@@ -30,7 +31,7 @@ const GlobalProductSchema = new mongoose.Schema(
       sparse: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("GlobalProduct", GlobalProductSchema);

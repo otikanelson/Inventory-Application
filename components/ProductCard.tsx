@@ -169,11 +169,12 @@ export const ProductCard = ({ item }: { item: Product }) => {
             color={isDark ? "#ffffff10" : "#00000010"}
           />
         )}
-        {item.imageUrl && (
+        {item.imageUrl && item.imageUrl !== "cube" && (
           <Image
             source={{ uri: item.imageUrl }}
             style={[styles.image, { opacity: isLoaded ? 1 : 0 }]}
             onLoad={() => setIsLoaded(true)}
+            onError={() => setIsLoaded(false)}
             resizeMode="contain"
           />
         )}

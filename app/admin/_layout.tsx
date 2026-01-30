@@ -10,10 +10,12 @@ import {
   TextInput,
   Text,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useTheme } from "../../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Toast from "react-native-toast-message";
 
 const { width } = Dimensions.get("window");
 
@@ -43,35 +45,60 @@ const AdminTabBg = ({ color }: { color: string }) => {
 export default function AdminLayout() {
   const { theme } = useTheme();
   const router = useRouter();
-  const segments = useSegments();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showSetupModal, setShowSetupModal] = useState(false);
   const [pin, setPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
   const [loading, setLoading] = useState(true);
+  const [hasPin, setHasPin] = useState(false);
+  const [autoLogoutEnabled, setAutoLogoutEnabled] = useState(true);
+  const [autoLogoutTime, setAutoLogoutTime] = useState(30);
 
   // Check authentication on mount and when screen focuses
   useFocusEffect(
     React.useCallback(() => {
       checkAuth();
-    }, []),
+    }, [])
   );
 
   const checkAuth = async () => {
     try {
-      const authStatus = await AsyncStorage.getItem("admin_authenticated");
-      const authTime = await AsyncStorage.getItem("admin_auth_time");
+      const storedPin = await AsyncStorage.getItem("admin_pin");
+      const lastAuth = await AsyncStorage.getItem("admin_last_auth");
+      const logoutEnabled = await AsyncStorage.getItem("admin_auto_logout");
+      const logoutTime = await AsyncStorage.getItem("admin_auto_logout_time");
 
-      if (authStatus === "true" && authTime) {
-        // Check if auth is still valid (30 minutes)
-        const elapsed = Date.now() - parseInt(authTime);
-        if (elapsed < 30 * 60 * 1000) {
+      // Load settings
+      setAutoLogoutEnabled(logoutEnabled !== "false");
+      setAutoLogoutTime(logoutTime ? parseInt(logoutTime) : 30);
+
+      // If no PIN exists at all, allow entry but show setup prompt
+      if (!storedPin) {
+        setHasPin(false);
+        setIsAuthenticated(true);
+        setShowSetupModal(true);
+        setLoading(false);
+        return;
+      }
+
+      setHasPin(true);
+
+      // Check if we have a recent auth session
+      if (lastAuth) {
+        const elapsed = Date.now() - parseInt(lastAuth);
+        const timeoutMs = (logoutTime ? parseInt(logoutTime) : 30) * 60 * 1000;
+
+        // If auto-logout is enabled and session is valid, authenticate
+        if ((logoutEnabled === "false" || elapsed < timeoutMs)) {
           setIsAuthenticated(true);
           setLoading(false);
           return;
         }
       }
 
-      // Not authenticated or session expired
+      // Need authentication
       setIsAuthenticated(false);
       setShowPinModal(true);
       setLoading(false);
@@ -84,46 +111,118 @@ export default function AdminLayout() {
   };
 
   const handlePinSubmit = async () => {
-    if (pin === "1234") {
-      // In production, use encrypted storage
-      await AsyncStorage.setItem("admin_authenticated", "true");
-      await AsyncStorage.setItem("admin_auth_time", Date.now().toString());
-      setIsAuthenticated(true);
-      setShowPinModal(false);
-      setPin("");
-    } else {
-      alert("Incorrect PIN");
-      setPin("");
+    try {
+      const storedPin = await AsyncStorage.getItem("admin_pin");
+
+      if (pin === storedPin) {
+        await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
+        setIsAuthenticated(true);
+        setShowPinModal(false);
+        setPin("");
+      } else {
+        Toast.show({
+          type: "error",
+          text1: "Access Denied",
+          text2: "Incorrect PIN",
+        });
+        setPin("");
+      }
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Authentication Error",
+        text2: "Could not verify PIN",
+      });
     }
+  };
+
+  const handleFirstTimeSetup = async () => {
+    try {
+      // Validate PIN format
+      if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+        Toast.show({
+          type: "error",
+          text1: "Invalid PIN",
+          text2: "PIN must be exactly 4 digits",
+        });
+        return;
+      }
+
+      // Validate confirmation
+      if (newPin !== confirmPin) {
+        Toast.show({
+          type: "error",
+          text1: "PIN Mismatch",
+          text2: "PINs do not match",
+        });
+        return;
+      }
+
+      // Store new PIN
+      await AsyncStorage.setItem("admin_pin", newPin);
+      await AsyncStorage.setItem("admin_first_setup", "completed");
+      await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
+
+      setHasPin(true);
+      setShowSetupModal(false);
+      setNewPin("");
+      setConfirmPin("");
+
+      Toast.show({
+        type: "success",
+        text1: "PIN Created",
+        text2: "Admin access is now secured",
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Setup Failed",
+        text2: "Could not save PIN",
+      });
+    }
+  };
+
+  const handleSkipSetup = () => {
+    setShowSetupModal(false);
+    Toast.show({
+      type: "info",
+      text1: "Setup Skipped",
+      text2: "Please set your PIN in Settings for security",
+    });
   };
 
   const handleCancel = () => {
     setShowPinModal(false);
+    setPin("");
     router.replace("/(tabs)");
   };
 
   if (loading) {
-    return <View style={{ flex: 1, backgroundColor: theme.background }} />;
+    return (
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && hasPin) {
     return (
       <Modal visible={showPinModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
-          >
-            <Ionicons name="shield-checkmark" size={48} color={theme.primary} />
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
+            </View>
             <Text style={[styles.modalTitle, { color: theme.text }]}>
               Admin Access Required
             </Text>
             <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
-              Enter admin PIN to continue
+              Enter your admin PIN to continue
             </Text>
             <TextInput
               style={[
                 styles.pinInput,
-                { color: theme.text, borderColor: theme.border },
+                { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
               ]}
               secureTextEntry
               keyboardType="numeric"
@@ -136,10 +235,10 @@ export default function AdminLayout() {
             />
             <View style={styles.modalActions}>
               <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.background }]}
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
                 onPress={handleCancel}
               >
-                <Text style={{ color: theme.text }}>Cancel</Text>
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
@@ -172,7 +271,7 @@ export default function AdminLayout() {
             backgroundColor: "transparent",
             borderTopWidth: 0,
             elevation: 0,
-            height: 70,
+            height: Platform.OS === "ios" ? 80 : 70,
             bottom: Platform.OS === "ios" ? 20 : 0,
           },
           tabBarBackground: () => <AdminTabBg color={theme.tabSurface} />,
@@ -206,13 +305,13 @@ export default function AdminLayout() {
           }}
         />
 
-        {/* FAB SCAN BUTTON (Center Dip) */}
         <Tabs.Screen
           name="scan"
           options={{
             title: "",
+            tabBarStyle: { display: "none" },
             tabBarIcon: ({ focused }) => (
-              <View style={styles.scanFab}>
+              <View style={styles.centerScanButton}>
                 <Ionicons
                   name="scan-circle-outline"
                   size={32}
@@ -250,8 +349,7 @@ export default function AdminLayout() {
             ),
           }}
         />
-
-        {/* Detail page hidden from Tab Bar */}
+      {/* Detail page hidden from Tab Bar */}
         <Tabs.Screen
           name="product/[id]"
           options={{
@@ -259,67 +357,154 @@ export default function AdminLayout() {
           }}
         />
       </Tabs>
+
+      {/* First-Time PIN Setup Modal */}
+      <Modal visible={showSetupModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
+            </View>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Secure Your Admin Panel
+            </Text>
+            <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
+              Create a 4-digit PIN to protect your admin dashboard
+            </Text>
+
+            <TextInput
+              style={[
+                styles.pinInput,
+                { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+              ]}
+              placeholder="Create PIN"
+              placeholderTextColor={theme.subtext}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              value={newPin}
+              onChangeText={setNewPin}
+            />
+
+            <TextInput
+              style={[
+                styles.pinInput,
+                { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+              ]}
+              placeholder="Confirm PIN"
+              placeholderTextColor={theme.subtext}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              value={confirmPin}
+              onChangeText={setConfirmPin}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
+                onPress={handleSkipSetup}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Skip</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={handleFirstTimeSetup}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Create PIN</Text>
+              </Pressable>
+            </View>
+
+            <Text style={[styles.warningText, { color: theme.subtext }]}>
+              ⚠️ You can set this up later in Settings
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   svgContainer: {
     position: "absolute",
     bottom: 0,
     width: width,
   },
-  scanFab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  centerScanButton: {
     justifyContent: "center",
     alignItems: "center",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
+    width: 60,
+    height: 60,
+    marginTop: Platform.OS === "ios" ? 10 : 5,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
+    backgroundColor: "rgba(0,0,0,0.90)",
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
   },
   modalContent: {
-    width: "85%",
+    width: "100%",
+    maxWidth: 400,
     padding: 30,
     borderRadius: 30,
     alignItems: "center",
   },
+  iconBox: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
   modalTitle: {
     fontSize: 22,
     fontWeight: "900",
-    marginTop: 15,
-    marginBottom: 5,
+    marginBottom: 10,
+    textAlign: "center",
   },
   modalSubtext: {
     fontSize: 14,
-    marginBottom: 20,
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 20,
   },
   pinInput: {
     width: "100%",
-    height: 60,
+    height: 55,
     borderWidth: 1,
     borderRadius: 15,
+    paddingHorizontal: 20,
+    marginBottom: 15,
     textAlign: "center",
-    fontSize: 28,
-    marginBottom: 20,
+    fontSize: 18,
+    fontWeight: "600",
   },
   modalActions: {
     flexDirection: "row",
     gap: 12,
+    marginTop: 10,
     width: "100%",
   },
   modalBtn: {
     flex: 1,
-    padding: 16,
+    height: 50,
     borderRadius: 15,
+    justifyContent: "center",
     alignItems: "center",
+  },
+  warningText: {
+    fontSize: 12,
+    marginTop: 15,
+    textAlign: "center",
+    fontWeight: "600",
   },
 });

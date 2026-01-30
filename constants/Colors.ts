@@ -1,11 +1,11 @@
 // constants/Colors.ts
 export const Colors = {
   light: {
-    background: '#dcdddfff',
-    tabSurface: '#bebebeff',
-    surface: '#e2e2e2ff', // Search bars, categories
-    text: '#1A1C1E',
-    subtext: '#6C727F',
+    background: '#eeeff2ff',
+    tabSurface: '#dfdcdcff',
+    surface: '#ffffffff', // Search bars, categories
+    text: '#0b0c0dff',
+    subtext: '#45464aff',
     primary: '#6366F1',
     border: '#a67eb6ff',
     card: '#FFFFFF',    // Bento boxes

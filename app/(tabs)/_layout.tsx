@@ -44,7 +44,7 @@ export default function TabsLayout() {
             backgroundColor: "transparent",
             borderTopWidth: 0,
             elevation: 0,
-            height: 70,
+            height: Platform.OS === "ios" ? 80 : 70,
             bottom: Platform.OS === "ios" ? 20 : 0,
           },
           tabBarBackground: () => <TabBg color={theme.tabSurface} />,

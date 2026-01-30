@@ -25,6 +25,11 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 // Routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use('/api/upload', require('./routes/uploadRoutes'));
+
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/alerts', require('./routes/alertsRoutes'));

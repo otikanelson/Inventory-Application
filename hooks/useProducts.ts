@@ -8,8 +8,8 @@
 // - Detail Fetching: Provide a method to retrieve a single product's full history for the View page.
 // - State Management: Export loading, error, and manual refresh functions for UI control.
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import axios from "axios";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /** Types & Interfaces **/
 export interface Batch {
@@ -29,6 +29,7 @@ export interface Product {
   barcode: string;
   hasBarcode: boolean;
   updatedAt: string;
+  genericPrice?: number | null;
 }
 
 export const useProducts = () => {
@@ -44,12 +45,15 @@ export const useProducts = () => {
       setLoading(true);
       const response = await axios.get(API_URL);
       const rawData = response.data.data || [];
-      
+
       // Transform: Use totalQuantity from backend (calculated via pre-save hook)
       const formattedData = rawData.map((p: any) => ({
         ...p,
         // Backend already calculates totalQuantity, but ensure it exists
-        totalQuantity: p.totalQuantity ?? p.batches?.reduce((acc: number, b: Batch) => acc + b.quantity, 0) ?? 0
+        totalQuantity:
+          p.totalQuantity ??
+          p.batches?.reduce((acc: number, b: Batch) => acc + b.quantity, 0) ??
+          0,
       }));
 
       setProducts(formattedData);
@@ -71,27 +75,37 @@ export const useProducts = () => {
     return {
       totalSkus: products.length,
       totalUnits: products.reduce((acc, p) => acc + p.totalQuantity, 0),
-      lowStockCount: products.filter(p => p.totalQuantity > 0 && p.totalQuantity < 10).length,
-      expiringSoonCount: products.filter(p => 
-        p.batches.some(b => {
+      lowStockCount: products.filter(
+        (p) => p.totalQuantity > 0 && p.totalQuantity < 10,
+      ).length,
+      expiringSoonCount: products.filter((p) =>
+        p.batches.some((b) => {
           const exp = new Date(b.expiryDate);
           return exp > now && exp <= thirtyDaysFromNow;
-        })
+        }),
       ).length,
-      outOfStockCount: products.filter(p => p.totalQuantity === 0).length,
+      outOfStockCount: products.filter((p) => p.totalQuantity === 0).length,
     };
   }, [products]);
 
   /** Unified Detail Fetcher (ID or Barcode) **/
-  const getProductById = async (identifier: string): Promise<Product | null> => {
+  const getProductById = async (
+    identifier: string,
+  ): Promise<Product | null> => {
     try {
       const response = await axios.get(`${API_URL}/${identifier}`);
       const item = response.data.data;
-      
+
       return {
         ...item,
         // Ensure totalQuantity is present
-        totalQuantity: item.totalQuantity ?? item.batches?.reduce((acc: number, b: Batch) => acc + b.quantity, 0) ?? 0
+        totalQuantity:
+          item.totalQuantity ??
+          item.batches?.reduce(
+            (acc: number, b: Batch) => acc + b.quantity,
+            0,
+          ) ??
+          0,
       };
     } catch (err) {
       console.error(`Detail Fetch Error for [${identifier}]:`, err);
@@ -103,10 +117,11 @@ export const useProducts = () => {
   const filterProducts = (query: string) => {
     if (!query) return products;
     const lowerQuery = query.toLowerCase();
-    return products.filter(p => 
-      p.name.toLowerCase().includes(lowerQuery) || 
-      p.barcode.includes(query) ||
-      p.category?.toLowerCase().includes(lowerQuery)
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(lowerQuery) ||
+        p.barcode.includes(query) ||
+        p.category?.toLowerCase().includes(lowerQuery),
     );
   };
 
@@ -115,13 +130,13 @@ export const useProducts = () => {
     fetchProducts();
   }, [fetchProducts]);
 
-  return { 
-    products, 
+  return {
+    products,
     inventoryStats,
-    loading, 
-    error, 
+    loading,
+    error,
     refresh: fetchProducts,
     getProductById,
-    filterProducts
+    filterProducts,
   };
 };

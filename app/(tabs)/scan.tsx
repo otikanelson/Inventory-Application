@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useAudioPlayer } from "expo-audio";
 import axios from "axios";
 import Toast from "react-native-toast-message";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { height } = Dimensions.get("window");
 
@@ -38,10 +39,10 @@ export default function ScanScreen() {
   const [loading, setLoading] = useState(false);
   const [torch, setTorch] = useState(false);
   const [confirmModal, setConfirmModal] = useState(false);
-  const [isNewProduct, setIsNewProduct] = useState(false);
   const [pinModal, setPinModal] = useState(false);
-  const [adminPin, setAdminPin] = useState("");
+  const [isNewProduct, setIsNewProduct] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
+  const [adminPin, setAdminPin] = useState("");
 
   // CRITICAL: Key to force camera remount when screen focuses
   const [cameraKey, setCameraKey] = useState(0);
@@ -79,8 +80,8 @@ export default function ScanScreen() {
       setLoading(false);
       setConfirmModal(false);
       setPinModal(false);
-      setAdminPin("");
       setPendingData(null);
+      setAdminPin("");
       setTorch(false);
 
       // Force camera remount by changing key
@@ -109,48 +110,72 @@ export default function ScanScreen() {
         `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`
       );
 
-      // DEBUG: Log the lookup response
-      console.log("Lookup Response:", {
-        barcode: data,
-        found: response.data.found,
-        productData: response.data.productData,
-        tab: tab,
-      });
-
+      // LOOKUP MODE: Navigate to existing product
       if (tab === "lookup") {
         if (response.data.found) {
-          BatchPlayer.play();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setScanned(false);
-          router.replace(`/product/${response.data.productData._id}`);
+          // Product exists in registry - now find it in local inventory
+          const localProductResponse = await axios.get(
+            `${process.env.EXPO_PUBLIC_API_URL}/products/barcode/${data}`
+          );
+          
+          if (localProductResponse.data.success && localProductResponse.data.product) {
+            // Product found in local inventory
+            BatchPlayer.play();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setScanned(false);
+            router.replace(`/product/${localProductResponse.data.product._id}`);
+          } else {
+            // Product in registry but not in local stock
+            RegPlayer.play();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            Toast.show({
+              type: "info",
+              text1: "Not In Stock",
+              text2: `${response.data.productData.name} is registered but has no inventory`,
+            });
+            setScanned(false);
+          }
         } else {
+          // Product not even in registry
           RegPlayer.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Toast.show({
             type: "info",
             text1: "Not Found",
-            text2: "Product does not exist.",
+            text2: "Product does not exist in registry",
           });
           setScanned(false);
         }
         return;
       }
 
-      // Registry Logic
+      // REGISTRY MODE: Register or Add Batch
       if (response.data.found) {
+        // Product exists in registry - add batch
         BatchPlayer.play();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setIsNewProduct(false);
-        setPendingData(response.data.productData);
+        
+        // Store complete product data for auto-fill
+        const productData = response.data.productData;
+        setPendingData({
+          barcode: data,
+          name: productData.name || "",
+          category: productData.category || "",
+          imageUrl: productData.imageUrl || "",
+          isPerishable: String(productData.isPerishable || false),
+        });
+        setConfirmModal(true);
       } else {
+        // Product NOT in registry - need to register
         RegPlayer.play();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setIsNewProduct(true);
         setPendingData({ barcode: data });
+        setConfirmModal(true);
       }
-      setConfirmModal(true);
     } catch (err) {
-      console.error(" Scan Error:", err);
+      console.error("Scan Error:", err);
       Toast.show({ type: "error", text1: "Error", text2: "Check connection" });
       setScanned(false);
     } finally {
@@ -158,16 +183,23 @@ export default function ScanScreen() {
     }
   };
 
-  // Dedicated handlers that reset state before navigation
+  // Handle confirmation modal "Proceed" button
   const handleModalProceed = () => {
     setConfirmModal(false);
+    
     if (isNewProduct) {
+      // Unknown product - prompt for admin PIN
       setPinModal(true);
     } else {
+      // Known product - go to add-products in inventory mode
       setScanned(false);
       router.push({
         pathname: "/add-products",
-        params: { ...pendingData, mode: "inventory", locked: "true" },
+        params: { 
+          ...pendingData, 
+          mode: "inventory", 
+          locked: "true" 
+        },
       });
     }
   };
@@ -177,21 +209,55 @@ export default function ScanScreen() {
     setScanned(false);
   };
 
-  const handlePinSubmit = () => {
-    if (adminPin === "1234") {
-      setPinModal(false);
-      setAdminPin("");
-      setScanned(false);
-      router.push({
-        pathname: "/add-products",
-        params: {
-          barcode: pendingData.barcode,
-          mode: "registry",
-          hasBarcode: String(pendingData.hasBarcode ?? true),
-        },
+  // Handle admin PIN submission for new product registration
+  const handlePinSubmit = async () => {
+    try {
+      const storedPin = await AsyncStorage.getItem('admin_pin');
+      
+      if (!storedPin) {
+        Toast.show({ 
+          type: "error", 
+          text1: "PIN Not Set",
+          text2: "Please set up admin PIN in settings first"
+        });
+        setPinModal(false);
+        setAdminPin("");
+        setScanned(false);
+        return;
+      }
+
+      if (adminPin === storedPin) {
+        // Correct PIN - update last auth time
+        await AsyncStorage.setItem('admin_last_auth', Date.now().toString());
+        
+        setPinModal(false);
+        setAdminPin("");
+        setScanned(false);
+        
+        // Navigate to add-products in REGISTRY mode
+        router.push({
+          pathname: "/add-products",
+          params: {
+            barcode: pendingData.barcode,
+            mode: "registry",
+          },
+        });
+      } else {
+        // Incorrect PIN
+        Toast.show({
+          type: "error",
+          text1: "Access Denied",
+          text2: "Incorrect PIN",
+        });
+        setAdminPin("");
+      }
+    } catch (error) {
+      console.error("PIN verification error:", error);
+      Toast.show({
+        type: "error",
+        text1: "Authentication Error",
+        text2: "Could not verify PIN",
       });
-    } else {
-      Toast.show({ type: "error", text1: "Access Denied" });
       setPinModal(false);
       setAdminPin("");
       setScanned(false);
@@ -204,31 +270,29 @@ export default function ScanScreen() {
     setScanned(false);
   };
 
-  const handleNoBarcodeEntry = () => {
-    setPendingData({
-      barcode: `INT-${Date.now()}`,
-      hasBarcode: false,
-    });
-    setIsNewProduct(true);
-    setPinModal(true);
-  };
-
   // Handle camera permissions
   if (!permission) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.permissionText}>Requesting camera permission...</Text>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Text style={[styles.permissionText, { color: theme.text }]}>
+          Requesting camera permission...
+        </Text>
       </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.permissionContainer}>
-          <Ionicons name="camera-outline" size={64} color="#666" />
-          <Text style={styles.permissionText}>Camera permission required</Text>
-          <Pressable style={styles.permissionBtn} onPress={requestPermission}>
+          <Ionicons name="camera-outline" size={64} color={theme.subtext} />
+          <Text style={[styles.permissionText, { color: theme.text }]}>
+            Camera permission required
+          </Text>
+          <Pressable 
+            style={[styles.permissionBtn, { backgroundColor: theme.primary }]} 
+            onPress={requestPermission}
+          >
             <Text style={styles.permissionBtnText}>Grant Permission</Text>
           </Pressable>
         </View>
@@ -268,11 +332,11 @@ export default function ScanScreen() {
               }}
               style={[
                 styles.tab,
-                tab === "lookup" && { backgroundColor: theme.primary },
+                tab === "lookup" && { backgroundColor: "#00D1FF" },
               ]}
             >
               <Text
-                style={[styles.tabText, tab === "lookup" && { color: "#FFF" }]}
+                style={[styles.tabText, tab === "lookup" && { color: "#000" }]}
               >
                 LOOKUP
               </Text>
@@ -284,13 +348,13 @@ export default function ScanScreen() {
               }}
               style={[
                 styles.tab,
-                tab === "registry" && { backgroundColor: theme.primary },
+                tab === "registry" && { backgroundColor: "#00FF00" },
               ]}
             >
               <Text
                 style={[
                   styles.tabText,
-                  tab === "registry" && { color: "#FFF" },
+                  tab === "registry" && { color: "#000" },
                 ]}
               >
                 REGISTRY
@@ -300,12 +364,15 @@ export default function ScanScreen() {
 
           <Pressable
             onPress={() => setTorch(!torch)}
-            style={styles.iconCircle}
+            style={[
+              styles.iconCircle,
+              torch && { backgroundColor: "rgba(255,255,255,0.4)" },
+            ]}
           >
             <Ionicons
               name={torch ? "flash" : "flash-off"}
               size={24}
-              color={torch ? "#FFD700" : "#FFF"}
+              color="#FFF"
             />
           </Pressable>
         </View>
@@ -350,17 +417,26 @@ export default function ScanScreen() {
             : "Scan to Register or Add Batch"}
           </Text>
           {tab === "registry" && (
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Pressable style={styles.altBtn} onPress={handleNoBarcodeEntry}>
-                <Text style={styles.altBtnText}>No Barcode?</Text>
-              </Pressable>
-              <Pressable
-                style={styles.manualBtn}
-                onPress={() => router.push("/add-products")}
-              >
-                <Text style={styles.manualBtnText}>Manual</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={styles.manualBtn}
+              onPress={() => {
+                // Generate unique barcode for manual entry
+                const timestamp = Date.now();
+                const random = Math.floor(Math.random() * 10000);
+                const generatedBarcode = `MAN-${timestamp}-${random}`;
+                
+                router.push({
+                  pathname: "/add-products",
+                  params: {
+                    barcode: generatedBarcode,
+                    mode: "manual",
+                    hasBarcode: "false"
+                  }
+                });
+              }}
+            >
+              <Text style={styles.manualBtnText}>Manual Entry</Text>
+            </Pressable>
           )}
         </View>
       </View>
@@ -423,18 +499,33 @@ export default function ScanScreen() {
               style={{ marginBottom: 10 }}
             />
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Registration Password
+              Admin Authorization
+            </Text>
+            <Text
+              style={{
+                color: theme.subtext,
+                textAlign: "center",
+                marginBottom: 20,
+              }}
+            >
+              Enter admin PIN to register new product
             </Text>
             <TextInput
               style={[
                 styles.pinInput,
-                { color: theme.text, borderColor: theme.border },
+                { 
+                  color: theme.text, 
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
               ]}
               secureTextEntry
               keyboardType="numeric"
               maxLength={4}
               value={adminPin}
               onChangeText={setAdminPin}
+              placeholder="Enter PIN"
+              placeholderTextColor={theme.subtext}
               autoFocus
             />
             <View style={styles.modalActions}>
@@ -448,7 +539,9 @@ export default function ScanScreen() {
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
                 onPress={handlePinSubmit}
               >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>VERIFY</Text>
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  Confirm
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -579,19 +672,10 @@ const styles = StyleSheet.create({
   manualBtn: {
     backgroundColor: "#FFF",
     paddingVertical: 15,
-    paddingHorizontal: 25,
+    paddingHorizontal: 30,
     borderRadius: 30,
   },
   manualBtnText: { color: "#000", fontWeight: "800", fontSize: 14 },
-  altBtn: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderWidth: 1,
-    borderColor: "#FFF",
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 30,
-  },
-  altBtnText: { color: "#FFF", fontWeight: "800", fontSize: 14 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
@@ -611,15 +695,21 @@ const styles = StyleSheet.create({
     marginTop: 10,
     width: "100%",
   },
-  modalBtn: { padding: 16, borderRadius: 15, flex: 1, alignItems: "center" },
+  modalBtn: { 
+    padding: 16, 
+    borderRadius: 15, 
+    flex: 1, 
+    alignItems: "center" 
+  },
   pinInput: {
     width: "100%",
     height: 60,
     borderWidth: 1,
     borderRadius: 15,
     textAlign: "center",
-    fontSize: 28,
-    marginBottom: 20,
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 15,
   },
   permissionContainer: {
     flex: 1,
@@ -628,13 +718,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   permissionText: {
-    color: "#FFF",
     fontSize: 16,
     marginVertical: 20,
     textAlign: "center",
   },
   permissionBtn: {
-    backgroundColor: "#6366F1",
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 20,
