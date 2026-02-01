@@ -15,7 +15,10 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] // Add your frontend domain if you have one
+    ? [
+        'https://inventory-application-xjc5.onrender.com',
+        'https://your-frontend-domain.com' // Add your frontend domain
+      ]
     : true, // Allow all origins in development
   credentials: true
 }));
@@ -31,8 +34,11 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+// Serve static files from uploads directory (for local development only)
+// In production, Cloudinary handles all images
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+}
 
 // Health check route
 app.get('/', (req, res) => {
@@ -41,7 +47,9 @@ app.get('/', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
+    version: '1.0.0',
+    storage: process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary (Production Ready)' : 'Local (Development Only)',
+    cloudinary_configured: !!process.env.CLOUDINARY_CLOUD_NAME
   });
 });
 
@@ -90,4 +98,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`.yellow.bold);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`.cyan);
+  console.log(`Storage: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary (Production Ready)' : 'Local (Development Only)'}`.green);
+  console.log(`Cloudinary Status: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '❌ Not Configured'}`.magenta);
 });

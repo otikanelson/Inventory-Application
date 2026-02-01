@@ -67,8 +67,18 @@ router.post('/image', async (req, res) => {
       hasCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
       hasApiKey: !!process.env.CLOUDINARY_API_KEY,
       hasApiSecret: !!process.env.CLOUDINARY_API_SECRET,
-      isConfigured: hasCloudinaryConfig
+      isConfigured: hasCloudinaryConfig,
+      environment: process.env.NODE_ENV
     });
+
+    // In production, REQUIRE Cloudinary (no local storage fallback)
+    if (process.env.NODE_ENV === 'production' && !hasCloudinaryConfig) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cloudinary configuration required in production environment',
+        error: 'CLOUDINARY_NOT_CONFIGURED'
+      });
+    }
 
     if (hasCloudinaryConfig) {
       // Use Cloudinary if properly configured
@@ -84,10 +94,21 @@ router.post('/image', async (req, res) => {
           storage: 'cloudinary'
         });
       } catch (cloudinaryError) {
-        console.error('Cloudinary upload failed, falling back to local storage:', cloudinaryError.message);
+        console.error('Cloudinary upload failed:', cloudinaryError.message);
+        
+        // In production, don't fall back to local storage
+        if (process.env.NODE_ENV === 'production') {
+          return res.status(500).json({
+            success: false,
+            message: 'Image upload failed. Cloudinary error in production.',
+            error: cloudinaryError.message
+          });
+        }
+        
+        console.log('Falling back to local storage (development only)');
       }
     } else {
-      console.log('Cloudinary not configured, using local storage');
+      console.log('Cloudinary not configured, using local storage (development only)');
     }
 
     // Fallback to local storage
