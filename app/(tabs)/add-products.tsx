@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -11,16 +10,16 @@ import {
   FlatList,
   Image,
   ImageBackground,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
-  View,
-  KeyboardAvoidingView,
-  Platform,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
@@ -39,13 +38,23 @@ export default function AddProducts() {
   const [isPerishable, setIsPerishable] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [formModified, setFormModified] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [pendingNavAction, setPendingNavAction] = useState<any>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [existingProduct, setExistingProduct] = useState<any>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  
+  // Enhanced UX states
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [validFields, setValidFields] = useState<string[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showModeHelp, setShowModeHelp] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [totalSteps] = useState(3);
+  const [showFieldHelp, setShowFieldHelp] = useState<string | null>(null);
+  const [highlightErrors, setHighlightErrors] = useState<string[]>([]); // For red flash effect
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -58,6 +67,10 @@ export default function AddProducts() {
 
   const mode = (params.mode as "registry" | "inventory" | "manual") || "manual";
   const isLocked = params.locked === "true";
+  
+  // Smart detection: Check if barcode came from scanning vs manual entry
+  const isScannedProduct = Boolean(params.barcode && params.barcode !== formData.barcode);
+  const showGenerateButton = !isLocked && !isScannedProduct;
 
   const existingCategories = Array.from(
     new Set(products.map((p) => p.category).filter(Boolean)),
@@ -150,31 +163,158 @@ export default function AddProducts() {
       navigation.setOptions && navigation.setOptions({ headerLeft: () => null });
     } catch (e) {}
 
-    const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
+    const beforeRemoveListener = (e: any) => {
       if (!formModified) return;
       e.preventDefault();
-      setPendingNavAction(() => () => navigation.dispatch(e.data.action));
+      setPendingNavAction(e.data?.action ?? null);
       setShowExitModal(true);
-    });
+    };
 
-    return unsubscribe;
+    const unsub = navigation.addListener?.("beforeRemove", beforeRemoveListener);
+    const parent = navigation.getParent && navigation.getParent();
+    let parentUnsub: any = null;
+    if (parent && parent.addListener) {
+      parentUnsub = parent.addListener("tabPress", (e: any) => {
+        try { if (navigation.isFocused && !navigation.isFocused()) return; } catch (err) {}
+        if (!formModified) return;
+        e.preventDefault();
+        setPendingNavAction(() => () => {
+          try { parent.navigate(e.target); } catch (err) {}
+        });
+        setShowExitModal(true);
+      });
+    }
+    return () => {
+      if (unsub) unsub();
+      if (parentUnsub) parentUnsub();
+    };
   }, [navigation, formModified]);
 
+  // Enhanced field validation with real-time feedback
+  const validateField = (field: string, value: string) => {
+    let result = { isValid: true, error: "" };
+    
+    switch (field) {
+      case "name":
+        if (!value.trim()) {
+          result = { isValid: false, error: "Product name is required" };
+        } else if (value.trim().length < 2) {
+          result = { isValid: false, error: "Name must be at least 2 characters" };
+        } else if (value.length > 100) {
+          result = { isValid: false, error: "Name cannot exceed 100 characters" };
+        }
+        break;
+      case "barcode":
+        if (!value.trim()) {
+          result = { isValid: false, error: "Barcode is required" };
+        } else if (value.length < 8 || value.length > 20) {
+          result = { isValid: false, error: "Invalid barcode format (8-20 characters)" };
+        }
+        break;
+      case "category":
+        if (!value.trim()) {
+          result = { isValid: false, error: "Category is required" };
+        } else if (value.length > 50) {
+          result = { isValid: false, error: "Category cannot exceed 50 characters" };
+        }
+        break;
+      case "quantity":
+        const qtyNum = parseFloat(value);
+        if (isNaN(qtyNum)) {
+          result = { isValid: false, error: "Quantity must be a number" };
+        } else if (qtyNum < 0) {
+          result = { isValid: false, error: "Quantity cannot be negative" };
+        } else if (qtyNum > 1000000) {
+          result = { isValid: false, error: "Quantity exceeds maximum limit" };
+        }
+        break;
+      case "price":
+        const priceNum = parseFloat(value);
+        if (isNaN(priceNum)) {
+          result = { isValid: false, error: "Price must be a number" };
+        } else if (priceNum < 0) {
+          result = { isValid: false, error: "Price cannot be negative" };
+        } else if (priceNum > 10000000) {
+          result = { isValid: false, error: "Price exceeds maximum limit" };
+        }
+        break;
+      case "expiryDate":
+        if (isPerishable && !value.trim()) {
+          result = { isValid: false, error: "Expiry date is required for perishable items" };
+        } else if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          result = { isValid: false, error: "Date must be in YYYY-MM-DD format" };
+        } else if (value) {
+          const expiryDate = new Date(value);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (isNaN(expiryDate.getTime())) {
+            result = { isValid: false, error: "Invalid date" };
+          } else if (expiryDate < today) {
+            result = { isValid: false, error: "Expiry date cannot be in the past" };
+          }
+        }
+        break;
+    }
+    
+    setFieldErrors(prev => ({
+      ...prev,
+      [field]: result.isValid ? "" : result.error
+    }));
+    
+    if (result.isValid && value.trim()) {
+      setValidFields(prev => [...prev.filter(f => f !== field), field]);
+    } else {
+      setValidFields(prev => prev.filter(f => f !== field));
+    }
+    
+    return result.isValid;
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    const sanitizedValue = value.trim().replace(/\s+/g, ' ');
+    setFormData((prev) => ({ ...prev, [field]: sanitizedValue }));
+    setFormModified(true);
+    
+    // Real-time validation with debounce
+    setTimeout(() => validateField(field, sanitizedValue), 300);
+  };
+
   const resetForm = () => {
-    setFormData({ name: "", quantity: "", expiryDate: "", category: "", price: "", barcode: "" });
+    setFormData({
+      name: "",
+      quantity: "",
+      expiryDate: "",
+      category: "",
+      price: "",
+      barcode: "",
+    });
     setImage(null);
     setIsPerishable(false);
     setFormModified(false);
     setExistingProduct(null);
-    setErrors([]);
+    setFieldErrors({});
+    setValidFields([]);
+    setHighlightErrors([]);
+    setCurrentStep(1);
+    setUploadProgress(0);
+    setIsUploading(false);
+    
+    Toast.show({
+      type: "success",
+      text1: "Form Reset",
+      text2: "All fields cleared successfully",
+    });
   };
 
-  const handleFieldChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    setFormModified(true);
-    setErrors((prev) => prev.filter((f) => f !== field));
+  const handleRefreshPress = () => {
+    if (formModified) {
+      setShowRefreshConfirm(true);
+    } else {
+      resetForm();
+    }
   };
 
+  // Generate barcode function
   const generateBarcode = () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 10000);
@@ -182,7 +322,6 @@ export default function AddProducts() {
     
     setFormData((prev) => ({ ...prev, barcode: newBarcode }));
     setFormModified(true);
-    setErrors((prev) => prev.filter((f) => f !== "barcode"));
     
     Toast.show({
       type: "success",
@@ -196,21 +335,40 @@ export default function AddProducts() {
     const cleanName = formData.name.trim();
     const cleanCategory = formData.category.trim();
     const newErrors: string[] = [];
+    const highlightFields: string[] = [];
 
-    if (!cleanBarcode) newErrors.push("barcode");
-    if (!cleanName) newErrors.push("name");
-    if (!cleanCategory) newErrors.push("category");
+    if (!cleanBarcode) {
+      newErrors.push("barcode");
+      highlightFields.push("barcode");
+    }
+    if (!cleanName) {
+      newErrors.push("name");
+      highlightFields.push("name");
+    }
+    if (!cleanCategory) {
+      newErrors.push("category");
+      highlightFields.push("category");
+    }
 
     const hasExistingBatchesWithImage = existingProduct && existingProduct.imageUrl && existingProduct.batches && existingProduct.batches.length > 0;
     const imageRequired = !hasExistingBatchesWithImage;
-    if (imageRequired && !image) newErrors.push("image");
+    if (imageRequired && !image) {
+      newErrors.push("image");
+      highlightFields.push("image");
+    }
 
     if (mode === "inventory" || mode === "manual") {
       const qtyNum = Number(formData.quantity);
-      if (!formData.quantity || isNaN(qtyNum) || qtyNum <= 0) newErrors.push("quantity");
+      if (!formData.quantity || isNaN(qtyNum) || qtyNum <= 0) {
+        newErrors.push("quantity");
+        highlightFields.push("quantity");
+      }
       
       const priceNum = Number(formData.price);
-      if (!formData.price || isNaN(priceNum) || priceNum < 0) newErrors.push("price");
+      if (!formData.price || isNaN(priceNum) || priceNum < 0) {
+        newErrors.push("price");
+        highlightFields.push("price");
+      }
 
       if (isPerishable) {
         const expiryDate = new Date(formData.expiryDate);
@@ -218,11 +376,17 @@ export default function AddProducts() {
         today.setHours(0, 0, 0, 0);
         if (!formData.expiryDate || isNaN(expiryDate.getTime()) || expiryDate < today) {
           newErrors.push("expiryDate");
+          highlightFields.push("expiryDate");
         }
       }
     }
 
-    setErrors(newErrors);
+    // Flash red highlights for missing fields
+    if (highlightFields.length > 0) {
+      setHighlightErrors(highlightFields);
+      // Remove highlights after animation
+      setTimeout(() => setHighlightErrors([]), 2000);
+    }
 
     if (newErrors.length > 0) {
       return { isValid: false, error: "Please fill all required fields correctly", field: "Validation" };
@@ -231,7 +395,8 @@ export default function AddProducts() {
     if (mode === "inventory" && existingProduct) {
       const registeredCategory = (existingProduct.category || "").trim().toLowerCase();
       if (registeredCategory && cleanCategory.toLowerCase() !== registeredCategory) {
-        setErrors(["category"]);
+        setHighlightErrors(["category"]);
+        setTimeout(() => setHighlightErrors([]), 2000);
         return { isValid: false, error: `Category mismatch! Must be "${existingProduct.category}"`, field: "Category" };
       }
     }
@@ -239,46 +404,26 @@ export default function AddProducts() {
     return { isValid: true };
   };
 
-  const pickImageHandler = async (useCamera: boolean) => {
+  const pickImage = async (useCamera: boolean) => {
     setShowPicker(false);
+    const perm = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Toast.show({ type: "error", text1: "Permission Denied", text2: "Access required" });
+      return;
+    }
     
-    if (useCamera) {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Toast.show({ type: "error", text1: "Permission Denied", text2: "Camera access required" });
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        quality: 0.7,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setImage(result.assets[0].uri);
-        setFormModified(true);
-        setErrors((prev) => prev.filter((f) => f !== "image"));
-      }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Toast.show({ type: "error", text1: "Permission Denied", text2: "Gallery access required" });
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setImage(result.assets[0].uri);
-        setFormModified(true);
-        setErrors((prev) => prev.filter((f) => f !== "image"));
-      }
+    // Improved image picker options with better compression
+    const options: ImagePicker.ImagePickerOptions = { 
+      quality: 0.3, // Reduced quality for smaller file size
+      allowsEditing: true, 
+      aspect: [1, 1],
+      base64: false, // Don't get base64 immediately to save memory
+    };
+    
+    let result = useCamera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+      setFormModified(true);
     }
   };
 
@@ -298,11 +443,14 @@ export default function AddProducts() {
     setIsSubmitting(true);
 
     try {
+      /** 1. Handle Image Upload First **/
       let finalImageUrl = image;
 
-      // If image is a local URI, upload to Cloudinary
+      // If 'image' exists and starts with 'file://', it's a local picker URI
       if (image && image.startsWith("file://")) {
-        setIsUploadingImage(true);
+        setIsUploading(true);
+        setUploadProgress(0);
+        
         Toast.show({ 
           type: "info", 
           text1: "Uploading Image...", 
@@ -310,66 +458,156 @@ export default function AddProducts() {
         });
 
         try {
-          // Convert to base64 using legacy API
-          const base64 = await FileSystem.readAsStringAsync(image, {
-            encoding: FileSystem.EncodingType.Base64,
+          // Simulate upload progress
+          const progressInterval = setInterval(() => {
+            setUploadProgress(prev => {
+              if (prev >= 90) {
+                clearInterval(progressInterval);
+                return 90;
+              }
+              return prev + 10;
+            });
+          }, 200);
+
+          console.log('Starting image upload process...');
+          console.log('Image URI:', image);
+
+          // Convert to base64 for upload
+          const response = await fetch(image);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status}`);
+          }
+
+          const blob = await response.blob();
+          console.log('Original blob size:', blob.size, 'type:', blob.type);
+
+          // Check if image is too large (> 5MB original)
+          if (blob.size > 5 * 1024 * 1024) {
+            throw new Error('Image is too large. Please choose a smaller image or take a new photo with lower quality.');
+          }
+
+          const reader = new FileReader();
+          
+          const base64Promise = new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+              console.log('FileReader completed');
+              const result = reader.result;
+              if (typeof result === 'string') {
+                resolve(result);
+              } else {
+                reject(new Error('Failed to read file as data URL'));
+              }
+            };
+            reader.onerror = (error) => {
+              console.error('FileReader error:', error);
+              reject(error);
+            };
+            reader.readAsDataURL(blob);
           });
 
-          // Upload to backend
+          const base64Data = await base64Promise;
+          console.log('Base64 data length:', base64Data.length);
+          console.log('Base64 prefix:', base64Data.substring(0, 50));
+
+          // Check final size (base64 is ~33% larger than binary)
+          const estimatedSize = (base64Data.length * 3) / 4;
+          console.log('Estimated final size:', estimatedSize, 'bytes');
+
+          if (estimatedSize > 10 * 1024 * 1024) { // 10MB limit
+            throw new Error('Image is too large after processing. Please choose a smaller image.');
+          }
+
+          // Upload to backend using the correct endpoint
+          console.log('Sending upload request to:', `${process.env.EXPO_PUBLIC_API_URL}/upload/image`);
+          
           const uploadResponse = await axios.post(
-            `${process.env.EXPO_PUBLIC_API_URL}/upload/image`,
+            `${process.env.EXPO_PUBLIC_API_URL}/upload/image`, 
             {
-              image: `data:image/jpeg;base64,${base64}`,
+              image: base64Data,
               folder: 'inventiease',
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              timeout: 60000, // 60 second timeout for large images
+              maxContentLength: 50 * 1024 * 1024, // 50MB max
+              maxBodyLength: 50 * 1024 * 1024, // 50MB max
             }
           );
+
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+
+          console.log('Upload response:', uploadResponse.data);
 
           if (uploadResponse.data.success) {
             finalImageUrl = uploadResponse.data.imageUrl;
             Toast.show({ 
               type: "success", 
-              text1: "Image Uploaded", 
+              text1: "Image Uploaded Successfully", 
               text2: "Saving product..." 
             });
           } else {
-            throw new Error("Upload failed");
+            throw new Error(uploadResponse.data.message || "Upload failed");
           }
         } catch (uploadError: any) {
-          console.error("Image upload error:", uploadError);
+          console.error("Image upload error details:", {
+            message: uploadError.message,
+            response: uploadError.response?.data,
+            status: uploadError.response?.status,
+            config: uploadError.config
+          });
+
+          let errorMessage = "Could not upload image. Please try again.";
+          
+          if (uploadError.response?.status === 413 || uploadError.message.includes('too large')) {
+            errorMessage = "Image is too large. Please choose a smaller image or take a new photo.";
+          } else if (uploadError.response?.status === 500) {
+            errorMessage = "Server error during upload. Please check your internet connection and try again.";
+          } else if (uploadError.response?.status === 400) {
+            errorMessage = "Invalid image format. Please try a different image.";
+          } else if (uploadError.code === 'ECONNABORTED') {
+            errorMessage = "Upload timeout. Please check your internet connection.";
+          } else if (uploadError.response?.data?.message) {
+            errorMessage = uploadError.response.data.message;
+          } else if (uploadError.message.includes('too large')) {
+            errorMessage = uploadError.message;
+          }
+
           Toast.show({
             type: "error",
             text1: "Upload Failed",
-            text2: "Could not upload image",
+            text2: errorMessage,
           });
-          setIsUploadingImage(false);
           setIsSubmitting(false);
           return;
         } finally {
-          setIsUploadingImage(false);
+          setIsUploading(false);
+          setUploadProgress(0);
         }
       }
 
-      // Save product with Cloudinary URL
+      /** 2. Proceed with Registry/Inventory logic using finalImageUrl **/
       if (mode === "registry") {
         await axios.post(`${API_URL}/registry/add`, {
           barcode: cleanBarcode,
           name: cleanName,
           category: cleanCategory,
           isPerishable: isPerishable,
-          imageUrl: finalImageUrl || "",
+          imageUrl: finalImageUrl || "", // Use the uploaded URL
         });
         
         Toast.show({ type: "success", text1: "Product Registered" });
         resetForm();
         setTimeout(() => router.replace("/(tabs)"), 800);
       } else {
+        // ... (Your registry lookup logic remains the same)
         let productInRegistry = false;
         try {
           const lookupResponse = await axios.get(`${API_URL}/registry/lookup/${cleanBarcode}`);
           productInRegistry = lookupResponse.data.found;
-        } catch (err) { 
-          productInRegistry = false; 
-        }
+        } catch (err) { productInRegistry = false; }
 
         if (!productInRegistry) {
           try {
@@ -378,15 +616,14 @@ export default function AddProducts() {
               name: cleanName,
               category: cleanCategory,
               isPerishable: isPerishable,
-              imageUrl: finalImageUrl || "",
+              imageUrl: finalImageUrl || "", // Use the uploaded URL
             });
           } catch (registryError: any) {
-            if (!registryError.response?.data?.message?.includes("already in registry")) {
-              throw registryError;
-            }
+            if (!registryError.response?.data?.message?.includes("already in registry")) throw registryError;
           }
         }
 
+        // Add Batch with permanent image URL
         const imageToSave = finalImageUrl || existingProduct?.imageUrl || "";
         
         await axios.post(API_URL, {
@@ -401,38 +638,25 @@ export default function AddProducts() {
           isPerishable: isPerishable,
         });
 
-        Toast.show({ type: "success", text1: "Batch Added Successfully" });
+        Toast.show({ type: "success", text1: "Batch Added" });
         resetForm();
         setTimeout(() => router.replace("/(tabs)"), 800);
       }
     } catch (err: any) {
       console.error("Save Error:", err);
-      Toast.show({ 
-        type: "error", 
-        text1: "Save Failed", 
-        text2: err.message || "Please try again" 
-      });
+      Toast.show({ type: "error", text1: "Save Failed", text2: err.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleScannerPress = () => {
-    if (formModified) { 
-      setShowExitModal(true); 
-    } else { 
-      router.push("/(tabs)/scan"); 
-    }
+    if (formModified) { setShowExitModal(true); } else { router.push("/(tabs)/scan"); }
   };
 
   const handleCategorySelect = (category: string) => {
-    if (!category || !category.trim()) {
-      setShowCategoryPicker(false);
-      return;
-    }
-    setFormData((prev) => ({ ...prev, category: category.trim() }));
+    setFormData((prev) => ({ ...prev, category }));
     setFormModified(true);
-    setErrors((prev) => prev.filter((f) => f !== "category"));
     setShowCategoryPicker(false);
   };
 
@@ -450,367 +674,752 @@ export default function AddProducts() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={[styles.headerCard, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.subtitle, { color: theme.primary }]}>
-              {mode === "registry" ? "GLOBAL REGISTRY" : mode === "inventory" ? "INVENTORY BATCH" : "MANUAL ENTRY"}
-            </Text>
-            <Text style={[styles.title, { color: theme.text }]}>
-              {mode === "registry" ? "Register Product" : "Add to Stock"}
-            </Text>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1, }}>
+              <Text style={[styles.subtitle, { color: theme.primary }]}>
+                {mode === "registry" ? "GLOBAL_REGISTRY_ENTRY" : "ADD_STOCK_TO_INVENTORY"}
+              </Text>
+              <Text style={[styles.title, { color: theme.text }]}>
+                {mode === "registry" ? "REGISTER_PRODUCT" : "ADD_BATCH"}
+              </Text>
+            </View>
             
-            {existingProduct && mode === "inventory" && (
-              <View style={[styles.infoBox, { backgroundColor: theme.background, borderColor: theme.primary }]}>
-                <Ionicons name="information-circle" size={20} color={theme.primary} />
-                <Text style={[styles.infoText, { color: theme.text }]}>
-                  Adding batch to: <Text style={{ fontWeight: "800" }}>{existingProduct.name}</Text>
-                </Text>
-              </View>
+            {/* Refresh Button */}
+            {(params.barcode || params.mode) && (
+              <Pressable 
+                style={[styles.refreshBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={handleRefreshPress}
+              >
+                <Ionicons name="refresh" size={20} color={theme.primary} />
+              </Pressable>
             )}
           </View>
 
-          {/* Scanner Shortcut */}
-          <Pressable 
-            style={[styles.scannerLink, { borderColor: theme.border }]} 
-            onPress={handleScannerPress}
-          >
-            <Ionicons name="barcode-outline" size={24} color={theme.primary} />
-            <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>
-              Smart Scanner
-            </Text>
-          </Pressable>
-
-          {/* Product Identity Section */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.subtext }]}>PRODUCT IDENTITY</Text>
-
-            {/* Barcode with Generate Button */}
-            <Text style={[styles.label, { color: theme.subtext }]}>BARCODE / ID</Text>
-            <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    flex: 1,
-                    backgroundColor: theme.surface,
-                    borderWidth: 1,
-                    borderColor: errors.includes("barcode") ? theme.notification : theme.border,
-                    color: theme.text,
-                  },
-                  isLocked && styles.locked,
-                ]}
-                value={formData.barcode}
-                editable={!isLocked}
-                placeholder="Scan or enter barcode"
-                placeholderTextColor={theme.subtext}
-                onChangeText={(t) => handleFieldChange("barcode", t)}
-              />
-              {!isLocked && (
-                <Pressable
-                  style={[styles.generateBtn, { backgroundColor: theme.primary }]}
-                  onPress={generateBarcode}
-                >
-                  <Ionicons name="refresh" size={20} color="#fff" />
+          {/* Enhanced Mode Selection with Help */}
+          {!params.barcode && !params.mode && (
+            <View style={styles.modeSelection}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>SELECT MODE</Text>
+                <Pressable onPress={() => setShowModeHelp(true)}>
+                  <Ionicons name="help-circle-outline" size={20} color={theme.primary} />
                 </Pressable>
-              )}
-            </View>
-
-            {/* Photo and Basic Info Row */}
-            <View style={styles.photoRow}>
-              <View style={styles.photoBoxContainer}>
+              </View>
+              
+              <View style={styles.modeButtons}>
                 <Pressable
                   style={[
-                    styles.photoBox,
+                    styles.modeBtn,
                     {
-                      backgroundColor: theme.surface,
-                      borderColor: errors.includes("image") ? theme.notification : theme.border,
-                      borderWidth: 2,
+                      backgroundColor: mode === "registry" ? theme.primary : theme.surface,
+                      borderColor: mode === "registry" ? theme.primary : theme.border,
                     },
                   ]}
-                  onPress={() => setShowPicker(true)}
-                  disabled={isUploadingImage}
+                  onPress={() => {
+                    setFormData(prev => ({ ...prev, mode: "registry" }));
+                    router.replace({
+                      pathname: "/(tabs)/add-products",
+                      params: { mode: "registry" }
+                    });
+                  }}
                 >
-                  {image ? (
-                    <Image source={{ uri: image }} style={styles.fullImg} />
-                  ) : (
-                    <Ionicons name="camera" size={40} color={theme.subtext} />
-                  )}
-                  {isUploadingImage && (
-                    <View style={styles.uploadingOverlay}>
-                      <ActivityIndicator size="large" color={theme.primary} />
-                    </View>
-                  )}
+                  <Ionicons 
+                    name="library-outline" 
+                    size={24} 
+                    color={mode === "registry" ? "#fff" : theme.text} 
+                  />
+                  <Text style={{
+                    color: mode === "registry" ? "#fff" : theme.text,
+                    fontWeight: "700",
+                    fontSize: 16,
+                    marginTop: 8,
+                  }}>
+                    Register Product
+                  </Text>
+                  <Text style={{
+                    color: mode === "registry" ? "#fff" : theme.subtext,
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 4,
+                  }}>
+                    Add to global database only
+                  </Text>
                 </Pressable>
-                
-                {/* Remove Image X Button */}
-                {image && !isUploadingImage && (
-                  <Pressable
-                    style={[styles.removePhoto, { backgroundColor: theme.notification }]}
-                    onPress={() => {
-                      setImage(null);
-                      setFormModified(true);
-                      setErrors((prev) => prev.filter((f) => f !== "image"));
-                      Toast.show({
-                        type: "info",
-                        text1: "Image Removed",
-                      });
-                    }}
-                  >
-                    <Ionicons name="close" size={18} color="#fff" />
-                  </Pressable>
-                )}
-              </View>
 
+                <Pressable
+                  style={[
+                    styles.modeBtn,
+                    {
+                      backgroundColor: mode === "manual" ? theme.primary : theme.surface,
+                      borderColor: mode === "manual" ? theme.primary : theme.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setFormData(prev => ({ ...prev, mode: "manual" }));
+                    router.replace({
+                      pathname: "/(tabs)/add-products",
+                      params: { mode: "manual" }
+                    });
+                  }}
+                >
+                  <Ionicons 
+                    name="add-circle-outline" 
+                    size={24} 
+                    color={mode === "manual" ? "#fff" : theme.text} 
+                  />
+                  <Text style={{
+                    color: mode === "manual" ? "#fff" : theme.text,
+                    fontWeight: "700",
+                    fontSize: 16,
+                    marginTop: 8,
+                  }}>
+                    Add to Inventory
+                  </Text>
+                  <Text style={{
+                    color: mode === "manual" ? "#fff" : theme.subtext,
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 4,
+                  }}>
+                    Register & add stock
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Progress Indicator */}
+          {(params.barcode || params.mode) && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { 
+                      width: `${(currentStep / totalSteps) * 100}%`,
+                      backgroundColor: theme.primary 
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={[styles.progressText, { color: theme.subtext }]}>
+                Step {currentStep} of {totalSteps}
+              </Text>
+            </View>
+          )}
+
+          {existingProduct && mode === "inventory" && (
+            <View style={[styles.infoCard, { backgroundColor: theme.primary + "15", borderColor: theme.primary }]}>
+              <Ionicons name="information-circle" size={20} color={theme.primary} />
+              <Text style={[styles.infoText, { color: theme.text }]}>
+                Adding batch to: <Text style={{ fontWeight: "800" }}>{existingProduct.name}</Text>
+              </Text>
+            </View>
+          )}
+
+          <Pressable style={[styles.scanShortcut, { borderColor: theme.border }]} onPress={handleScannerPress}>
+            <Ionicons name="barcode-outline" size={24} color={theme.primary} />
+            <Text style={{ color: theme.text, fontWeight: "700", marginLeft: 10 }}>Smart Scanner</Text>
+          </Pressable>
+
+          <Text style={styles.sectionTitle}>PRODUCT IDENTITY</Text>
+
+          {/* Enhanced Barcode Input with Validation */}
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={[styles.label, { color: theme.subtext }]}>BARCODE / ID</Text>
+              <Pressable onPress={() => setShowFieldHelp(showFieldHelp === 'barcode' ? null : 'barcode')}>
+                <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
+              </Pressable>
+            </View>
+            
+            {showFieldHelp === 'barcode' && (
+              <View style={[styles.helpBox, { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}>
+                <Text style={[styles.helpText, { color: theme.text }]}>
+                  Scan a barcode or generate one automatically. Barcodes help track products uniquely.
+                </Text>
+              </View>
+            )}
+            
+            <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.label, { color: theme.subtext }]}>NAME</Text>
                 <TextInput
                   style={[
                     styles.input,
                     {
                       backgroundColor: theme.surface,
-                      borderWidth: 1,
-                      borderColor: errors.includes("name") ? theme.notification : theme.border,
+                      borderWidth: 2,
+                      borderColor: highlightErrors.includes('barcode')
+                        ? theme.notification 
+                        : fieldErrors.barcode 
+                          ? theme.notification 
+                          : validFields.includes('barcode') 
+                            ? '#4CAF50' 
+                            : theme.border,
                       color: theme.text,
                     },
                     isLocked && styles.locked,
+                    highlightErrors.includes('barcode') && styles.errorHighlight,
                   ]}
-                  value={formData.name}
+                  value={formData.barcode}
                   editable={!isLocked}
-                  placeholder="Product name"
+                  placeholder={isScannedProduct ? "Scanned barcode" : "Scan or enter barcode"}
                   placeholderTextColor={theme.subtext}
-                  onChangeText={(t) => handleFieldChange("name", t)}
+                  onChangeText={(t) => handleFieldChange("barcode", t)}
                 />
-
-                <Text style={[styles.label, { color: theme.subtext }]}>CATEGORY</Text>
-                <Pressable
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.surface,
-                      borderWidth: 1,
-                      borderColor: errors.includes("category") ? theme.notification : theme.border,
-                      justifyContent: "center",
-                    },
-                  ]}
-                  onPress={() => setShowCategoryPicker(true)}
-                >
-                  <Text style={{ color: formData.category ? theme.text : theme.subtext }}>
-                    {formData.category || "Select category"}
+                {fieldErrors.barcode && (
+                  <Text style={[styles.errorText, { color: theme.notification }]}>
+                    {fieldErrors.barcode}
                   </Text>
-                </Pressable>
+                )}
+                {validFields.includes('barcode') && (
+                  <View style={styles.successRow}>
+                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                    <Text style={[styles.successText, { color: '#4CAF50' }]}>
+                      {isScannedProduct ? "Scanned successfully" : "Valid barcode"}
+                    </Text>
+                  </View>
+                )}
               </View>
-            </View>
-
-            {/* Perishable Toggle */}
-            <View style={[styles.toggleRow, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-              <Text style={{ color: theme.text, fontWeight: "600", fontSize: 15 }}>
-                Perishable Item
-              </Text>
-              <Switch
-                value={isPerishable}
-                onValueChange={(val) => {
-                  setIsPerishable(val);
-                  setFormModified(true);
-                  if (!val) setFormData((prev) => ({ ...prev, expiryDate: "" }));
-                }}
-                trackColor={{ false: theme.border, true: theme.primary + "80" }}
-                thumbColor={isPerishable ? theme.primary : theme.subtext}
-              />
+              
+              {/* Smart Generate Button - Only show for manual entry */}
+              {showGenerateButton && (
+                <Pressable
+                  style={[styles.generateBtn, { backgroundColor: theme.primary }]}
+                  onPress={generateBarcode}
+                >
+                  <Ionicons name="pencil" size={20} color="#fff" />
+                </Pressable>
+              )}
             </View>
           </View>
 
-          {/* Batch Details Section */}
-          {(mode === "inventory" || mode === "manual") && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.subtext }]}>BATCH DETAILS</Text>
-
-              <Text style={[styles.label, { color: theme.subtext }]}>QUANTITY</Text>
-              <TextInput
+          {/* Enhanced Photo Section */}
+          <View style={styles.photoRow}>
+            <View style={styles.photoBoxContainer}>
+              <Pressable
                 style={[
-                  styles.input,
+                  styles.photoBox,
                   {
                     backgroundColor: theme.surface,
-                    borderWidth: 1,
-                    borderColor: errors.includes("quantity") ? theme.notification : theme.border,
-                    color: theme.text,
+                    borderColor: highlightErrors.includes('image')
+                      ? theme.notification
+                      : fieldErrors.image 
+                        ? theme.notification 
+                        : theme.border,
+                    borderWidth: 2,
                   },
+                  highlightErrors.includes('image') && styles.errorHighlight,
                 ]}
-                value={formData.quantity}
-                placeholder="Enter quantity"
-                placeholderTextColor={theme.subtext}
-                keyboardType="numeric"
-                onChangeText={(t) => handleFieldChange("quantity", t)}
-              />
-
-              <Text style={[styles.label, { color: theme.subtext }]}>PRICE PER UNIT (₦)</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.surface,
-                    borderWidth: 1,
-                    borderColor: errors.includes("price") ? theme.notification : theme.border,
-                    color: theme.text,
-                  },
-                ]}
-                value={formData.price}
-                placeholder="Enter price"
-                placeholderTextColor={theme.subtext}
-                keyboardType="numeric"
-                onChangeText={(t) => handleFieldChange("price", t)}
-              />
-
-              {isPerishable && (
-                <>
-                  <Text style={[styles.label, { color: theme.subtext }]}>EXPIRY DATE</Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.surface,
-                        borderWidth: 1,
-                        borderColor: errors.includes("expiryDate") ? theme.notification : theme.border,
-                        color: theme.text,
-                      },
-                    ]}
-                    value={formData.expiryDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={theme.subtext}
-                    onChangeText={(t) => handleFieldChange("expiryDate", t)}
-                  />
-                </>
+                onPress={() => setShowPicker(true)}
+                disabled={isUploading}
+              >
+                {image ? (
+                  <Image source={{ uri: image }} style={styles.fullImg} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Ionicons name="camera" size={30} color={theme.subtext} />
+                    <Text style={[styles.photoPlaceholderText, { color: theme.subtext }]}>
+                      Tap to add
+                    </Text>
+                  </View>
+                )}
+                
+                {isUploading && (
+                  <View style={styles.uploadOverlay}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                    <Text style={styles.uploadText}>{uploadProgress}%</Text>
+                    <View style={styles.uploadProgressBar}>
+                      <View 
+                        style={[
+                          styles.uploadProgressFill, 
+                          { 
+                            width: `${uploadProgress}%`,
+                            backgroundColor: theme.primary 
+                          }
+                        ]} 
+                      />
+                    </View>
+                  </View>
+                )}
+              </Pressable>
+              
+              {image && !isUploading && (
+                <Pressable 
+                  style={styles.removePhoto} 
+                  onPress={() => { 
+                    setImage(null); 
+                    setFormModified(true);
+                    setFieldErrors(prev => ({ ...prev, image: "" }));
+                  }}
+                >
+                  <Ionicons name="close-circle" size={24} color="#FF4444" />
+                </Pressable>
               )}
+            </View>
+            
+            <View style={{ flex: 1 }}>
+              <View style={styles.labelRow}>
+                <Text style={[styles.label, { marginTop: 0, color: theme.subtext }]}>PRODUCT IMAGE</Text>
+                <Pressable onPress={() => setShowFieldHelp(showFieldHelp === 'image' ? null : 'image')}>
+                  <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
+                </Pressable>
+              </View>
+              
+              {showFieldHelp === 'image' && (
+                <View style={[styles.helpBox, { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}>
+                  <Text style={[styles.helpText, { color: theme.text }]}>
+                    Add a clear photo of your product. This helps with identification and inventory management.
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.imageRequirement}>
+                <Ionicons 
+                  name={image ? "checkmark-circle" : "information-circle"} 
+                  size={16} 
+                  color={image ? "#4CAF50" : theme.subtext} 
+                />
+                <Text style={{ 
+                  color: image ? "#4CAF50" : theme.subtext, 
+                  fontSize: 12, 
+                  marginLeft: 6 
+                }}>
+                  {(existingProduct?.imageUrl && existingProduct?.batches?.length > 0) 
+                    ? "Optional - existing image available" 
+                    : image 
+                      ? "Image added successfully"
+                      : "Required - no existing image"
+                  }
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Enhanced Product Name Input */}
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={[styles.label, { color: theme.subtext }]}>PRODUCT NAME</Text>
+              <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+            </View>
+            
+            <TextInput
+              style={[
+                styles.input,
+                isLocked && styles.locked,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: highlightErrors.includes('name')
+                    ? theme.notification
+                    : fieldErrors.name 
+                      ? theme.notification 
+                      : validFields.includes('name') 
+                        ? '#4CAF50' 
+                        : theme.border,
+                  borderWidth: 2,
+                  color: theme.text,
+                },
+                highlightErrors.includes('name') && styles.errorHighlight,
+              ]}
+              value={formData.name}
+              editable={!isLocked}
+              placeholder="Enter product name"
+              placeholderTextColor={theme.subtext}
+              onChangeText={(t) => handleFieldChange("name", t)}
+              maxLength={100}
+            />
+            
+            <View style={styles.inputFooter}>
+              {fieldErrors.name && (
+                <Text style={[styles.errorText, { color: theme.notification }]}>
+                  {fieldErrors.name}
+                </Text>
+              )}
+              {validFields.includes('name') && (
+                <View style={styles.successRow}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={[styles.successText, { color: '#4CAF50' }]}>Good name</Text>
+                </View>
+              )}
+              <Text style={[styles.charCount, { color: theme.subtext }]}>
+                {formData.name.length}/100
+              </Text>
+            </View>
+          </View>
+
+          {/* Enhanced Category Input */}
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={[styles.label, { color: theme.subtext }]}>CATEGORY</Text>
+              <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+            </View>
+            
+            <Pressable
+              onPress={() => setShowCategoryPicker(true)}
+              style={[
+                styles.input,
+                isLocked && styles.locked,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: highlightErrors.includes('category')
+                    ? theme.notification
+                    : fieldErrors.category 
+                      ? theme.notification 
+                      : validFields.includes('category') 
+                        ? '#4CAF50' 
+                        : theme.border,
+                  borderWidth: 2,
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  alignItems: "center",
+                },
+                highlightErrors.includes('category') && styles.errorHighlight,
+              ]}
+            >
+              <Text style={{ 
+                color: formData.category ? theme.text : theme.subtext,
+                flex: 1,
+              }}>
+                {formData.category || "Select or enter category"}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.subtext} />
+            </Pressable>
+            
+            {fieldErrors.category && (
+              <Text style={[styles.errorText, { color: theme.notification }]}>
+                {fieldErrors.category}
+              </Text>
+            )}
+            {validFields.includes('category') && (
+              <View style={styles.successRow}>
+                <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                <Text style={[styles.successText, { color: '#4CAF50' }]}>Category selected</Text>
+              </View>
+            )}
+          </View>
+
+          {mode === "registry" && (
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>Perishable Item?</Text>
+                <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 2 }}>Requires expiry date tracking</Text>
+              </View>
+              <Switch
+                value={isPerishable}
+                onValueChange={(val) => { setIsPerishable(val); setFormModified(true); }}
+                trackColor={{ true: theme.primary }}
+              />
             </View>
           )}
 
-          {/* Submit Button */}
-          <Pressable
-            style={[
-              styles.completeBtn,
-              {
-                backgroundColor: theme.primary,
-                opacity: (isSubmitting || isUploadingImage) ? 0.6 : 1,
-              },
-            ]}
-            onPress={handleSave}
-            disabled={isSubmitting || isUploadingImage}
-          >
-            {(isSubmitting || isUploadingImage) ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                <Text style={styles.completeBtnText}>
-                  {mode === "registry" ? "REGISTER PRODUCT" : "ADD TO INVENTORY"}
-                </Text>
-              </>
-            )}
-          </Pressable>
+          {/* Show perishable toggle for manual mode too */}
+          {mode === "manual" && (
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>Perishable Item?</Text>
+                <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 2 }}>Requires expiry date tracking</Text>
+              </View>
+              <Switch
+                value={isPerishable}
+                onValueChange={(val) => { 
+                  setIsPerishable(val); 
+                  setFormModified(true);
+                  if (!val) setFormData((prev) => ({ ...prev, expiryDate: "" }));
+                }}
+                trackColor={{ true: theme.primary }}
+              />
+            </View>
+          )}
+
+          {(mode === "inventory" || mode === "manual") && (
+            <View style={styles.batchSection}>
+              <Text style={styles.sectionTitle}>BATCH DETAILS</Text>
+              
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.labelRow}>
+                    <Text style={[styles.label, { color: theme.subtext }]}>PRICE (₦)</Text>
+                    <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.input, 
+                      { 
+                        backgroundColor: theme.surface, 
+                        borderColor: highlightErrors.includes('price')
+                          ? theme.notification
+                          : fieldErrors.price 
+                            ? theme.notification 
+                            : validFields.includes('price') 
+                              ? '#4CAF50' 
+                              : theme.border, 
+                        borderWidth: 2, 
+                        color: theme.text 
+                      },
+                      highlightErrors.includes('price') && styles.errorHighlight,
+                    ]}
+                    keyboardType="numeric"
+                    placeholder="0.00"
+                    value={formData.price}
+                    onChangeText={(t) => handleFieldChange("price", t)}
+                  />
+                  {fieldErrors.price && (
+                    <Text style={[styles.errorText, { color: theme.notification }]}>
+                      {fieldErrors.price}
+                    </Text>
+                  )}
+                </View>
+                
+                <View style={{ flex: 1 }}>
+                  <View style={styles.labelRow}>
+                    <Text style={[styles.label, { color: theme.subtext }]}>QUANTITY</Text>
+                    <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.input, 
+                      { 
+                        backgroundColor: theme.surface, 
+                        borderColor: highlightErrors.includes('quantity')
+                          ? theme.notification
+                          : fieldErrors.quantity 
+                            ? theme.notification 
+                            : validFields.includes('quantity') 
+                              ? '#4CAF50' 
+                              : theme.border, 
+                        borderWidth: 2, 
+                        color: theme.text 
+                      },
+                      highlightErrors.includes('quantity') && styles.errorHighlight,
+                    ]}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    value={formData.quantity}
+                    onChangeText={(t) => handleFieldChange("quantity", t)}
+                  />
+                  {fieldErrors.quantity && (
+                    <Text style={[styles.errorText, { color: theme.notification }]}>
+                      {fieldErrors.quantity}
+                    </Text>
+                  )}
+                </View>
+                
+                {isPerishable && (
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.labelRow}>
+                      <Text style={[styles.label, { color: theme.subtext }]}>EXPIRY</Text>
+                      <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+                    </View>
+                    <TextInput
+                      style={[
+                        styles.input, 
+                        { 
+                          backgroundColor: theme.surface, 
+                          borderColor: highlightErrors.includes('expiryDate')
+                            ? theme.notification
+                            : fieldErrors.expiryDate 
+                              ? theme.notification 
+                              : validFields.includes('expiryDate') 
+                                ? '#4CAF50' 
+                                : theme.border, 
+                          borderWidth: 2, 
+                          color: theme.text 
+                        },
+                        highlightErrors.includes('expiryDate') && styles.errorHighlight,
+                      ]}
+                      value={formData.expiryDate}
+                      placeholder="YYYY-MM-DD"
+                      onChangeText={(t) => handleFieldChange("expiryDate", t)}
+                    />
+                    {fieldErrors.expiryDate && (
+                      <Text style={[styles.errorText, { color: theme.notification }]}>
+                        {fieldErrors.expiryDate}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Enhanced Submit Button */}
+          <View style={styles.submitSection}>
+            <Pressable
+              style={[
+                styles.completeBtn, 
+                { 
+                  backgroundColor: theme.primary,
+                  opacity: (isSubmitting || isUploading) ? 0.6 : 1,
+                },
+                (isSubmitting || isUploading) && styles.disabledBtn
+              ]}
+              onPress={handleSave}
+              disabled={isSubmitting || isUploading}
+            >
+              {(isSubmitting || isUploading) ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.completeBtnText}>
+                    {isUploading ? "Uploading..." : "Saving..."}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                  <Text style={styles.completeBtnText}>
+                    {mode === "registry" ? "Register Product" : "Add to Inventory"}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+            
+            {/* Form Summary */}
+            <View style={styles.formSummary}>
+              <Text style={[styles.summaryText, { color: theme.subtext }]}>
+                {validFields.length} of {mode === "registry" ? "3" : "5"} required fields completed
+              </Text>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Image Picker Modal */}
-      <Modal visible={showPicker} transparent animationType="fade">
-        <Pressable style={styles.pickerOverlay} onPress={() => setShowPicker(false)}>
-          <View style={[styles.pickerContent, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.pickerTitle, { color: theme.text }]}>Add Photo</Text>
-            <Pressable
-              style={[styles.pickerOpt, { borderBottomColor: theme.border }]}
-              onPress={() => pickImageHandler(true)}
-            >
-              <Ionicons name="camera" size={24} color={theme.primary} style={{ marginRight: 15 }} />
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}>Take Photo</Text>
-            </Pressable>
-            <Pressable
-              style={styles.pickerOpt}
-              onPress={() => pickImageHandler(false)}
-            >
-              <Ionicons name="images" size={24} color={theme.primary} style={{ marginRight: 15 }} />
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}>Choose from Gallery</Text>
-            </Pressable>
+      {/* Refresh Confirmation Modal */}
+      <Modal visible={showRefreshConfirm} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <Ionicons name="refresh-circle" size={48} color={theme.primary} />
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Reset Form?</Text>
+            <Text style={{ color: theme.subtext, textAlign: "center", marginBottom: 20 }}>
+              This will clear all your current inputs. Are you sure you want to continue?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.modalBtn, { backgroundColor: theme.background }]} onPress={() => setShowRefreshConfirm(false)}>
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={() => {
+                  setShowRefreshConfirm(false);
+                  resetForm();
+                }}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Reset</Text>
+              </Pressable>
+            </View>
           </View>
-        </Pressable>
+        </View>
       </Modal>
 
-      {/* Category Picker Modal */}
+      {/* Mode Help Modal */}
+      <Modal visible={showModeHelp} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.helpModal, { backgroundColor: theme.surface }]}>
+            <View style={styles.helpModalHeader}>
+              <Text style={[styles.helpModalTitle, { color: theme.text }]}>Mode Selection Help</Text>
+              <Pressable onPress={() => setShowModeHelp(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            
+            <ScrollView style={styles.helpModalContent}>
+              <View style={styles.helpModeItem}>
+                <Ionicons name="library-outline" size={24} color={theme.primary} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.helpModeTitle, { color: theme.text }]}>Register Product</Text>
+                  <Text style={[styles.helpModeDesc, { color: theme.subtext }]}>
+                    Adds the product to your global database for future use. No inventory is added.
+                    Perfect for building your product catalog.
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.helpModeItem}>
+                <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.helpModeTitle, { color: theme.text }]}>Add to Inventory</Text>
+                  <Text style={[styles.helpModeDesc, { color: theme.subtext }]}>
+                    Registers the product AND adds stock quantities. Use this when you want to 
+                    track actual inventory levels.
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODALS REMAIN UNCHANGED BELOW */}
+      <Modal visible={showPicker} transparent animationType="slide">
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.pickerTitle, { color: theme.text }]}>Add Product Image</Text>
+            <Pressable style={styles.pickerOpt} onPress={() => pickImage(true)}>
+              <Ionicons name="camera" size={24} color={theme.primary} />
+              <Text style={{ color: theme.text, marginLeft: 15, fontSize: 16 }}>Take Photo</Text>
+            </Pressable>
+            <Pressable style={styles.pickerOpt} onPress={() => pickImage(false)}>
+              <Ionicons name="images" size={24} color={theme.primary} />
+              <Text style={{ color: theme.text, marginLeft: 15, fontSize: 16 }}>Choose from Gallery</Text>
+            </Pressable>
+            <Pressable style={[styles.pickerOpt, { borderBottomWidth: 0 }]} onPress={() => setShowPicker(false)}>
+              <Text style={{ color: "#FF4444", fontWeight: "700", fontSize: 16 }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showCategoryPicker} transparent animationType="slide">
         <View style={styles.pickerOverlay}>
           <View style={[styles.categoryModal, { backgroundColor: theme.surface }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.pickerTitle, { color: theme.text, marginBottom: 0 }]}>
-                Select Category
-              </Text>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.pickerTitle, { color: theme.text }]}>Select Category</Text>
               <Pressable onPress={() => setShowCategoryPicker(false)}>
                 <Ionicons name="close" size={24} color={theme.text} />
               </Pressable>
             </View>
+            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1, color: theme.text }]}
+                placeholder="Type new category..."
+                value={formData.category}
+                onChangeText={(t) => handleFieldChange("category", t)}
+                onSubmitEditing={() => { if (formData.category.trim()) setShowCategoryPicker(false); }}
+              />
+            </View>
             <FlatList
               data={existingCategories}
-              keyExtractor={(item, index) => (item ?? index.toString())}
+              keyExtractor={(item, index) => item ?? index.toString()}
+              style={{ maxHeight: 300 }}
               renderItem={({ item }) => (
-                <Pressable
-                  style={[styles.categoryItem, { borderBottomColor: theme.border }]}
-                  onPress={() => handleCategorySelect(item as string)}
-                >
-                  <Text style={{ color: theme.text, fontSize: 16 }}>{item}</Text>
+                <Pressable style={styles.categoryItem} onPress={() => item && handleCategorySelect(item)}>
+                  <Text style={{ color: theme.text, fontSize: 16 }}>{item ?? ""}</Text>
                   <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
                 </Pressable>
               )}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                  borderWidth: 1,
-                  color: theme.text,
-                  marginHorizontal: 20,
-                  marginTop: 10,
-                },
-              ]}
-              placeholder="Or type new category..."
-              placeholderTextColor={theme.subtext}
-              onSubmitEditing={(e) => {
-                if (e.nativeEvent.text.trim()) {
-                  handleCategorySelect(e.nativeEvent.text.trim());
-                }
-              }}
             />
           </View>
         </View>
       </Modal>
 
-      {/* Exit Confirmation Modal */}
       <Modal visible={showExitModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <Ionicons name="warning" size={48} color={theme.notification} />
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Unsaved Changes</Text>
-            <Text style={{ color: theme.subtext, textAlign: "center", marginBottom: 20 }}>
-              You have unsaved changes. Are you sure you want to leave?
-            </Text>
+            <Ionicons name="warning-outline" size={48} color={theme.notification} />
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Discard Changes?</Text>
             <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.border }]}
-                onPress={() => setShowExitModal(false)}
-              >
-                <Text style={{ color: theme.text, fontWeight: "700" }}>Cancel</Text>
+              <Pressable style={[styles.modalBtn, { backgroundColor: theme.background }]} onPress={() => setShowExitModal(false)}>
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Stay</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: theme.notification }]}
                 onPress={() => {
-                  resetForm();
                   setShowExitModal(false);
-                  if (pendingNavAction) {
-                    pendingNavAction();
-                    setPendingNavAction(null);
-                  } else {
-                    router.back();
-                  }
+                  resetForm();
+                  if (typeof pendingNavAction === "function") { pendingNavAction(); } 
+                  else if (pendingNavAction && navigation.dispatch) { navigation.dispatch(pendingNavAction); } 
+                  else { router.back(); }
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "700" }}>Leave</Text>
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Discard</Text>
               </Pressable>
             </View>
           </View>
@@ -821,59 +1430,256 @@ export default function AddProducts() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 20,
+  container: { padding: 25, paddingTop: 50, paddingBottom: 100 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 5,
   },
-  headerCard: {
-    padding: 25,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+  refreshBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 5,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: { fontSize: 28, fontWeight: "900", letterSpacing: -1 },
+  subtitle: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  
+  // Enhanced mode selection
+  modeSelection: {
+    marginBottom: 25,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  modeButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modeBtn: {
+    flex: 1,
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 2,
+    alignItems: "center",
+    gap: 4,
+  },
+  
+  // Progress indicator
+  progressContainer: {
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  progressBar: {
+    width: "100%",
+    height: 4,
+    backgroundColor: "rgba(150,150,150,0.2)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  progressText: {
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: "600",
+  },
+  
+  // Enhanced input groups
+  inputGroup: {
     marginBottom: 20,
   },
-  infoBox: {
+  labelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    padding: 15,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    marginTop: 15,
+    marginBottom: 8,
+    gap: 6,
   },
-  infoText: {
-    flex: 1,
+  required: {
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  helpBox: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  helpText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  inputFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  successRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    gap: 4,
+  },
+  successText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  charCount: {
+    fontSize: 11,
+    marginLeft: "auto",
+  },
+  
+  // Enhanced photo section
+  photoPlaceholder: {
+    alignItems: "center",
+    gap: 4,
+  },
+  photoPlaceholderText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 20,
+    gap: 8,
+  },
+  uploadText: {
+    color: "#fff",
     fontSize: 14,
     fontWeight: "600",
   },
-  scannerLink: {
+  uploadProgressBar: {
+    width: 60,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  uploadProgressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  imageRequirement: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  
+  // Enhanced batch section
+  batchSection: {
+    marginTop: 20,
+  },
+  
+  // Enhanced submit section
+  submitSection: {
+    marginTop: 30,
+    alignItems: "center",
+  },
+  loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 18,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    marginHorizontal: 20,
+  },
+  disabledBtn: {
+    transform: [{ scale: 0.98 }],
+  },
+  formSummary: {
+    marginTop: 12,
+    alignItems: "center",
+  },
+  summaryText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  
+  // Help modal styles
+  helpModal: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "70%",
+    marginTop: "auto",
+  },
+  helpModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
+  },
+  helpModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  helpModalContent: {
+    padding: 20,
+  },
+  helpModeItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(150,150,150,0.05)",
+  },
+  helpModeTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  helpModeDesc: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  
+  // Existing styles
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
     marginBottom: 15,
   },
-  section: {
-    paddingHorizontal: 20,
-    marginTop: 10,
+  infoText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  scanShortcut: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 15,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-    marginBottom: 15,
-    opacity: 0.5,
-  },
-  subtitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    opacity: 0.7,
-  },
-  title: {
-    fontSize: 30,
+    textAlign: "center",
+    fontSize: 10,
+    color: "#888",
+    letterSpacing: 2,
     fontWeight: "800",
     marginBottom: 20,
   },
@@ -886,21 +1692,28 @@ const styles = StyleSheet.create({
   input: {
     padding: 16,
     borderRadius: 15,
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 14,
+    fontWeight: "400",
   },
-  locked: { 
-    opacity: 0.5 
+  errorHighlight: {
+    borderColor: '#FF4444',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    shadowColor: '#FF4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
+  locked: { opacity: 0.5 },
+  row: { flexDirection: "row", gap: 12 },
   photoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 15,
     marginTop: 10,
+    marginBottom: 20,
   },
-  photoBoxContainer: { 
-    position: "relative" 
-  },
+  photoBoxContainer: { position: "relative" },
   photoBox: {
     width: 90,
     height: 90,
@@ -909,39 +1722,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     overflow: "hidden",
   },
-  fullImg: { 
-    width: "100%", 
-    height: "100%" 
-  },
-  uploadingOverlay: { 
-    position: "absolute", 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
-    backgroundColor: "rgba(0,0,0,0.5)", 
-    alignItems: "center", 
-    justifyContent: "center",
-    borderRadius: 20,
-  },
+  fullImg: { width: "100%", height: "100%" },
   removePhoto: {
     position: "absolute",
     top: -8,
     right: -8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
     elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
   generateBtn: {
-    width: 50,
-    height: 50,
+    width: 52,
+    height: 52,
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
@@ -954,16 +1746,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 15,
     borderWidth: 1,
+    borderColor: "rgba(150,150,150,0.2)",
   },
   completeBtn: {
     flexDirection: "row",
     gap: 10,
     padding: 18,
     borderRadius: 20,
-    marginTop: 30,
-    marginHorizontal: 20,
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 200,
   },
   completeBtnText: {
     color: "#FFF",
@@ -991,6 +1783,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 18,
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
   },
   categoryModal: {
     borderTopLeftRadius: 30,
@@ -1003,6 +1796,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
   },
   categoryItem: {
     flexDirection: "row",
@@ -1010,6 +1804,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.05)",
   },
   modalOverlay: {
     flex: 1,

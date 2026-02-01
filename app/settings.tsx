@@ -442,7 +442,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 10 }} />
         <Text style={styles.versionText}>
           Build v2.0.4 - Production Environment
         </Text>

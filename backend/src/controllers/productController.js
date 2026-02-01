@@ -1,4 +1,5 @@
 const Product = require("../models/Product");
+const Sale = require("../models/Sale");
 
 // @desc    Add a new product or new batch
 // @route   POST /api/products
@@ -268,7 +269,8 @@ exports.deleteBatch = async (req, res) => {
 // @route   POST /api/products/process-sale
 exports.processSale = async (req, res) => {
   try {
-    const { items } = req.body; // Array of { productId, quantity }
+    const { items } = req.body; // Array of { productId, quantity, price }
+    const saleRecords = [];
 
     for (const item of items) {
       const product = await Product.findById(item.productId);
@@ -298,11 +300,31 @@ exports.processSale = async (req, res) => {
       // Remove batches that hit 0 to keep DB clean
       product.batches = product.batches.filter((b) => b.quantity > 0);
       await product.save();
+
+      // Record the sale for analytics
+      const saleRecord = new Sale({
+        productId: product._id,
+        productName: product.name,
+        category: product.category,
+        quantitySold: item.quantity,
+        priceAtSale: item.price || 0,
+        totalAmount: (item.price || 0) * item.quantity,
+        saleDate: new Date(),
+        paymentMethod: item.paymentMethod || 'cash'
+      });
+
+      saleRecords.push(saleRecord);
+    }
+
+    // Save all sale records
+    if (saleRecords.length > 0) {
+      await Sale.insertMany(saleRecords);
     }
 
     res.status(200).json({
       success: true,
       message: "Sale processed successfully via FEFO",
+      salesRecorded: saleRecords.length
     });
   } catch (error) {
     console.error("ProcessSale Error:", error);

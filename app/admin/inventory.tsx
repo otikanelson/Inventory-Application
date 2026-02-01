@@ -1,21 +1,21 @@
-import React, { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  Pressable,
-  ImageBackground,
-  RefreshControl,
-  Image,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
 import { useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
+import {
+    FlatList,
+    Image,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
-import axios from "axios";
-import Toast from "react-native-toast-message";
 
 export default function AdminInventory() {
   const router = useRouter();

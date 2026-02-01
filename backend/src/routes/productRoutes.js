@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const Product = require("../models/Product"); // Add missing Product model import
 
 const {
   addProduct,

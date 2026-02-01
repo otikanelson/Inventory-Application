@@ -1,10 +1,22 @@
 const cloudinary = require('../backend/src/config/cloudinary');
 
-const uploadToCloudinary = async (base64Image, folder = 'StockQ') => {
+const uploadToCloudinary = async (base64Image, folder = 'inventiease') => {
   try {
-    const dataURI = base64Image.startsWith('data:')
-      ? base64Image
-      : `data:image/jpeg;base64,${base64Image}`;
+    console.log('Starting Cloudinary upload...');
+    console.log('Folder:', folder);
+    console.log('Image data length:', base64Image ? base64Image.length : 'No image data');
+
+    if (!base64Image) {
+      throw new Error('No image data provided');
+    }
+
+    // Ensure proper data URI format
+    let dataURI = base64Image;
+    if (!base64Image.startsWith('data:')) {
+      dataURI = `data:image/jpeg;base64,${base64Image}`;
+    }
+
+    console.log('Data URI format:', dataURI.substring(0, 50) + '...');
 
     const result = await cloudinary.uploader.upload(dataURI, {
       folder: folder,
@@ -15,10 +27,16 @@ const uploadToCloudinary = async (base64Image, folder = 'StockQ') => {
       ],
     });
 
+    console.log('Cloudinary upload successful:', result.secure_url);
     return result.secure_url;
   } catch (error) {
-    console.error('Cloudinary upload error:', error);
-    throw new Error('Failed to upload image to Cloudinary');
+    console.error('Cloudinary upload error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      http_code: error.http_code
+    });
+    throw new Error(`Failed to upload image to Cloudinary: ${error.message}`);
   }
 };
 

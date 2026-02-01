@@ -1,24 +1,24 @@
-import React, { useState, useRef, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { useAudioPlayer } from "expo-audio";
+import { useCameraPermissions } from "expo-camera";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Pressable,
   StyleSheet,
   Text,
   View,
-  Pressable,
-  Modal,
-  Animated,
-  FlatList,
-  Image,
-  Dimensions,
 } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { useTheme } from "../../context/ThemeContext";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useAudioPlayer } from "expo-audio";
-import axios from "axios";
 import Toast from "react-native-toast-message";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
+import { useTheme } from "../../context/ThemeContext";
 
 const { height, width } = Dimensions.get("window");
 
@@ -174,74 +174,101 @@ export default function AdminScanScreen() {
       } else {
         // SALES MODE: Add to cart
         if (response.data.found) {
-          const product = response.data.productData;
+          // First, get the product from local inventory to get accurate stock info
+          try {
+            const localProductResponse = await axios.get(
+              `${process.env.EXPO_PUBLIC_API_URL}/products/barcode/${data}`
+            );
+            
+            if (localProductResponse.data.success && localProductResponse.data.product) {
+              const product = localProductResponse.data.product;
 
-          // Check if product has stock
-          if (product.totalQuantity === 0) {
+              // Check if product has stock
+              if (product.totalQuantity === 0) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Toast.show({
+                  type: "error",
+                  text1: "Out of Stock",
+                  text2: `${product.name} is not available`,
+                });
+                setScanned(false);
+                return;
+              }
+
+              // Check if already in cart
+              const existingIndex = cart.findIndex((item) => item._id === product._id);
+
+              if (existingIndex !== -1) {
+                // Already in cart - increment quantity
+                const updatedCart = [...cart];
+                const currentQty = updatedCart[existingIndex].quantity;
+
+                if (currentQty < product.totalQuantity) {
+                  updatedCart[existingIndex].quantity += 1;
+                  setCart(updatedCart);
+                  
+                  scanBeep.play();
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  animateCartIcon();
+                  
+                  Toast.show({
+                    type: "success",
+                    text1: "Quantity Updated",
+                    text2: `${product.name} x${updatedCart[existingIndex].quantity}`,
+                  });
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  Toast.show({
+                    type: "info",
+                    text1: "Maximum Quantity",
+                    text2: `Only ${product.totalQuantity} units available`,
+                  });
+                }
+              } else {
+                // Add new item to cart
+                const newItem: CartItem = {
+                  _id: product._id,
+                  name: product.name,
+                  barcode: product.barcode,
+                  imageUrl: product.imageUrl,
+                  totalQuantity: product.totalQuantity,
+                  quantity: 1,
+                };
+
+                setCart([...cart, newItem]);
+                
+                scanBeep.play();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                animateCartIcon();
+                
+                Toast.show({
+                  type: "success",
+                  text1: "Added to Cart",
+                  text2: product.name,
+                });
+              }
+
+              setScanned(false);
+            } else {
+              // Product in registry but not in local stock
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Toast.show({
+                type: "info",
+                text1: "Not In Stock",
+                text2: `${response.data.productData.name} exists in registry but has no inventory`,
+              });
+              setScanned(false);
+            }
+          } catch (localError) {
+            console.error("Local product lookup error for sales:", localError);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             Toast.show({
               type: "error",
-              text1: "Out of Stock",
-              text2: `${product.name} is not available`,
+              text1: "Not In Stock",
+              text2: "Product exists in registry but has no inventory",
             });
             setScanned(false);
-            return;
           }
-
-          // Check if already in cart
-          const existingIndex = cart.findIndex((item) => item._id === product._id);
-
-          if (existingIndex !== -1) {
-            // Already in cart - increment quantity
-            const updatedCart = [...cart];
-            const currentQty = updatedCart[existingIndex].quantity;
-
-            if (currentQty < product.totalQuantity) {
-              updatedCart[existingIndex].quantity += 1;
-              setCart(updatedCart);
-              
-              scanBeep.play();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              animateCartIcon();
-              
-              Toast.show({
-                type: "success",
-                text1: "Quantity Updated",
-                text2: `${product.name} x${updatedCart[existingIndex].quantity}`,
-              });
-            } else {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              Toast.show({
-                type: "warning",
-                text1: "Maximum Quantity",
-                text2: `Only ${product.totalQuantity} units available`,
-              });
-            }
-          } else {
-            // Add new item to cart
-            const newItem: CartItem = {
-              _id: product._id,
-              name: product.name,
-              barcode: product.barcode,
-              imageUrl: product.imageUrl,
-              totalQuantity: product.totalQuantity,
-              quantity: 1,
-            };
-
-            setCart([...cart, newItem]);
-            
-            scanBeep.play();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            animateCartIcon();
-            
-            Toast.show({
-              type: "success",
-              text1: "Added to Cart",
-              text2: product.name,
-            });
-          }
-
-          setScanned(false);
         } else {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Toast.show({
@@ -266,9 +293,10 @@ export default function AdminScanScreen() {
       prevCart.map((item) => {
         if (item._id === productId) {
           const newQty = Math.max(1, item.quantity + delta);
+          const maxStock = item.totalQuantity || 999; // Fallback if totalQuantity is missing
           return {
             ...item,
-            quantity: Math.min(newQty, item.totalQuantity),
+            quantity: Math.min(newQty, maxStock),
           };
         }
         return item;
@@ -501,7 +529,14 @@ export default function AdminScanScreen() {
                     {/* Quantity Controls */}
                     <View style={styles.qtyControls}>
                       <Pressable
-                        style={[styles.qtyBtn, { backgroundColor: theme.surface }]}
+                        style={[
+                          styles.qtyBtn, 
+                          { 
+                            backgroundColor: theme.surface,
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                          }
+                        ]}
                         onPress={() => updateCartQuantity(item._id, -1)}
                       >
                         <Ionicons name="remove" size={16} color={theme.text} />
@@ -510,7 +545,14 @@ export default function AdminScanScreen() {
                         {item.quantity}
                       </Text>
                       <Pressable
-                        style={[styles.qtyBtn, { backgroundColor: theme.surface }]}
+                        style={[
+                          styles.qtyBtn, 
+                          { 
+                            backgroundColor: theme.surface,
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                          }
+                        ]}
                         onPress={() => updateCartQuantity(item._id, 1)}
                       >
                         <Ionicons name="add" size={16} color={theme.text} />

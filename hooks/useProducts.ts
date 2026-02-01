@@ -34,10 +34,12 @@ export interface Product {
 
 export const useProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [recentlySold, setRecentlySold] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
+  const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
 
   /** Fetch & Transform Data **/
   const fetchProducts = useCallback(async () => {
@@ -65,6 +67,19 @@ export const useProducts = () => {
       setLoading(false);
     }
   }, [API_URL]);
+
+  /** Fetch Recently Sold Products **/
+  const fetchRecentlySold = useCallback(async () => {
+    try {
+      const response = await axios.get(`${ANALYTICS_URL}/recently-sold?limit=10`);
+      if (response.data.success) {
+        setRecentlySold(response.data.data || []);
+      }
+    } catch (err) {
+      console.error("Recently Sold Fetch Error:", err);
+      // Don't set error state for this, as it's not critical
+    }
+  }, [ANALYTICS_URL]);
 
   /** Real-Time Analytics (Memoized for performance) **/
   const inventoryStats = useMemo(() => {
@@ -128,14 +143,21 @@ export const useProducts = () => {
   /** Initial Synchronization **/
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    fetchRecentlySold();
+  }, [fetchProducts, fetchRecentlySold]);
+
+  /** Refresh function that updates both products and recently sold **/
+  const refresh = useCallback(async () => {
+    await Promise.all([fetchProducts(), fetchRecentlySold()]);
+  }, [fetchProducts, fetchRecentlySold]);
 
   return {
     products,
+    recentlySold,
     inventoryStats,
     loading,
     error,
-    refresh: fetchProducts,
+    refresh,
     getProductById,
     filterProducts,
   };

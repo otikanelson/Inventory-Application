@@ -1,23 +1,22 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  ImageBackground,
-  Modal,
-  ActivityIndicator,
-  Dimensions,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { useAudioPlayer } from "expo-audio";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    Dimensions,
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { useAudioPlayer } from "expo-audio";
-import axios from "axios";
-import Toast from "react-native-toast-message";
 
 const { width } = Dimensions.get("window");
 
@@ -60,10 +59,30 @@ export default function AdminSales() {
   const finalizeSale = async () => {
     setIsSyncing(true);
     try {
-      const saleData = cart.map((item) => ({
-        productId: item._id,
-        quantity: item.quantity,
-      }));
+      const saleData = cart.map((item) => {
+        // Get price from the product - use genericPrice or average batch price
+        const product = products.find(p => p._id === item._id);
+        let price = 0;
+        
+        if (product) {
+          if (product.genericPrice && product.genericPrice > 0) {
+            price = product.genericPrice;
+          } else if (product.batches && product.batches.length > 0) {
+            // Calculate average price from batches with prices
+            const batchesWithPrice = product.batches.filter(b => b.price && b.price > 0);
+            if (batchesWithPrice.length > 0) {
+              price = batchesWithPrice.reduce((sum, b) => sum + b.price, 0) / batchesWithPrice.length;
+            }
+          }
+        }
+
+        return {
+          productId: item._id,
+          quantity: item.quantity,
+          price: price,
+          paymentMethod: 'cash' // Default payment method
+        };
+      });
 
       await axios.post(
         `${process.env.EXPO_PUBLIC_API_URL}/products/process-sale`,
@@ -95,8 +114,7 @@ export default function AdminSales() {
       prevCart.map((item) => {
         if (item._id === productId) {
           const newQty = Math.max(1, item.quantity + delta);
-          const maxStock = item.quantityInStock || item.totalQuantity || 0;
-          // Don't exceed available stock
+          const maxStock = item.totalQuantity || 999; // Fallback if totalQuantity is missing
           return {
             ...item,
             quantity: Math.min(newQty, maxStock),
@@ -233,7 +251,7 @@ export default function AdminSales() {
                       {item.name}
                     </Text>
                     <Text style={[styles.productMeta, { color: theme.subtext }]}>
-                      Available: {item.quantityInStock || item.totalQuantity || 0} units
+                      Available: {item.totalQuantity || 0} units
                     </Text>
                   </View>
 
@@ -242,7 +260,11 @@ export default function AdminSales() {
                     <Pressable
                       style={[
                         styles.qtyButton,
-                        { backgroundColor: theme.background },
+                        { 
+                          backgroundColor: theme.background,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                        },
                       ]}
                       onPress={() => updateQuantity(item._id, -1)}
                     >
@@ -258,7 +280,11 @@ export default function AdminSales() {
                     <Pressable
                       style={[
                         styles.qtyButton,
-                        { backgroundColor: theme.background },
+                        { 
+                          backgroundColor: theme.background,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                        },
                       ]}
                       onPress={() => updateQuantity(item._id, 1)}
                     >

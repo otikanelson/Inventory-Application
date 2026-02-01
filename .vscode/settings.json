@@ -4,5 +4,8 @@
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
   },
-  "cSpell.words": ["FEFO", "STOCKQ"]
+  "cSpell.words": [
+    "FEFO",
+    "STOCKQ"
+  ]
 }

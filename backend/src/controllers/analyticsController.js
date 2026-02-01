@@ -214,10 +214,112 @@ exports.recordSale = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get recently sold products
+ * @route   GET /api/analytics/recently-sold
+ * @access  Admin
+ */
+exports.getRecentlySold = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    
+    // Get recent sales with product details
+    const recentSales = await Sale.aggregate([
+      {
+        $sort: { saleDate: -1 }
+      },
+      {
+        $group: {
+          _id: '$productId',
+          productName: { $first: '$productName' },
+          category: { $first: '$category' },
+          lastSaleDate: { $first: '$saleDate' },
+          totalSold: { $sum: '$quantitySold' },
+          totalRevenue: { $sum: '$totalAmount' }
+        }
+      },
+      {
+        $sort: { lastSaleDate: -1 }
+      },
+      {
+        $limit: parseInt(limit)
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'productDetails'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productDetails',
+          preserveNullAndEmptyArrays: true
+        }
+      }
+    ]);
+    
+    res.status(200).json({
+      success: true,
+      data: recentSales.map(sale => ({
+        _id: sale._id,
+        name: sale.productName,
+        category: sale.category,
+        lastSaleDate: sale.lastSaleDate,
+        totalSold: sale.totalSold,
+        totalRevenue: sale.totalRevenue,
+        imageUrl: sale.productDetails?.imageUrl || 'cube',
+        totalQuantity: sale.productDetails?.totalQuantity || 0,
+        isPerishable: sale.productDetails?.isPerishable || false,
+        batches: sale.productDetails?.batches || []
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Recently Sold Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get sales history for a specific product
+ * @route   GET /api/analytics/product-sales/:productId
+ * @access  Admin
+ */
+exports.getProductSales = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { limit = 50 } = req.query;
+    
+    // Get sales history for this specific product
+    const salesHistory = await Sale.find({ productId })
+      .sort({ saleDate: -1 })
+      .limit(parseInt(limit));
+    
+    res.status(200).json({
+      success: true,
+      data: salesHistory
+    });
+    
+  } catch (error) {
+    console.error('Product Sales History Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getProductAnalytics: exports.getProductAnalytics,
   getDashboardStats: exports.getDashboardStats,
   getSalesTrends: exports.getSalesTrends,
   getCategoryAnalytics: exports.getCategoryAnalytics,
-  recordSale: exports.recordSale
+  recordSale: exports.recordSale,
+  getRecentlySold: exports.getRecentlySold,
+  getProductSales: exports.getProductSales
 };

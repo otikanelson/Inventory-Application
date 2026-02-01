@@ -1,24 +1,113 @@
-import React, { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  ImageBackground,
-  RefreshControl,
-  ActivityIndicator,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, Href } from "expo-router";
-import { useTheme } from "../../context/ThemeContext";
+import { Href, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import {
+    ActivityIndicator,
+    FlatList,
+    Image,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
+import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
+
+// Recently Sold Card Component
+const RecentlySoldCard = ({ item }: { item: any }) => {
+  const { theme, isDark } = useTheme();
+  const router = useRouter();
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <Pressable
+      onPress={() => router.push(`/product/${item._id}/sales` as Href)}
+      style={[
+        styles.card,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <View style={styles.topLabels}>
+        <View
+          style={[
+            styles.pill,
+            { backgroundColor: theme.primary + "20" },
+          ]}
+        >
+          <Ionicons name="trending-down" size={10} color={theme.primary} />
+          <Text style={[styles.pillText, { color: theme.primary }]}>
+            SOLD
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.pill,
+            { backgroundColor: isDark ? "#ffffff10" : "#00000005" },
+          ]}
+        >
+          <Ionicons name="time-outline" size={10} color={theme.subtext} />
+          <Text style={[styles.pillText, { color: theme.subtext }]}>
+            {formatDate(item.lastSaleDate)}
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={[
+          styles.imageWrapper,
+          { backgroundColor: isDark ? "#00000035" : "#a2a2a22f" },
+        ]}
+      >
+        {!isLoaded && (
+          <Ionicons
+            name="cube-outline"
+            size={40}
+            color={isDark ? "#ffffff10" : "#00000010"}
+          />
+        )}
+        {item.imageUrl && item.imageUrl !== "cube" && (
+          <Image
+            source={{ uri: item.imageUrl }}
+            style={[styles.image, { opacity: isLoaded ? 1 : 0 }]}
+            onLoad={() => setIsLoaded(true)}
+            onError={() => setIsLoaded(false)}
+            resizeMode="contain"
+          />
+        )}
+      </View>
+
+      <View style={styles.footer}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.quantityLabel, { color: theme.primary }]}>
+            {item.totalSold} Units Sold  •  ₦{item.totalRevenue?.toLocaleString() || 0}
+          </Text>
+          <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+};
 
 export default function Dashboard() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
-  const { products, loading, refresh, inventoryStats } = useProducts();
+  const { products, recentlySold, loading, refresh, inventoryStats } = useProducts();
 
   const [activeTab, setActiveTab] = useState<"stocked" | "sold">("stocked");
   const [displayLimit, setDisplayLimit] = useState(6);
@@ -51,13 +140,14 @@ export default function Dashboard() {
               new Date(b.updatedAt || 0).getTime() -
               new Date(a.updatedAt || 0).getTime()
           )
-        : products.filter((p) => p.totalQuantity === 0);
+        : recentlySold; // Use recently sold data instead of out of stock
 
     return baseData.slice(0, displayLimit);
-  }, [products, activeTab, displayLimit]);
+  }, [products, recentlySold, activeTab, displayLimit]);
 
   const handleLoadMore = () => {
-    if (displayLimit < products.length) {
+    const maxLength = activeTab === "stocked" ? products.length : recentlySold.length;
+    if (displayLimit < maxLength) {
       setDisplayLimit((prev) => prev + 6);
     }
   };
@@ -393,15 +483,24 @@ export default function Dashboard() {
           </View>
         }
         renderItem={({ item }) =>
-          loading ? <ProductCardSkeleton /> : <ProductCard item={item} />
+          loading ? (
+            <ProductCardSkeleton />
+          ) : activeTab === "sold" ? (
+            <RecentlySoldCard item={item} />
+          ) : (
+            <ProductCard item={item} />
+          )
         }
         ListFooterComponent={
-          displayLimit < products.length && !loading ? (
-            <ActivityIndicator
-              style={{ marginVertical: 20 }}
-              color={theme.primary}
-            />
-          ) : null
+          (() => {
+            const maxLength = activeTab === "stocked" ? products.length : recentlySold.length;
+            return displayLimit < maxLength && !loading ? (
+              <ActivityIndicator
+                style={{ marginVertical: 20 }}
+                color={theme.primary}
+              />
+            ) : null;
+          })()
         }
       />
     </View>
@@ -531,4 +630,58 @@ const styles = StyleSheet.create({
   },
   tabText: { fontSize: 14, fontWeight: "800" },
   row: { justifyContent: "space-between" },
+  
+  // Recently Sold Card Styles (reusing ProductCard styles)
+  card: {
+    width: (370 / 2) - 27, // Approximate width calculation
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 16,
+  },
+  topLabels: { 
+    flexDirection: "row", 
+    gap: 6, 
+    marginBottom: 12 
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  pillText: { 
+    fontSize: 8, 
+    fontWeight: "700", 
+    textTransform: "uppercase" 
+  },
+  imageWrapper: {
+    width: "100%",
+    height: 140,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  image: { 
+    width: "85%", 
+    height: "85%" 
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    paddingHorizontal: 4,
+  },
+  quantityLabel: { 
+    fontSize: 12, 
+    fontWeight: "500", 
+    marginBottom: 2 
+  },
+  name: { 
+    fontSize: 15, 
+    fontWeight: "800" 
+  },
 });

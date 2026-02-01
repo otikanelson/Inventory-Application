@@ -6,7 +6,9 @@ const {
   getDashboardStats,
   getSalesTrends,
   getCategoryAnalytics,
-  recordSale
+  recordSale,
+  getRecentlySold,
+  getProductSales
 } = require('../controllers/analyticsController');
 
 // @route   GET /api/analytics/dashboard
@@ -28,6 +30,16 @@ router.get('/sales-trends', getSalesTrends);
 // @desc    Get category-wise analytics
 // @access  Admin
 router.get('/by-category', getCategoryAnalytics);
+
+// @route   GET /api/analytics/recently-sold
+// @desc    Get recently sold products
+// @access  Admin
+router.get('/recently-sold', getRecentlySold);
+
+// @route   GET /api/analytics/product-sales/:productId
+// @desc    Get sales history for a specific product
+// @access  Admin
+router.get('/product-sales/:productId', getProductSales);
 
 // @route   POST /api/analytics/record-sale
 // @desc    Record a sale transaction
