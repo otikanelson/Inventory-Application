@@ -10,6 +10,13 @@ const uploadToCloudinary = async (base64Image, folder = 'inventiease') => {
       throw new Error('No image data provided');
     }
 
+    // Validate Cloudinary configuration
+    if (!process.env.CLOUDINARY_CLOUD_NAME || 
+        !process.env.CLOUDINARY_API_KEY || 
+        !process.env.CLOUDINARY_API_SECRET) {
+      throw new Error('Cloudinary credentials not configured');
+    }
+
     // Ensure proper data URI format
     let dataURI = base64Image;
     if (!base64Image.startsWith('data:')) {
@@ -24,10 +31,21 @@ const uploadToCloudinary = async (base64Image, folder = 'inventiease') => {
       transformation: [
         { width: 800, height: 800, crop: 'limit' },
         { quality: 'auto:good' },
+        { format: 'auto' } // Automatically choose best format (WebP, JPEG, etc.)
       ],
+      // Add unique filename to prevent conflicts
+      public_id: `product_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     });
 
     console.log('Cloudinary upload successful:', result.secure_url);
+    console.log('Image optimized:', {
+      originalSize: base64Image.length,
+      cloudinaryUrl: result.secure_url,
+      format: result.format,
+      width: result.width,
+      height: result.height
+    });
+    
     return result.secure_url;
   } catch (error) {
     console.error('Cloudinary upload error details:', {
@@ -36,7 +54,17 @@ const uploadToCloudinary = async (base64Image, folder = 'inventiease') => {
       code: error.code,
       http_code: error.http_code
     });
-    throw new Error(`Failed to upload image to Cloudinary: ${error.message}`);
+    
+    // Provide more specific error messages
+    if (error.message.includes('credentials')) {
+      throw new Error('Cloudinary credentials not properly configured. Please check your .env file.');
+    } else if (error.http_code === 401) {
+      throw new Error('Invalid Cloudinary credentials. Please verify your API key and secret.');
+    } else if (error.http_code === 400) {
+      throw new Error('Invalid image data. Please try a different image.');
+    } else {
+      throw new Error(`Failed to upload image to Cloudinary: ${error.message}`);
+    }
   }
 };
 

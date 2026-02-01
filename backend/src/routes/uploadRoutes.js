@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { uploadToCloudinary } = require('../../../utils/imageUpload');
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../../../uploads');
+// Ensure uploads directory exists - FIX: Use correct path that matches server static serving
+const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -55,15 +55,25 @@ router.post('/image', async (req, res) => {
       });
     }
 
-    // Check if Cloudinary is configured
+    // Check if Cloudinary is properly configured
     const hasCloudinaryConfig = process.env.CLOUDINARY_CLOUD_NAME && 
                                process.env.CLOUDINARY_API_KEY && 
-                               process.env.CLOUDINARY_API_SECRET;
+                               process.env.CLOUDINARY_API_SECRET &&
+                               process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name_here' &&
+                               process.env.CLOUDINARY_API_KEY !== 'your_api_key_here' &&
+                               process.env.CLOUDINARY_API_SECRET !== 'your_api_secret_here';
 
-    if (hasCloudinaryConfig && 
-        process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name_here') {
+    console.log('Cloudinary config check:', {
+      hasCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+      hasApiKey: !!process.env.CLOUDINARY_API_KEY,
+      hasApiSecret: !!process.env.CLOUDINARY_API_SECRET,
+      isConfigured: hasCloudinaryConfig
+    });
+
+    if (hasCloudinaryConfig) {
       // Use Cloudinary if properly configured
       try {
+        console.log('Attempting Cloudinary upload...');
         const imageUrl = await uploadToCloudinary(image, folder || 'inventiease');
         console.log('Cloudinary upload successful:', imageUrl);
 
@@ -71,10 +81,13 @@ router.post('/image', async (req, res) => {
           success: true,
           message: 'Image uploaded successfully to Cloudinary',
           imageUrl,
+          storage: 'cloudinary'
         });
       } catch (cloudinaryError) {
         console.error('Cloudinary upload failed, falling back to local storage:', cloudinaryError.message);
       }
+    } else {
+      console.log('Cloudinary not configured, using local storage');
     }
 
     // Fallback to local storage
@@ -103,6 +116,8 @@ router.post('/image', async (req, res) => {
       success: true,
       message: 'Image uploaded successfully to local storage',
       imageUrl,
+      storage: 'local',
+      warning: 'Using local storage. Set up Cloudinary for persistent image hosting.'
     });
 
   } catch (error) {

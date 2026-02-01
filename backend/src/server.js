@@ -40,7 +40,23 @@ app.get('/', (req, res) => {
     message: 'InventiEase API is running...',
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
+});
+
+// API status endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'InventiEase API',
+    status: 'healthy',
+    endpoints: {
+      products: '/api/products',
+      analytics: '/api/analytics',
+      upload: '/api/upload',
+      alerts: '/api/alerts'
+    },
+    timestamp: new Date().toISOString()
   });
 });
 
