@@ -2,15 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  ImageBackground,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
 import { useTheme } from "../../context/ThemeContext";
@@ -341,27 +341,6 @@ export default function Dashboard() {
                   Manual
                 </Text>
               </Pressable>
-
-              <Pressable
-                onPress={() => router.push("/FEFO")}
-                style={[
-                  styles.actionCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                ]}
-              >
-                <View
-                  style={[styles.actionIcon, { backgroundColor: "#FF2D5520" }]}
-                >
-                  <Ionicons
-                    name="bar-chart-outline"
-                    size={22}
-                    color="#FF2D55"
-                  />
-                </View>
-                <Text style={[styles.actionText, { color: theme.text }]}>
-                  Reports
-                </Text>
-              </Pressable>
             </View>
 
             {/* FEFO SECTION */}
@@ -516,8 +495,9 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flex: 1,
-    height: "45%",
+    height: 60,
     minWidth: "48%",
+    maxWidth: "48%",
     padding: 10,
     borderRadius: 20,
     borderWidth: 1,
@@ -544,7 +524,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 25,
   },
-  headerRight: { flexDirection: "row" },
+  headerRight: { flexDirection: "row", gap: 10 },
   greet: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
   title: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
   iconBtn: {

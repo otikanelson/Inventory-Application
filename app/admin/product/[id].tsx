@@ -1,26 +1,26 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  ScrollView,
-  Pressable,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-  ImageBackground,
-  Dimensions,
-} from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../../context/ThemeContext";
-import { useProducts } from "../../../hooks/useProducts";
-import * as ImagePicker from "expo-image-picker";
-import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useImageUpload } from "../../../hooks/useImageUpload";
 import axios from "axios";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import {
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { useTheme } from "../../../context/ThemeContext";
+import { useImageUpload } from "../../../hooks/useImageUpload";
+import { useProducts } from "../../../hooks/useProducts";
 
 const { width } = Dimensions.get("window");
 
@@ -30,18 +30,6 @@ interface Batch {
   expiryDate: string;
   receivedDate?: string;
   price?: number;
-}
-
-interface PredictionData {
-  nextWeekDemand?: number;
-  stockoutRisk?: number;
-  optimalOrderQty?: number;
-  trend?: string;
-  demandVelocity?: number;
-  averageSalesPerDay?: number;
-  daysUntilStockout?: number;
-  reorderPoint?: number;
-  turnoverRate?: number;
 }
 
 export default function AdminProductDetails() {
@@ -54,7 +42,6 @@ export default function AdminProductDetails() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [prediction, setPrediction] = useState<PredictionData | null>(null);
 
   // Edit state
   const [editedName, setEditedName] = useState("");
@@ -93,18 +80,6 @@ export default function AdminProductDetails() {
       setEditedCategory(data.category || "");
       setEditedImage(data.imageUrl || "");
       setEditedGenericPrice(data.genericPrice?.toString() || "");
-
-      // Fetch AI predictions
-      try {
-        const response = await axios.get(
-          `${process.env.EXPO_PUBLIC_API_URL}/analytics/predictions/${id}`
-        );
-        if (response.data && response.data.success) {
-          setPrediction(response.data.data);
-        }
-      } catch (err) {
-        console.log("Predictions not available");
-      }
     }
     setLoading(false);
   };
@@ -364,23 +339,6 @@ export default function AdminProductDetails() {
     };
   }, [product]);
 
-  const getRiskLevel = () => {
-    const stockoutRisk = prediction?.stockoutRisk || 0;
-    if (stockoutRisk > 0.7) return { label: "CRITICAL", color: "#FF3B30", icon: "alert-circle" };
-    if (stockoutRisk > 0.4) return { label: "HIGH", color: "#FF9500", icon: "warning" };
-    if (stockoutRisk > 0.2) return { label: "MODERATE", color: "#FFD60A", icon: "alert" };
-    return { label: "LOW", color: "#34C759", icon: "checkmark-circle" };
-  };
-
-  const getDemandVelocityLabel = () => {
-    const velocity = prediction?.demandVelocity || 0;
-    if (velocity > 10) return { label: "Very High", color: "#FF3B30" };
-    if (velocity > 5) return { label: "High", color: "#FF9500" };
-    if (velocity > 2) return { label: "Moderate", color: "#FFD60A" };
-    if (velocity > 0.5) return { label: "Low", color: "#34C759" };
-    return { label: "Very Low", color: theme.subtext };
-  };
-
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
@@ -405,9 +363,6 @@ export default function AdminProductDetails() {
       </View>
     );
   }
-
-  const riskLevel = getRiskLevel();
-  const velocityInfo = getDemandVelocityLabel();
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -633,136 +588,6 @@ export default function AdminProductDetails() {
               : "IN STOCK"}
           </Text>
         </View>
-
-        {/* AI Analytics Section */}
-        {prediction && (
-          <View style={[styles.section, { backgroundColor: theme.surface }]}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="analytics-outline" size={18} color={theme.primary} />
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                AI Analytics
-              </Text>
-            </View>
-
-            {/* Risk & Velocity Row */}
-            <View style={styles.analyticsRow}>
-              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: riskLevel.color }]}>
-                <Ionicons name={riskLevel.icon as any} size={20} color={riskLevel.color} />
-                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
-                  Stockout Risk
-                </Text>
-                <Text style={[styles.analyticsValue, { color: riskLevel.color }]}>
-                  {riskLevel.label}
-                </Text>
-                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
-                  {prediction.stockoutRisk ? `${(prediction.stockoutRisk * 100).toFixed(0)}%` : "N/A"}
-                </Text>
-              </View>
-
-              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: velocityInfo.color }]}>
-                <Ionicons name="speedometer-outline" size={20} color={velocityInfo.color} />
-                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
-                  Demand Velocity
-                </Text>
-                <Text style={[styles.analyticsValue, { color: velocityInfo.color }]}>
-                  {velocityInfo.label}
-                </Text>
-                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
-                  {prediction.demandVelocity?.toFixed(1) || "0.0"} units/day
-                </Text>
-              </View>
-            </View>
-
-            {/* Predictions Grid */}
-            <View style={styles.predictionsGrid}>
-              <View style={styles.predictionItem}>
-                <Text style={[styles.predictionValue, { color: theme.primary }]}>
-                  {prediction.nextWeekDemand || 0}
-                </Text>
-                <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
-                  7-Day Forecast
-                </Text>
-              </View>
-
-              <View style={styles.predictionItem}>
-                <Text style={[styles.predictionValue, { color: theme.primary }]}>
-                  {prediction.optimalOrderQty || 0}
-                </Text>
-                <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
-                  Optimal Order
-                </Text>
-              </View>
-
-              {prediction.reorderPoint !== undefined && (
-                <View style={styles.predictionItem}>
-                  <Text style={[styles.predictionValue, { color: "#FF9500" }]}>
-                    {prediction.reorderPoint}
-                  </Text>
-                  <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
-                    Reorder Point
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Days Until Stockout */}
-            {prediction.daysUntilStockout !== undefined && prediction.daysUntilStockout > 0 && (
-              <View
-                style={[
-                  styles.alertBanner,
-                  {
-                    backgroundColor:
-                      prediction.daysUntilStockout < 7 ? "#FF3B30" + "10"
-                      : prediction.daysUntilStockout < 14 ? "#FF9500" + "10"
-                      : "#34C759" + "10",
-                    borderColor:
-                      prediction.daysUntilStockout < 7 ? "#FF3B30"
-                      : prediction.daysUntilStockout < 14 ? "#FF9500"
-                      : "#34C759",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="timer-outline"
-                  size={16}
-                  color={
-                    prediction.daysUntilStockout < 7 ? "#FF3B30"
-                    : prediction.daysUntilStockout < 14 ? "#FF9500"
-                    : "#34C759"
-                  }
-                />
-                <Text
-                  style={[
-                    styles.alertText,
-                    {
-                      color:
-                        prediction.daysUntilStockout < 7 ? "#FF3B30"
-                        : prediction.daysUntilStockout < 14 ? "#FF9500"
-                        : "#34C759",
-                    },
-                  ]}
-                >
-                  Stockout in ~{Math.ceil(prediction.daysUntilStockout)} days
-                </Text>
-              </View>
-            )}
-
-            {/* Turnover Rate */}
-            {prediction.turnoverRate !== undefined && (
-              <View style={[styles.turnoverRow, { backgroundColor: theme.background }]}>
-                <View style={styles.turnoverInfo}>
-                  <Ionicons name="repeat-outline" size={16} color={theme.primary} />
-                  <Text style={[styles.turnoverLabel, { color: theme.subtext }]}>
-                    Turnover Rate
-                  </Text>
-                </View>
-                <Text style={[styles.turnoverValue, { color: theme.primary }]}>
-                  {prediction.turnoverRate.toFixed(2)}x
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Batch Timeline */}
         {product.batches && product.batches.length > 0 && (

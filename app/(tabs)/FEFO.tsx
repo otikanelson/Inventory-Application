@@ -1,27 +1,24 @@
-import React, { useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import {
-  View,
-  Text,
   FlatList,
-  StyleSheet,
   ImageBackground,
-  RefreshControl,
   Pressable,
-  Dimensions,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-
-const { width } = Dimensions.get("window");
 
 export default function FEFOScreen() {
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
   const router = useRouter();
 
-  // New state to toggle view mode
+  // State to toggle view mode
   const [viewByProduct, setViewByProduct] = useState(false);
 
   const backgroundImage =
@@ -29,8 +26,8 @@ export default function FEFOScreen() {
       require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
 
-  /** * FEFO Technical Logic: Flattening Batches into a Priority Queue
-   * Enhanced to support grouping by product (showing only the soonest batch)
+  /** 
+   * FEFO Technical Logic: Flattening Batches into a Priority Queue
    **/
   const priorityQueue = useMemo(() => {
     const queue: any[] = [];
@@ -46,21 +43,23 @@ export default function FEFOScreen() {
             (new Date(batch.expiryDate).getTime() - new Date().getTime()) /
               (1000 * 60 * 60 * 24),
           );
+          
           return {
             ...batch,
             parentName: product.name,
             parentId: product._id,
             daysLeft,
             category: product.category,
+            totalStock: product.totalQuantity,
           };
         });
 
         if (viewByProduct) {
-          // Find only the batch closest to expiry for this product
-          const soonestBatch = productBatches.reduce((prev, curr) =>
+          // Find the batch with earliest expiry for this product
+          const earliestBatch = productBatches.reduce((prev, curr) =>
             prev.daysLeft < curr.daysLeft ? prev : curr,
           );
-          queue.push(soonestBatch);
+          queue.push(earliestBatch);
         } else {
           // Push all batches normally
           queue.push(...productBatches);
@@ -68,7 +67,7 @@ export default function FEFOScreen() {
       }
     });
 
-    // Sort the final queue by most urgent (lowest daysLeft)
+    // Sort by days left (earliest first)
     return queue.sort((a, b) => a.daysLeft - b.daysLeft);
   }, [products, viewByProduct]);
 
@@ -115,6 +114,7 @@ export default function FEFOScreen() {
                 FEFO_QUEUE
               </Text>
 
+            <View style={styles.controlsRow}>
               <Pressable
                 onPress={() => setViewByProduct(!viewByProduct)}
                 style={[
@@ -128,7 +128,7 @@ export default function FEFOScreen() {
               >
                 <Ionicons
                   name={viewByProduct ? "copy" : "copy-outline"}
-                  size={14}
+                  size={10}
                   color={viewByProduct ? "#FFF" : theme.primary}
                 />
                 <Text
@@ -140,6 +140,7 @@ export default function FEFOScreen() {
                   {viewByProduct ? "BY_PRODUCT" : "BY_BATCH"}
                 </Text>
               </Pressable>
+            </View>
             </View>
 
             <View style={[styles.statsStrip, { borderColor: theme.border }]}>
@@ -161,7 +162,10 @@ export default function FEFOScreen() {
               onPress={() => router.push(`/product/${item.parentId}`)}
               style={[
                 styles.technicalRow,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { 
+                  backgroundColor: theme.surface, 
+                  borderColor: theme.border,
+                },
               ]}
             >
               <View
@@ -170,17 +174,21 @@ export default function FEFOScreen() {
 
               <View style={styles.mainInfo}>
                 <View style={styles.topLine}>
-                  <Text style={[styles.batchId, { color: theme.subtext }]}>
-                    {viewByProduct ?
-                      "SOONEST_EXPIRY"
-                    : `BATCH_#${item.batchNumber?.slice(-7).toUpperCase() || "MANUAL"}`
-                    }
-                  </Text>
-                  <Text style={[styles.daysCounter, { color: statusColor }]}>
-                    {item.daysLeft < 0 ?
-                      "EXPIRED"
-                    : `${item.daysLeft}d_REMAINING`}
-                  </Text>
+                  <View style={styles.batchIdContainer}>
+                    <Text style={[styles.batchId, { color: theme.subtext }]}>
+                      {viewByProduct ?
+                        "SOONEST_EXPIRY"
+                      : `BATCH_#${item.batchNumber?.slice(-7).toUpperCase() || "MANUAL"}`
+                      }
+                    </Text>
+                  </View>
+                  <View style={styles.rightInfo}>
+                    <Text style={[styles.daysCounter, { color: statusColor }]}>
+                      {item.daysLeft < 0 ?
+                        "EXPIRED"
+                      : `${item.daysLeft}d_REMAINING`}
+                    </Text>
+                  </View>
                 </View>
 
                 <Text
@@ -256,16 +264,22 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   systemTag: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
-  title: { fontSize: 30, fontWeight: "900", letterSpacing: -1 },
+  title: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
+  controlsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 5,
+    marginLeft: 10,
+  },
   filterToggle: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 6,
-    marginBottom: 5,
+    gap: 2,
   },
   filterToggleText: {
     fontSize: 10,
@@ -286,19 +300,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
     overflow: "hidden",
-    height: 95,
+    minHeight: 95,
   },
   indicator: { width: 6, height: "100%" },
   mainInfo: { flex: 1, padding: 15, justifyContent: "center" },
   topLine: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 4,
   },
+  batchIdContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   batchId: { fontSize: 10, fontWeight: "800", fontFamily: "monospace" },
+  rightInfo: {
+    alignItems: "flex-end",
+  },
   daysCounter: { fontSize: 10, fontWeight: "900" },
+  priorityScore: { fontSize: 8, fontWeight: "800", marginTop: 2 },
   name: { fontSize: 18, fontWeight: "800", marginBottom: 8 },
-  bottomLine: { flexDirection: "row", gap: 12 },
+  bottomLine: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
   tag: { flexDirection: "row", alignItems: "center", gap: 4 },
   tagText: { fontSize: 10, fontWeight: "700" },
   rankContainer: {
@@ -309,6 +332,17 @@ const styles = StyleSheet.create({
     borderLeftColor: "rgba(150,150,150,0.1)",
   },
   rankText: { fontSize: 24, fontWeight: "900" },
+  riskBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  riskBadgeText: {
+    color: "#FFF",
+    fontSize: 8,
+    fontWeight: "800",
+  },
   emptyContainer: { alignItems: "center", marginTop: 100 },
   emptyText: {
     marginTop: 15,

@@ -60,13 +60,19 @@ export default function ProductSalesDetails() {
       setProduct(productResponse.data.data);
 
       // Fetch sales history for this product
-      const salesResponse = await axios.get(
-        `${process.env.EXPO_PUBLIC_API_URL}/analytics/product-sales/${id}`
-      );
-      setSalesHistory(salesResponse.data.data || []);
+      try {
+        const salesResponse = await axios.get(
+          `${process.env.EXPO_PUBLIC_API_URL}/analytics/product-sales/${id}`
+        );
+        setSalesHistory(salesResponse.data.data || []);
+      } catch (salesError: any) {
+        console.error("Error fetching sales data:", salesError);
+        // If sales endpoint fails (e.g., MongoDB not connected), just show empty sales
+        setSalesHistory([]);
+      }
       
     } catch (error) {
-      console.error("Error fetching sales data:", error);
+      console.error("Error fetching product data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);

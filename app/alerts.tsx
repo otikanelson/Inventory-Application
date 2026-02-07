@@ -1,21 +1,21 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  ImageBackground,
-  Platform,
-  RefreshControl,
-  Pressable,
-  TextInput,
-  Modal,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import { useAlerts, Alert, AlertAction } from "../hooks/useAlerts";
 import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  ImageBackground,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import Toast from "react-native-toast-message";
+import { useTheme } from "../context/ThemeContext";
+import { Alert, AlertAction, useAlerts } from "../hooks/useAlerts";
 
 export default function Alerts() {
   const { theme, isDark } = useTheme();
@@ -88,7 +88,9 @@ export default function Alerts() {
       >
         <View style={styles.header}>
           <View>
-            <Text style={[styles.title, { color: theme.text }]}>Alerts</Text>
+            <Text style={[styles.title, { color: theme.text }]}>
+              Alerts
+            </Text>
             <Text style={[styles.subtitle, { color: theme.subtext }]}>
               {filteredAlerts.length} items requiring attention
             </Text>
@@ -106,7 +108,7 @@ export default function Alerts() {
             { label: "Expired", key: "expired", color: "#8B0000" },
             { label: "Critical", key: "critical", color: "#FF4444" },
             { label: "High", key: "high", color: "#FF9500" },
-            { label: "Early", key: "early", color: "#FFCC00" },
+            { label: "Early", key: "early", color: "#FFD60A" },
           ].map((item) => (
             <View
               key={item.key}
@@ -120,7 +122,7 @@ export default function Alerts() {
               ]}
             >
               <Text style={[styles.summaryValue, { color: item.color }]}>
-                {summary ? (summary as any)[item.key] : 0}
+                {summary ? (summary as any)[item.key] || 0 : 0}
               </Text>
               <Text style={[styles.summaryLabel, { color: theme.subtext }]}>
                 {item.label}
@@ -221,7 +223,7 @@ export default function Alerts() {
             </Pressable>
 
             <View style={styles.actionsRow}>
-              {alert.actions?.slice(0, 2).map((action, idx) => (
+              {alert.actions?.slice(0, 2).map((action: any, idx: number) => (
                 <Pressable
                   key={idx}
                   onPress={() => handleAction(alert, action)}

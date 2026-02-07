@@ -7,5 +7,6 @@
   "cSpell.words": [
     "FEFO",
     "STOCKQ"
-  ]
+  ],
+  "typescript.autoClosingTags": false
 }

@@ -46,23 +46,46 @@ export const useProducts = () => {
     try {
       setLoading(true);
       const response = await axios.get(API_URL);
-      const rawData = response.data.data || [];
+      
+      // Handle different response structures
+      let rawData = [];
+      if (response.data.status === 'success' && response.data.data?.products) {
+        rawData = response.data.data.products;
+      } else if (Array.isArray(response.data)) {
+        rawData = response.data;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        rawData = response.data.data;
+      }
+
+      // Ensure rawData is an array
+      if (!Array.isArray(rawData)) {
+        rawData = [];
+      }
 
       // Transform: Use totalQuantity from backend (calculated via pre-save hook)
       const formattedData = rawData.map((p: any) => ({
         ...p,
+        name: p.productName || p.name, // Map productName to name for consistency
         // Backend already calculates totalQuantity, but ensure it exists
         totalQuantity:
           p.totalQuantity ??
+          p.stockQuantity ??
           p.batches?.reduce((acc: number, b: Batch) => acc + b.quantity, 0) ??
           0,
+        // Ensure batches is always an array
+        batches: Array.isArray(p.batches) ? p.batches : [],
       }));
 
       setProducts(formattedData);
       setError(null);
-    } catch (err) {
-      setError("SYNC_FAILURE: UNABLE_TO_REACH_REGISTRY");
-      console.error("Fetch Error:", err);
+    } catch (err: any) {
+      // Check if it's a server error (500) vs network error
+      if (err.response?.status === 500) {
+        setError("Database connection issue. Please check backend.");
+      } else {
+        setError("Unable to reach server. Check your connection.");
+      }
+      setProducts([]); // Set empty array so app doesn't crash
     } finally {
       setLoading(false);
     }
@@ -76,8 +99,9 @@ export const useProducts = () => {
         setRecentlySold(response.data.data || []);
       }
     } catch (err) {
-      console.error("Recently Sold Fetch Error:", err);
-      // Don't set error state for this, as it's not critical
+      // Silently fail - recently sold is not critical
+      // This prevents error spam when MongoDB is down
+      setRecentlySold([]);
     }
   }, [ANALYTICS_URL]);
 
@@ -94,7 +118,7 @@ export const useProducts = () => {
         (p) => p.totalQuantity > 0 && p.totalQuantity < 10,
       ).length,
       expiringSoonCount: products.filter((p) =>
-        p.batches.some((b) => {
+        Array.isArray(p.batches) && p.batches.some((b) => {
           const exp = new Date(b.expiryDate);
           return exp > now && exp <= thirtyDaysFromNow;
         }),
@@ -109,10 +133,24 @@ export const useProducts = () => {
   ): Promise<Product | null> => {
     try {
       const response = await axios.get(`${API_URL}/${identifier}`);
-      const item = response.data.data;
+      
+      // Handle different response structures
+      let item = null;
+      if (response.data.status === 'success' && response.data.data?.product) {
+        item = response.data.data.product;
+      } else if (response.data.data) {
+        item = response.data.data;
+      } else {
+        item = response.data;
+      }
+
+      if (!item) {
+        return null;
+      }
 
       return {
         ...item,
+        name: item.productName || item.name,
         // Ensure totalQuantity is present
         totalQuantity:
           item.totalQuantity ??
@@ -121,6 +159,8 @@ export const useProducts = () => {
             0,
           ) ??
           0,
+        // Ensure batches is always an array
+        batches: Array.isArray(item.batches) ? item.batches : [],
       };
     } catch (err) {
       console.error(`Detail Fetch Error for [${identifier}]:`, err);

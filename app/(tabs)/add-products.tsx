@@ -72,6 +72,34 @@ export default function AddProducts() {
   const isScannedProduct = Boolean(params.barcode && params.barcode !== formData.barcode);
   const showGenerateButton = !isLocked && !isScannedProduct;
 
+  // Predefined categories - strict list to avoid random entries
+  const PREDEFINED_CATEGORIES = [
+    "Beverages",
+    "Dairy",
+    "Bakery",
+    "Produce",
+    "Meat & Poultry",
+    "Seafood",
+    "Frozen Foods",
+    "Canned Goods",
+    "Dry Goods",
+    "Snacks",
+    "Condiments & Sauces",
+    "Spices & Seasonings",
+    "Breakfast & Cereal",
+    "Pasta & Grains",
+    "Baking Supplies",
+    "Stationary",
+    "Household Items",
+    "Personal Care",
+    "Health & Wellness",
+    "Baby Products",
+    "Pet Supplies",
+    "Electronics",
+    "Office Supplies",
+    "Other"
+  ].sort();
+
   const existingCategories = Array.from(
     new Set(products.map((p) => p.category).filter(Boolean)),
   ).sort();
@@ -279,7 +307,7 @@ export default function AddProducts() {
     setTimeout(() => validateField(field, sanitizedValue), 300);
   };
 
-  const resetForm = () => {
+  const resetForm = (showToast: boolean = false) => {
     setFormData({
       name: "",
       quantity: "",
@@ -299,18 +327,20 @@ export default function AddProducts() {
     setUploadProgress(0);
     setIsUploading(false);
     
-    Toast.show({
-      type: "success",
-      text1: "Form Reset",
-      text2: "All fields cleared successfully",
-    });
+    if (showToast) {
+      Toast.show({
+        type: "success",
+        text1: "Form Reset",
+        text2: "All fields cleared successfully",
+      });
+    }
   };
 
   const handleRefreshPress = () => {
     if (formModified) {
       setShowRefreshConfirm(true);
     } else {
-      resetForm();
+      resetForm(true); // Show toast when explicitly refreshing
     }
   };
 
@@ -1299,7 +1329,7 @@ export default function AddProducts() {
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
                 onPress={() => {
                   setShowRefreshConfirm(false);
-                  resetForm();
+                  resetForm(true); // Show toast when user confirms reset
                 }}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>Reset</Text>
@@ -1376,22 +1406,66 @@ export default function AddProducts() {
                 <Ionicons name="close" size={24} color={theme.text} />
               </Pressable>
             </View>
+            
+            {/* Search/Filter Input */}
             <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1, color: theme.text }]}
-                placeholder="Type new category..."
-                value={formData.category}
-                onChangeText={(t) => handleFieldChange("category", t)}
-                onSubmitEditing={() => { if (formData.category.trim()) setShowCategoryPicker(false); }}
-              />
+              <View style={[styles.searchContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Ionicons name="search" size={20} color={theme.subtext} />
+                <TextInput
+                  style={[styles.searchInput, { color: theme.text }]}
+                  placeholder="Search categories..."
+                  placeholderTextColor={theme.subtext}
+                  value={formData.category}
+                  onChangeText={(t) => setFormData((prev) => ({ ...prev, category: t }))}
+                />
+                {formData.category && (
+                  <Pressable onPress={() => setFormData((prev) => ({ ...prev, category: "" }))}>
+                    <Ionicons name="close-circle" size={20} color={theme.subtext} />
+                  </Pressable>
+                )}
+              </View>
             </View>
+            
             <FlatList
-              data={existingCategories}
-              keyExtractor={(item, index) => item ?? index.toString()}
-              style={{ maxHeight: 300 }}
+              data={PREDEFINED_CATEGORIES.filter(cat => 
+                cat.toLowerCase().includes(formData.category.toLowerCase())
+              )}
+              keyExtractor={(item) => item}
+              style={{ maxHeight: 400 }}
+              ListEmptyComponent={
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Ionicons name="search-outline" size={48} color={theme.subtext} />
+                  <Text style={{ color: theme.subtext, marginTop: 12, textAlign: 'center' }}>
+                    No matching categories found
+                  </Text>
+                  <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+                    Try a different search term
+                  </Text>
+                </View>
+              }
               renderItem={({ item }) => (
-                <Pressable style={styles.categoryItem} onPress={() => item && handleCategorySelect(item)}>
-                  <Text style={{ color: theme.text, fontSize: 16 }}>{item ?? ""}</Text>
+                <Pressable 
+                  style={[
+                    styles.categoryItem,
+                    formData.category === item && { backgroundColor: theme.primary + '15' }
+                  ]} 
+                  onPress={() => handleCategorySelect(item)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Ionicons 
+                      name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
+                      size={20} 
+                      color={formData.category === item ? theme.primary : theme.subtext} 
+                    />
+                    <Text style={{ 
+                      color: formData.category === item ? theme.primary : theme.text, 
+                      fontSize: 16,
+                      marginLeft: 12,
+                      fontWeight: formData.category === item ? '600' : '400'
+                    }}>
+                      {item}
+                    </Text>
+                  </View>
                   <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
                 </Pressable>
               )}
@@ -1452,7 +1526,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 28, fontWeight: "900", letterSpacing: -1 },
+  title: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
   subtitle: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
   
   // Enhanced mode selection
@@ -1835,5 +1909,18 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 15,
     alignItems: "center",
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    padding: 0,
   },
 });

@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60 },
   topSection: { paddingHorizontal: 20, marginBottom: 10 },
   subtitle: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
-  title: { fontSize: 32, fontWeight: "900", letterSpacing: -1 },
+  title: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
   searchRow: { flexDirection: "row", gap: 10, marginBottom: 15 },
   searchBar: {
     flex: 1,

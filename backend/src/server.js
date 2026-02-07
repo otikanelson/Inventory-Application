@@ -2,13 +2,17 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const morgan = require('morgan');
-const colors = require('colors');
 const path = require('path');
 const connectDB = require('./config/db');
 
 // Load environment variables
 dotenv.config();
-connectDB(); // Connect to Atlas
+
+// Try to connect to MongoDB, but don't block server startup
+connectDB().catch(err => {
+  console.error('⚠️  Server starting without MongoDB connection');
+  console.error('⚠️  Database operations will fail until connection is established');
+});
 
 const app = express();
 
@@ -96,8 +100,8 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`.yellow.bold);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`.cyan);
-  console.log(`Storage: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary (Production Ready)' : 'Local (Development Only)'}`.green);
-  console.log(`Cloudinary Status: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '❌ Not Configured'}`.magenta);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Storage: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary (Production Ready)' : 'Local (Development Only)'}`);
+  console.log(`Cloudinary Status: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '❌ Not Configured'}`);
 });

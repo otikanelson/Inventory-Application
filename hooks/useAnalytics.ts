@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useCallback, useEffect, useState } from 'react';
 
 interface AnalyticsSummary {
   totalProducts: number;
@@ -33,9 +33,11 @@ export const useAnalytics = () => {
       const response = await axios.get(`${API_URL}/dashboard`);
       setDashboardData(response.data.data);
       setError(null);
-    } catch (err) {
-      setError("Failed to load analytics");
+    } catch (err: any) {
+      // Don't crash if MongoDB isn't connected - just show empty data
       console.error("Analytics Error:", err);
+      setError(err.response?.status === 404 ? "Analytics service unavailable" : "Failed to load analytics");
+      setDashboardData(null);
     } finally {
       setLoading(false);
     }
@@ -46,8 +48,10 @@ export const useAnalytics = () => {
     try {
       const response = await axios.get(`${API_URL}/sales-trends?days=${days}`);
       setSalesTrends(response.data.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Sales Trends Error:", err);
+      // Set empty data instead of crashing
+      setSalesTrends(null);
     }
   }, [API_URL]);
 
