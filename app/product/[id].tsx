@@ -2,16 +2,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  ImageBackground,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Image,
+    ImageBackground,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
+import { PredictionCard } from "../../components/PredictionCard";
 import { useTheme } from "../../context/ThemeContext";
+import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useProducts } from "../../hooks/useProducts";
 
 interface Batch {
@@ -27,6 +29,11 @@ export default function ProductDetails() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { getProductById } = useProducts();
+  const { prediction, loading: predictionLoading } = useAIPredictions({ 
+    productId: id as string,
+    enableWebSocket: true,
+    autoFetch: true
+  });
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -238,6 +245,12 @@ export default function ProductDetails() {
             </View>
           </View>
         </View>
+
+        {/* AI Prediction Card */}
+        <PredictionCard 
+          prediction={prediction} 
+          loading={predictionLoading}
+        />
 
         {/* Price Information */}
         {priceAnalytics && (priceAnalytics.genericPrice || priceAnalytics.hasBatchPrices) && (

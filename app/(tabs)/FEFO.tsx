@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+    ActivityIndicator,
     FlatList,
     ImageBackground,
     Pressable,
@@ -11,20 +12,54 @@ import {
     View
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
+import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useProducts } from "../../hooks/useProducts";
+import { Prediction } from "../../types/ai-predictions";
 
 export default function FEFOScreen() {
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
+  const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
   const router = useRouter();
 
-  // State to toggle view mode
+  // State to toggle view mode and sort mode
   const [viewByProduct, setViewByProduct] = useState(false);
+  const [sortByAI, setSortByAI] = useState(false);
+  const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
+  const [loadingPredictions, setLoadingPredictions] = useState(false);
 
   const backgroundImage =
     isDark ?
       require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
+
+  // Fetch predictions for all perishable products
+  useEffect(() => {
+    const fetchPredictions = async () => {
+      if (sortByAI && products.length > 0) {
+        setLoadingPredictions(true);
+        const perishableProducts = products.filter(p => p.isPerishable);
+        const productIds = perishableProducts.map(p => p._id);
+        
+        if (productIds.length > 0) {
+          try {
+            const batchPredictions = await fetchBatchPredictions(productIds);
+            const predictionsMap: Record<string, Prediction> = {};
+            batchPredictions.forEach((pred: Prediction) => {
+              if (pred.productId) {
+                predictionsMap[pred.productId] = pred;
+              }
+            });
+            setPredictions(predictionsMap);
+          } catch (error) {
+            console.error('Error fetching predictions:', error);
+          }
+        }
+        setLoadingPredictions(false);
+      }
+    };
+    fetchPredictions();
+  }, [sortByAI, products, fetchBatchPredictions]);
 
   /** 
    * FEFO Technical Logic: Flattening Batches into a Priority Queue
@@ -44,6 +79,10 @@ export default function FEFOScreen() {
               (1000 * 60 * 60 * 24),
           );
           
+          // Get prediction data for this product
+          const prediction = predictions[product._id];
+          const riskScore = prediction?.metrics?.riskScore || 0;
+          
           return {
             ...batch,
             parentName: product.name,
@@ -51,6 +90,8 @@ export default function FEFOScreen() {
             daysLeft,
             category: product.category,
             totalStock: product.totalQuantity,
+            riskScore,
+            prediction,
           };
         });
 
@@ -67,15 +108,33 @@ export default function FEFOScreen() {
       }
     });
 
-    // Sort by days left (earliest first)
-    return queue.sort((a, b) => a.daysLeft - b.daysLeft);
-  }, [products, viewByProduct]);
+    // Sort by AI risk or expiry date
+    if (sortByAI) {
+      // Sort by risk score (highest first), then by days left as tiebreaker
+      return queue.sort((a, b) => {
+        if (b.riskScore !== a.riskScore) {
+          return b.riskScore - a.riskScore;
+        }
+        return a.daysLeft - b.daysLeft;
+      });
+    } else {
+      // Sort by days left (earliest first)
+      return queue.sort((a, b) => a.daysLeft - b.daysLeft);
+    }
+  }, [products, viewByProduct, sortByAI, predictions]);
 
   const getStatusColor = (days: number) => {
     if (days < 0) return "#FF4444"; // Expired (Red)
     if (days < 7) return "#ff6a00ff"; // Critical (Dark Orange)
     if (days < 30) return "#FFD700"; // Warning (Yellow/Gold)
     return "#4CAF50"; // Stable (Green)
+  };
+
+  const getRiskColor = (riskScore: number) => {
+    if (riskScore >= 70) return '#FF3B30'; // Red
+    if (riskScore >= 50) return '#FF9500'; // Orange
+    if (riskScore >= 30) return '#FFCC00'; // Yellow
+    return '#34C759'; // Green
   };
 
   return (
@@ -113,6 +172,31 @@ export default function FEFOScreen() {
               </Text>
 
             <View style={styles.controlsRow}>
+              <Pressable
+                onPress={() => setSortByAI(!sortByAI)}
+                style={[
+                  styles.filterToggle,
+                  {
+                    borderColor: sortByAI ? '#FF9500' : theme.primary,
+                    backgroundColor: sortByAI ? '#FF9500' : 'transparent',
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={sortByAI ? 'sparkles' : 'sparkles-outline'}
+                  size={10}
+                  color={sortByAI ? '#FFF' : theme.primary}
+                />
+                <Text
+                  style={[
+                    styles.filterToggleText,
+                    { color: sortByAI ? '#FFF' : theme.text },
+                  ]}
+                >
+                  {sortByAI ? 'AI_RISK' : 'EXPIRY'}
+                </Text>
+              </Pressable>
+
               <Pressable
                 onPress={() => setViewByProduct(!viewByProduct)}
                 style={[
@@ -153,7 +237,7 @@ export default function FEFOScreen() {
           </View>
         }
         renderItem={({ item, index }) => {
-          const statusColor = getStatusColor(item.daysLeft);
+          const statusColor = sortByAI ? getRiskColor(item.riskScore) : getStatusColor(item.daysLeft);
 
           return (
             <Pressable
@@ -181,11 +265,22 @@ export default function FEFOScreen() {
                     </Text>
                   </View>
                   <View style={styles.rightInfo}>
-                    <Text style={[styles.daysCounter, { color: statusColor }]}>
-                      {item.daysLeft < 0 ?
-                        "EXPIRED"
-                      : `${item.daysLeft}d_REMAINING`}
-                    </Text>
+                    {sortByAI && item.riskScore > 0 ? (
+                      <>
+                        <Text style={[styles.daysCounter, { color: statusColor }]}>
+                          RISK_{item.riskScore}/100
+                        </Text>
+                        <Text style={[styles.priorityScore, { color: theme.subtext }]}>
+                          {item.daysLeft < 0 ? 'EXPIRED' : `${item.daysLeft}d left`}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={[styles.daysCounter, { color: statusColor }]}>
+                        {item.daysLeft < 0 ?
+                          "EXPIRED"
+                        : `${item.daysLeft}d_REMAINING`}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -217,6 +312,13 @@ export default function FEFOScreen() {
                       {new Date(item.expiryDate).toLocaleDateString()}
                     </Text>
                   </View>
+                  {sortByAI && item.prediction?.recommendations?.[0] && (
+                    <View style={[styles.riskBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.riskBadgeText}>
+                        {item.prediction.recommendations[0].priority.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -224,6 +326,9 @@ export default function FEFOScreen() {
                 <Text style={[styles.rankText, { color: theme.border }]}>
                   {index + 1}
                 </Text>
+                {loadingPredictions && sortByAI && (
+                  <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 4 }} />
+                )}
               </View>
             </Pressable>
           );

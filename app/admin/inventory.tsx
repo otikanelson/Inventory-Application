@@ -1,32 +1,79 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
-  Image,
-  ImageBackground,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    FlatList,
+    Image,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
+import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useProducts } from "../../hooks/useProducts";
+import { Prediction } from "../../types/ai-predictions";
 
 export default function AdminInventory() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
+  const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<"name" | "totalQuantity">("name");
+  const [sortField, setSortField] = useState<"name" | "totalQuantity" | "risk" | "velocity">("name");
   const [activeTab, setActiveTab] = useState<"registry" | "inventory">("inventory");
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
+  const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
+
+  // Fetch predictions for inventory products
+  useEffect(() => {
+    const fetchPredictions = async () => {
+      if (activeTab === "inventory" && products.length > 0) {
+        const productIds = products.map(p => p._id);
+        try {
+          const batchPredictions = await fetchBatchPredictions(productIds);
+          const predictionsMap: Record<string, Prediction> = {};
+          batchPredictions.forEach((pred: Prediction) => {
+            if (pred.productId) {
+              predictionsMap[pred.productId] = pred;
+            }
+          });
+          setPredictions(predictionsMap);
+        } catch (error) {
+          console.error('Error fetching predictions:', error);
+        }
+      }
+    };
+    fetchPredictions();
+  }, [products, activeTab, fetchBatchPredictions]);
+
+  // Helper functions
+  const getRiskColor = (riskScore: number) => {
+    if (riskScore >= 70) return '#FF3B30';
+    if (riskScore >= 50) return '#FF9500';
+    if (riskScore >= 30) return '#FFCC00';
+    return null;
+  };
+
+  const getVelocityIndicator = (velocity: number) => {
+    if (velocity > 5) return { icon: 'flash' as const, color: '#34C759' };
+    if (velocity < 0.5) return { icon: 'hourglass' as const, color: '#FF9500' };
+    return null;
+  };
+
+  const cycleSortField = () => {
+    const fields: Array<"name" | "totalQuantity" | "risk" | "velocity"> = ["name", "totalQuantity", "risk", "velocity"];
+    const currentIndex = fields.indexOf(sortField);
+    const nextIndex = (currentIndex + 1) % fields.length;
+    setSortField(fields[nextIndex]);
+  };
 
   // Fetch global registry products
   const fetchGlobalProducts = async () => {
@@ -70,13 +117,21 @@ export default function AdminInventory() {
 
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
-      if (sortField === "name") {
+      if (sortField === "risk" && activeTab === "inventory") {
+        const riskA = predictions[a._id]?.metrics?.riskScore || 0;
+        const riskB = predictions[b._id]?.metrics?.riskScore || 0;
+        return riskB - riskA;
+      } else if (sortField === "velocity" && activeTab === "inventory") {
+        const velA = predictions[a._id]?.metrics?.velocity || 0;
+        const velB = predictions[b._id]?.metrics?.velocity || 0;
+        return velB - velA;
+      } else if (sortField === "name") {
         return a.name.localeCompare(b.name);
       } else {
         return (b.totalQuantity || 0) - (a.totalQuantity || 0);
       }
     });
-  }, [filteredProducts, sortField]);
+  }, [filteredProducts, sortField, predictions, activeTab]);
 
   const handleRefresh = () => {
     if (activeTab === "inventory") {
@@ -165,11 +220,17 @@ export default function AdminInventory() {
                 styles.sortBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
-              onPress={() =>
-                setSortField(sortField === "name" ? "totalQuantity" : "name")
-              }
+              onPress={cycleSortField}
             >
-              <Ionicons name="swap-vertical" size={20} color={theme.primary} />
+              <Ionicons 
+                name={
+                  sortField === "risk" ? "alert-circle" :
+                  sortField === "velocity" ? "speedometer" :
+                  "swap-vertical"
+                } 
+                size={20} 
+                color={theme.primary} 
+              />
             </Pressable>
           </View>
 
@@ -249,6 +310,13 @@ export default function AdminInventory() {
               ? products.some((p) => p.barcode === item.barcode)
               : true;
 
+            // Get prediction data (only for inventory tab)
+            const prediction = activeTab === "inventory" ? predictions[item._id] : null;
+            const riskScore = prediction?.metrics?.riskScore || 0;
+            const velocity = prediction?.metrics?.velocity || 0;
+            const riskColor = getRiskColor(riskScore);
+            const velocityIndicator = getVelocityIndicator(velocity);
+
             return (
               <Pressable
                 onPress={() => handleProductPress(item)}
@@ -257,6 +325,11 @@ export default function AdminInventory() {
                   { backgroundColor: theme.surface, borderColor: theme.border },
                 ]}
               >
+                {/* Risk Dot */}
+                {riskColor && riskScore > 30 && activeTab === "inventory" && (
+                  <View style={[styles.riskDot, { backgroundColor: riskColor }]} />
+                )}
+
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
                     {item.imageUrl && item.imageUrl !== "cube" ? (
@@ -274,12 +347,23 @@ export default function AdminInventory() {
                     )}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text
-                      style={[styles.name, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
+                    <View style={styles.nameRow}>
+                      <Text
+                        style={[styles.name, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {/* Velocity Indicator */}
+                      {velocityIndicator && activeTab === "inventory" && (
+                        <Ionicons 
+                          name={velocityIndicator.icon} 
+                          size={14} 
+                          color={velocityIndicator.color}
+                          style={{ marginLeft: 6 }}
+                        />
+                      )}
+                    </View>
                     <Text style={[styles.category, { color: theme.subtext }]}>
                       {item.category || "General"}
                     </Text>
@@ -393,7 +477,22 @@ const styles = StyleSheet.create({
   countText: { fontSize: 13, fontWeight: "600" },
   sortLabel: { fontSize: 11, fontWeight: "800" },
   listPadding: { paddingHorizontal: 20, paddingBottom: 100 },
-  itemCard: { borderRadius: 20, borderWidth: 1, marginBottom: 12, padding: 16 },
+  itemCard: { 
+    borderRadius: 20, 
+    borderWidth: 1, 
+    marginBottom: 12, 
+    padding: 16,
+    position: 'relative',
+  },
+  riskDot: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 10,
+  },
   cardMain: { flexDirection: "row", alignItems: "center" },
   imageContainer: {
     width: 60,
@@ -405,6 +504,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   image: { width: "100%", height: "100%", borderRadius: 12 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   name: { fontSize: 16, fontWeight: "800" },
   category: { fontSize: 12, fontWeight: "600", marginTop: 2 },
   statusRow: {

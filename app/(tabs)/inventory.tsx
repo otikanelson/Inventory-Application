@@ -1,27 +1,74 @@
-import React, { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  Pressable,
-  ImageBackground,
-  RefreshControl,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, Href } from "expo-router";
+import { Href, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import {
+    FlatList,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
 import { useTheme } from "../../context/ThemeContext";
-import { useProducts, Product } from "../../hooks/useProducts";
+import { useAIPredictions } from "../../hooks/useAIPredictions";
+import { Product, useProducts } from "../../hooks/useProducts";
+import { Prediction } from "../../types/ai-predictions";
 
 export default function InventoryScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
+  const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<keyof Product>("name");
+  const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
   const [displayMode, setDisplayMode] = useState<"card" | "list">("card");
+  const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
+
+  // Fetch predictions for all products
+  useEffect(() => {
+    const fetchPredictions = async () => {
+      if (products.length > 0) {
+        const productIds = products.map(p => p._id);
+        try {
+          const batchPredictions = await fetchBatchPredictions(productIds);
+          const predictionsMap: Record<string, Prediction> = {};
+          batchPredictions.forEach((pred: Prediction) => {
+            if (pred.productId) {
+              predictionsMap[pred.productId] = pred;
+            }
+          });
+          setPredictions(predictionsMap);
+        } catch (error) {
+          console.error('Error fetching predictions:', error);
+        }
+      }
+    };
+    fetchPredictions();
+  }, [products, fetchBatchPredictions]);
+
+  // Helper functions
+  const getRiskColor = (riskScore: number) => {
+    if (riskScore >= 70) return '#FF3B30';
+    if (riskScore >= 50) return '#FF9500';
+    if (riskScore >= 30) return '#FFCC00';
+    return null;
+  };
+
+  const getVelocityIndicator = (velocity: number) => {
+    if (velocity > 5) return { icon: 'flash' as const, color: '#34C759' };
+    if (velocity < 0.5) return { icon: 'hourglass' as const, color: '#FF9500' };
+    return null;
+  };
+
+  const cycleSortField = () => {
+    const fields: Array<keyof Product | "risk" | "velocity"> = ["name", "totalQuantity", "risk", "velocity"];
+    const currentIndex = fields.indexOf(sortField);
+    const nextIndex = (currentIndex + 1) % fields.length;
+    setSortField(fields[nextIndex]);
+  };
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -36,11 +83,21 @@ export default function InventoryScreen() {
 
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
-      const valA = (a[sortField] || "").toString().toLowerCase();
-      const valB = (b[sortField] || "").toString().toLowerCase();
-      return valA.localeCompare(valB);
+      if (sortField === "risk") {
+        const riskA = predictions[a._id]?.metrics?.riskScore || 0;
+        const riskB = predictions[b._id]?.metrics?.riskScore || 0;
+        return riskB - riskA; // Highest risk first
+      } else if (sortField === "velocity") {
+        const velA = predictions[a._id]?.metrics?.velocity || 0;
+        const velB = predictions[b._id]?.metrics?.velocity || 0;
+        return velB - velA; // Highest velocity first
+      } else {
+        const valA = (a[sortField] || "").toString().toLowerCase();
+        const valB = (b[sortField] || "").toString().toLowerCase();
+        return valA.localeCompare(valB);
+      }
     });
-  }, [filteredProducts, sortField]);
+  }, [filteredProducts, sortField, predictions]);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -95,11 +152,17 @@ export default function InventoryScreen() {
                 styles.sortBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
-              onPress={() =>
-                setSortField(sortField === "name" ? "totalQuantity" : "name")
-              }
+              onPress={cycleSortField}
             >
-              <Ionicons name="swap-vertical" size={20} color={theme.primary} />
+              <Ionicons 
+                name={
+                  sortField === "risk" ? "alert-circle" :
+                  sortField === "velocity" ? "speedometer" :
+                  "swap-vertical"
+                } 
+                size={20} 
+                color={theme.primary} 
+              />
             </Pressable>
 
             <Pressable
@@ -144,19 +207,41 @@ export default function InventoryScreen() {
             />
           }
           renderItem={({ item }) => {
+            const prediction = predictions[item._id];
+            const riskScore = prediction?.metrics?.riskScore || 0;
+            const velocity = prediction?.metrics?.velocity || 0;
+            const riskColor = getRiskColor(riskScore);
+            const velocityIndicator = getVelocityIndicator(velocity);
+
             if (displayMode === "list") {
               return (
                 <Pressable
                   onPress={() => router.push(`/product/${item._id}` as Href)}
                   style={[styles.listItem, { borderBottomColor: theme.border }]}
                 >
-                  <View style={{ flex: 2 }}>
-                    <Text
-                      style={[styles.listName, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
+                  {/* Risk Dot */}
+                  {riskColor && riskScore > 30 && (
+                    <View style={[styles.listRiskDot, { backgroundColor: riskColor }]} />
+                  )}
+                  
+                  <View style={{ flex: 2, marginLeft: riskColor && riskScore > 30 ? 8 : 0 }}>
+                    <View style={styles.listNameRow}>
+                      <Text
+                        style={[styles.listName, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {/* Velocity Indicator */}
+                      {velocityIndicator && (
+                        <Ionicons 
+                          name={velocityIndicator.icon} 
+                          size={12} 
+                          color={velocityIndicator.color}
+                          style={{ marginLeft: 6 }}
+                        />
+                      )}
+                    </View>
                     <Text
                       style={[styles.listSubtitle, { color: theme.subtext }]}
                     >
@@ -196,6 +281,11 @@ export default function InventoryScreen() {
                   { backgroundColor: theme.surface, borderColor: theme.border },
                 ]}
               >
+                {/* Risk Dot - Card Mode */}
+                {riskColor && riskScore > 30 && (
+                  <View style={[styles.cardRiskDot, { backgroundColor: riskColor }]} />
+                )}
+                
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
                     {item.imageUrl && item.imageUrl !== "cube" ? (
@@ -213,12 +303,23 @@ export default function InventoryScreen() {
                     )}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text
-                      style={[styles.name, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
+                    <View style={styles.cardNameRow}>
+                      <Text
+                        style={[styles.name, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {/* Velocity Indicator */}
+                      {velocityIndicator && (
+                        <Ionicons 
+                          name={velocityIndicator.icon} 
+                          size={14} 
+                          color={velocityIndicator.color}
+                          style={{ marginLeft: 6 }}
+                        />
+                      )}
+                    </View>
                     <Text style={[styles.category, { color: theme.subtext }]}>
                       {item.category || "General"}
                     </Text>
@@ -310,6 +411,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 15,
     borderBottomWidth: 1,
+    position: 'relative',
+  },
+  listRiskDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  listNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   listName: { fontSize: 14, fontWeight: "700" },
   listSubtitle: { fontSize: 11 },
@@ -321,4 +433,17 @@ const styles = StyleSheet.create({
   },
   listCategory: { fontSize: 10, fontWeight: "700" },
   listQty: { fontSize: 14, fontWeight: "800" },
+  cardRiskDot: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  cardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 });

@@ -1,23 +1,28 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from "expo-router";
+import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  ImageBackground,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
 import { useAlerts } from "../../hooks/useAlerts";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default function AdminSettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -307,14 +312,22 @@ export default function AdminSettingsScreen() {
       await AsyncStorage.setItem('admin_auto_backup', value.toString());
       
       if (value) {
+        // Schedule next backup for 7 days from now
+        const nextBackupDate = new Date();
+        nextBackupDate.setDate(nextBackupDate.getDate() + 7);
+        await AsyncStorage.setItem('next_backup_date', nextBackupDate.toISOString());
+        
         // Perform initial backup when enabled
         await performBackup();
+      } else {
+        // Clear scheduled backup
+        await AsyncStorage.removeItem('next_backup_date');
       }
       
       Toast.show({
         type: 'success',
         text1: 'Setting Updated',
-        text2: `Auto-backup ${value ? 'enabled' : 'disabled'}`
+        text2: `Auto-backup ${value ? 'enabled - backs up every 7 days' : 'disabled'}`
       });
     } catch (error) {
       Toast.show({
@@ -328,22 +341,41 @@ export default function AdminSettingsScreen() {
   const performBackup = async () => {
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL;
-      const response = await axios.get(`${API_URL}/products`);
       
-      if (response.data.success) {
-        const products = response.data.data;
+      // Fetch all data
+      const [productsRes, salesRes, predictionsRes] = await Promise.all([
+        axios.get(`${API_URL}/products`),
+        axios.get(`${API_URL}/analytics/sales-trends?days=365`),
+        axios.get(`${API_URL}/analytics/dashboard`)
+      ]);
+      
+      if (productsRes.data.success) {
+        const products = productsRes.data.data;
+        const salesData = salesRes.data.success ? salesRes.data.data : null;
+        const analyticsData = predictionsRes.data.success ? predictionsRes.data.data : null;
         
-        // Create backup object
+        // Create comprehensive backup object
         const backup = {
           timestamp: new Date().toISOString(),
-          version: '1.0',
-          productCount: products.length,
-          data: products
+          version: '2.0',
+          type: 'full_backup',
+          data: {
+            products: products,
+            productCount: products.length,
+            salesHistory: salesData,
+            aiInsights: analyticsData,
+            inventorySnapshot: {
+              totalProducts: products.length,
+              totalQuantity: products.reduce((sum: number, p: any) => sum + (p.totalQuantity || 0), 0),
+              perishableCount: products.filter((p: any) => p.isPerishable).length,
+              categories: [...new Set(products.map((p: any) => p.category))].length
+            }
+          }
         };
         
         const backupJson = JSON.stringify(backup, null, 2);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-        const filename = `inventory_backup_${timestamp}.json`;
+        const filename = `inventease_backup_${timestamp}.json`;
         
         if (Platform.OS === 'web') {
           // Web: Download backup
@@ -354,25 +386,48 @@ export default function AdminSettingsScreen() {
           link.download = filename;
           link.click();
           URL.revokeObjectURL(url);
+          
+          Toast.show({
+            type: 'success',
+            text1: 'Backup Complete',
+            text2: `${products.length} products backed up`
+          });
         } else {
           // Mobile: Save backup to device
+          // @ts-ignore - expo-file-system types issue
           const fileUri = FileSystem.documentDirectory + filename;
-          await FileSystem.writeAsStringAsync(fileUri, backupJson, {
-            encoding: FileSystem.EncodingType.UTF8
-          });
+          // @ts-ignore
+          await FileSystem.writeAsStringAsync(fileUri, backupJson);
           
           // Store backup metadata
           const backupDate = new Date().toISOString();
           await AsyncStorage.setItem('last_backup_date', backupDate);
           await AsyncStorage.setItem('last_backup_file', fileUri);
           setLastBackupDate(backupDate);
+          
+          // Share the backup file
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'application/json',
+              dialogTitle: 'Backup Complete - Save or Share',
+              UTI: 'public.json'
+            });
+          }
+          
+          Toast.show({
+            type: 'success',
+            text1: 'Backup Complete',
+            text2: `${products.length} products + sales + AI insights backed up`
+          });
         }
         
-        Toast.show({
-          type: 'success',
-          text1: 'Backup Complete',
-          text2: `${products.length} products backed up`
-        });
+        // Schedule next backup if auto-backup is enabled
+        if (enableBackup) {
+          const nextBackupDate = new Date();
+          nextBackupDate.setDate(nextBackupDate.getDate() + 7);
+          await AsyncStorage.setItem('next_backup_date', nextBackupDate.toISOString());
+        }
       }
     } catch (error) {
       console.error('Backup error:', error);
@@ -453,10 +508,10 @@ export default function AdminSettingsScreen() {
           });
         } else {
           // Mobile: Save and share file
+          // @ts-ignore - expo-file-system types issue
           const fileUri = FileSystem.documentDirectory + filename;
-          await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-            encoding: FileSystem.EncodingType.UTF8
-          });
+          // @ts-ignore
+          await FileSystem.writeAsStringAsync(fileUri, csvContent);
           
           // Check if sharing is available
           const isAvailable = await Sharing.isAvailableAsync();
@@ -470,7 +525,7 @@ export default function AdminSettingsScreen() {
             Toast.show({
               type: 'success',
               text1: 'Export Complete',
-              text2: `${products.length} products exported to ${filename}`
+              text2: `${products.length} products exported`
             });
           } else {
             Toast.show({
@@ -692,7 +747,13 @@ export default function AdminSettingsScreen() {
           <SettingRow
             icon="cloud-upload-outline"
             label="Auto Backup"
-            description={lastBackupDate ? `Last backup: ${new Date(lastBackupDate).toLocaleString()}` : "Automatically backup inventory data"}
+            description={
+              enableBackup 
+                ? (lastBackupDate 
+                    ? `Last: ${new Date(lastBackupDate).toLocaleDateString()} - Next in 7 days` 
+                    : "Backs up every 7 days automatically")
+                : "Enable automatic backups every 7 days"
+            }
           >
             <Switch
               value={enableBackup}
@@ -701,19 +762,21 @@ export default function AdminSettingsScreen() {
             />
           </SettingRow>
 
-          <SettingRow
-            icon="save-outline"
-            label="Backup Now"
-            description="Create manual backup of all inventory data"
-            onPress={performBackup}
-          >
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-          </SettingRow>
+          {!enableBackup && (
+            <SettingRow
+              icon="save-outline"
+              label="Backup Now"
+              description="Create manual backup of all data"
+              onPress={performBackup}
+            >
+              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            </SettingRow>
+          )}
 
           <SettingRow
             icon="download-outline"
-            label="Export Data"
-            description="Download inventory as CSV"
+            label="Export Inventory CSV"
+            description="Download inventory data as CSV"
             onPress={handleExportData}
           >
             {isExporting ? (

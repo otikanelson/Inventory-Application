@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { Product } from "../hooks/useProducts";
+import { Prediction } from "../types/ai-predictions";
 
 const { width } = Dimensions.get("window");
 
@@ -117,10 +118,35 @@ export const ProductCardSkeleton = () => {
 };
 
 // --- MAIN PRODUCT CARD ---
-export const ProductCard = ({ item }: { item: Product }) => {
+interface ProductCardProps {
+  item: Product;
+  prediction?: Prediction | null;
+}
+
+export const ProductCard = React.memo(({ item, prediction }: ProductCardProps) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Get risk color based on score
+  const getRiskColor = (riskScore: number) => {
+    if (riskScore >= 70) return '#FF3B30'; // Red
+    if (riskScore >= 50) return '#FF9500'; // Orange
+    if (riskScore >= 30) return '#FFCC00'; // Yellow
+    return null; // No indicator for low risk
+  };
+
+  // Get velocity indicator
+  const getVelocityIndicator = (velocity: number) => {
+    if (velocity > 5) return { icon: 'flash' as const, color: '#34C759' }; // Fast
+    if (velocity < 0.5) return { icon: 'hourglass' as const, color: '#FF9500' }; // Slow
+    return null;
+  };
+
+  const riskScore = prediction?.metrics?.riskScore || 0;
+  const velocity = prediction?.metrics?.velocity || 0;
+  const riskColor = getRiskColor(riskScore);
+  const velocityIndicator = getVelocityIndicator(velocity);
 
   return (
     <Pressable
@@ -131,6 +157,11 @@ export const ProductCard = ({ item }: { item: Product }) => {
         { backgroundColor: theme.surface, borderColor: theme.border },
       ]}
     >
+      {/* Risk Indicator Dot - Top Right */}
+      {riskColor && riskScore > 0 && (
+        <View style={[styles.riskDot, { backgroundColor: riskColor }]} />
+      )}
+
       <View style={styles.topLabels}>
         <View
           style={[
@@ -163,6 +194,13 @@ export const ProductCard = ({ item }: { item: Product }) => {
           { backgroundColor: isDark ? "#00000035" : "#a2a2a22f" },
         ]}
       >
+        {/* Velocity Indicator - Bottom Left of Image */}
+        {velocityIndicator && (
+          <View style={[styles.velocityIndicator, { backgroundColor: velocityIndicator.color + '20' }]}>
+            <Ionicons name={velocityIndicator.icon} size={10} color={velocityIndicator.color} />
+          </View>
+        )}
+
         {!isLoaded && (
           <Ionicons
             name="cube-outline"
@@ -206,7 +244,7 @@ export const ProductCard = ({ item }: { item: Product }) => {
       </View>
     </Pressable>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {
@@ -215,6 +253,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 10,
     marginBottom: 16,
+    position: 'relative',
+  },
+  riskDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  velocityIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
   },
   topLabels: { flexDirection: "row", gap: 6, marginBottom: 12 },
   pill: {

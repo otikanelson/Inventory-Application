@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -13,10 +14,12 @@ import {
   View,
 } from "react-native";
 import Toast from "react-native-toast-message";
-import axios from "axios";
+import { AIInsightsBadge } from "../../components/AIInsightsBadge";
 import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
 import { useTheme } from "../../context/ThemeContext";
+import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useProducts } from "../../hooks/useProducts";
+import { Prediction } from "../../types/ai-predictions";
 
 // Recently Sold Card Component
 const RecentlySoldCard = ({ item, isBatchView = false }: { item: any; isBatchView?: boolean }) => {
@@ -151,11 +154,13 @@ export default function Dashboard() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, recentlySold, loading, refresh, inventoryStats } = useProducts();
+  const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
 
   const [activeTab, setActiveTab] = useState<"stocked" | "sold">("stocked");
   const [displayLimit, setDisplayLimit] = useState(6);
   const [viewByProduct, setViewByProduct] = useState(true); // Toggle for recently sold view
   const [recentlySoldBatches, setRecentlySoldBatches] = useState<any[]>([]);
+  const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
 
   const backgroundImage = isDark
   ? require("../../assets/images/Background7.png")
@@ -213,6 +218,48 @@ export default function Dashboard() {
 
     return baseData.slice(0, displayLimit);
   }, [products, recentlySold, recentlySoldBatches, activeTab, displayLimit, viewByProduct]);
+
+  // Fetch batch predictions for visible products
+  useEffect(() => {
+    const fetchPredictionsForVisible = async () => {
+      if (activeTab === "stocked" && visibleData.length > 0 && !loading) {
+        const productIds = visibleData.map((p: any) => p._id).filter(Boolean);
+        if (productIds.length > 0) {
+          try {
+            const batchPredictions = await fetchBatchPredictions(productIds);
+            const predictionsMap: Record<string, Prediction> = {};
+            batchPredictions.forEach((pred: Prediction) => {
+              if (pred.productId) {
+                predictionsMap[pred.productId] = pred;
+              }
+            });
+            setPredictions(predictionsMap);
+          } catch (error) {
+            console.error('Error fetching batch predictions:', error);
+          }
+        }
+      }
+    };
+    fetchPredictionsForVisible();
+  }, [visibleData, activeTab, loading, fetchBatchPredictions]);
+  useEffect(() => {
+    const fetchBatchSales = async () => {
+      if (!viewByProduct && activeTab === "sold") {
+        try {
+          const response = await axios.get(
+            `${process.env.EXPO_PUBLIC_API_URL}/analytics/recently-sold-batches?limit=20`
+          );
+          if (response.data.success) {
+            setRecentlySoldBatches(response.data.data || []);
+          }
+        } catch (error) {
+          console.error("Error fetching batch sales:", error);
+          setRecentlySoldBatches([]);
+        }
+      }
+    };
+    fetchBatchSales();
+  }, [viewByProduct, activeTab]);
 
   const handleLoadMore = () => {
     let maxLength;
@@ -347,6 +394,9 @@ export default function Dashboard() {
               </View>
             </View>
 
+            {/* AI INSIGHTS BADGE */}
+            <AIInsightsBadge />
+
             {/* QUICK ACTIONS SECTION */}
             <Text
               style={[
@@ -414,6 +464,26 @@ export default function Dashboard() {
                 </View>
                 <Text style={[styles.actionText, { color: theme.text }]}>
                   Manual
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/FEFO")}
+                style={[
+                  styles.actionCard,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={[styles.actionIcon, { backgroundColor: "#c7343420" }]}
+                >
+                  <Ionicons
+                    name="stats-chart-outline"
+                    size={22}
+                    color="#c7343bff"
+                  />
+                </View>
+                <Text style={[styles.actionText, { color: theme.text }]}>
+                  Statistics
                 </Text>
               </Pressable>
             </View>
@@ -566,7 +636,7 @@ export default function Dashboard() {
           ) : activeTab === "sold" ? (
             <RecentlySoldCard item={item} isBatchView={!viewByProduct} />
           ) : (
-            <ProductCard item={item} />
+            <ProductCard item={item} prediction={predictions[item._id] || null} />
           )
         }
         ListFooterComponent={
