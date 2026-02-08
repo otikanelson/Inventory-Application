@@ -143,7 +143,7 @@ export default function AdminSales() {
             ADMIN//SALES_TERMINAL
           </Text>
           <Text style={[styles.title, { color: theme.text }]}>
-            Transaction Log
+            TRANSACTION_LOG
           </Text>
         </View>
 
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: {
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: "900",
     letterSpacing: -0.5,
   },

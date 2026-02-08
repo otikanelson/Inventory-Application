@@ -99,9 +99,64 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+// Create HTTP server for WebSocket integration
+const http = require('http');
+const server = http.createServer(app);
+
+// Initialize WebSocket
+const { initializeWebSocket } = require('./services/websocketService');
+initializeWebSocket(server);
+
+// Cache warming function
+const warmupCache = async () => {
+  try {
+    console.log('🔥 Starting cache warmup...');
+    
+    const { getQuickInsights, batchUpdatePredictions } = require('./services/predicitveAnalytics');
+    const cacheService = require('./services/cacheService');
+    const Product = require('./models/Product');
+    
+    // Warm up quick insights (dashboard)
+    await cacheService.getOrSet(
+      cacheService.CACHE_KEYS.quickInsights,
+      async () => await getQuickInsights(),
+      30
+    );
+    
+    // Get all active products
+    const products = await Product.find().limit(50); // Limit to top 50 for initial warmup
+    const productIds = products.map(p => p._id.toString());
+    
+    // Batch update predictions (creates if not exists)
+    if (productIds.length > 0) {
+      await batchUpdatePredictions(productIds);
+      console.log(`✅ Cache warmed with ${productIds.length} product predictions`);
+    }
+    
+    console.log('✅ Cache warmup completed');
+  } catch (error) {
+    console.error('❌ Cache warmup failed:', error.message);
+  }
+};
+
+// Schedule cache refresh every 5 minutes
+const scheduleCacheRefresh = () => {
+  setInterval(async () => {
+    console.log('🔄 Refreshing cache...');
+    await warmupCache();
+  }, 5 * 60 * 1000); // 5 minutes
+};
+
+server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Storage: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary (Production Ready)' : 'Local (Development Only)'}`);
   console.log(`Cloudinary Status: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '❌ Not Configured'}`);
+  console.log(`WebSocket: ✅ Enabled (Real-time predictions active)`);
+  
+  // Warm up cache on startup (after a short delay to let DB connect)
+  setTimeout(async () => {
+    await warmupCache();
+    scheduleCacheRefresh();
+  }, 3000); // 3 second delay
 });

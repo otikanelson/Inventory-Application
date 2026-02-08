@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { Product } from "../hooks/useProducts";
@@ -135,11 +135,12 @@ export const ProductCard = ({ item }: { item: Product }) => {
         <View
           style={[
             styles.pill,
+            styles.categoryPill,
             { backgroundColor: isDark ? "#ffffff10" : "#00000005" },
           ]}
         >
           <Ionicons name="pricetag-outline" size={10} color={theme.subtext} />
-          <Text style={[styles.pillText, { color: theme.subtext }]}>
+          <Text style={[styles.pillText, { color: theme.subtext }]} numberOfLines={1}>
             {item.category || "General"}
           </Text>
         </View>
@@ -223,6 +224,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
+  },
+  categoryPill: {
+    flex: 1,
+    minWidth: 0, // Important for text truncation to work
   },
   pillText: { fontSize: 8, fontWeight: "700", textTransform: "uppercase" },
   imageWrapper: {

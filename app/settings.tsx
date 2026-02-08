@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Switch,
-  TextInput,
-  Modal,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import { useRouter } from "expo-router";
-import { useAlerts } from "../hooks/useAlerts";
-import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { useTheme } from "../context/ThemeContext";
+import { useAlerts } from "../hooks/useAlerts";
 
 export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -32,6 +32,40 @@ export default function SettingsScreen() {
     earlyWarning: 30
   });
 
+  // Load rapid scan setting from AsyncStorage
+  useEffect(() => {
+    loadRapidScanSetting();
+  }, []);
+
+  const loadRapidScanSetting = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('rapid_scan_enabled');
+      if (saved !== null) {
+        setRapidScan(saved === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading rapid scan setting:', error);
+    }
+  };
+
+  const handleRapidScanToggle = async (value: boolean) => {
+    setRapidScan(value);
+    try {
+      await AsyncStorage.setItem('rapid_scan_enabled', value.toString());
+      Toast.show({
+        type: 'success',
+        text1: 'Setting Updated',
+        text2: `Rapid scan ${value ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Could not save setting'
+      });
+    }
+  };
+
   // Load alert settings when they become available
   useEffect(() => {
     if (alertSettings?.thresholds) {
@@ -41,7 +75,7 @@ export default function SettingsScreen() {
         earlyWarning: alertSettings.thresholds.earlyWarning || 30
       });
     }
-  }, []);
+  }, [alertSettings]);
 
   // Admin Login State
   const [pinModal, setPinModal] = useState(false);
@@ -192,11 +226,11 @@ export default function SettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          Settings
+        <Text style={[styles.headerSub, { color: theme.primary }]}>
+          SYSTEM_CONFIGURATION
         </Text>
-        <Text style={[styles.headerSub, { color: theme.subtext }]}>
-          System Configuration & Preferences
+        <Text style={[styles.headerTitle, { color: theme.text }]}>
+          SETTINGS
         </Text>
       </View>
 
@@ -315,7 +349,7 @@ export default function SettingsScreen() {
         >
           <Switch
             value={rapidScan}
-            onValueChange={setRapidScan}
+            onValueChange={handleRapidScanToggle}
             trackColor={{ true: theme.primary }}
           />
         </SettingRow>

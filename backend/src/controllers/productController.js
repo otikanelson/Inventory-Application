@@ -271,6 +271,7 @@ exports.processSale = async (req, res) => {
   try {
     const { items } = req.body; // Array of { productId, quantity, price }
     const saleRecords = [];
+    const updatedProducts = []; // Track products for prediction updates
 
     for (const item of items) {
       const product = await Product.findById(item.productId);
@@ -314,11 +315,61 @@ exports.processSale = async (req, res) => {
       });
 
       saleRecords.push(saleRecord);
+      updatedProducts.push({
+        productId: product._id,
+        category: product.category,
+        saleData: {
+          quantitySold: item.quantity,
+          saleDate: new Date()
+        }
+      });
     }
 
     // Save all sale records
     if (saleRecords.length > 0) {
       await Sale.insertMany(saleRecords);
+    }
+
+    // ============================================================================
+    // REAL-TIME PREDICTION UPDATES (NEW)
+    // ============================================================================
+    
+    // Update predictions in background (don't block response)
+    if (updatedProducts.length > 0) {
+      // Import services
+      const { updatePredictionAfterSale } = require('../services/predicitveAnalytics');
+      const { broadcastPredictionUpdate, broadcastDashboardUpdate } = require('../services/websocketService');
+      const cacheService = require('../services/cacheService');
+      
+      // Process updates asynchronously
+      setImmediate(async () => {
+        for (const { productId, category, saleData } of updatedProducts) {
+          try {
+            // Invalidate cache
+            cacheService.invalidatePredictionCache(productId, category);
+            
+            // Update prediction
+            const updatedPrediction = await updatePredictionAfterSale(productId, saleData);
+            
+            if (updatedPrediction) {
+              // Broadcast via WebSocket
+              broadcastPredictionUpdate(productId, updatedPrediction);
+              console.log(`✅ Real-time prediction updated for product ${productId}`);
+            }
+          } catch (error) {
+            console.error(`Failed to update prediction for ${productId}:`, error);
+          }
+        }
+        
+        // Broadcast dashboard update
+        try {
+          const { getQuickInsights } = require('../services/predicitveAnalytics');
+          const insights = await getQuickInsights();
+          broadcastDashboardUpdate(insights);
+        } catch (error) {
+          console.error('Failed to broadcast dashboard update:', error);
+        }
+      });
     }
 
     res.status(200).json({
@@ -358,6 +409,10 @@ exports.updateProduct = async (req, res) => {
         message: "Product not found",
       });
     }
+
+    // Invalidate cache after product update
+    const cacheService = require('../services/cacheService');
+    cacheService.invalidatePredictionCache(id, category);
 
     res.status(200).json({
       success: true,

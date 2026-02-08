@@ -1,41 +1,66 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    ImageBackground,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import Toast from "react-native-toast-message";
+import axios from "axios";
 import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
 
 // Recently Sold Card Component
-const RecentlySoldCard = ({ item }: { item: any }) => {
+const RecentlySoldCard = ({ item, isBatchView = false }: { item: any; isBatchView?: boolean }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Safety check: If item is null or missing required fields, don't render
+  if (!item || !item.name) {
+    return null;
+  }
+
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) return `${diffDays} days ago`;
+      return date.toLocaleDateString();
+    } catch (error) {
+      return "Recently";
+    }
+  };
+
+  const handlePress = () => {
+    try {
+      // For batch view, use productId; for product view, use _id
+      const productId = isBatchView ? item.productId : item._id;
+      router.push(`/product/${productId}/sales` as Href);
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Could not open product details'
+      });
+    }
   };
 
   return (
     <Pressable
-      onPress={() => router.push(`/product/${item._id}/sales` as Href)}
+      onPress={handlePress}
       style={[
         styles.card,
         { backgroundColor: theme.surface, borderColor: theme.border },
@@ -61,7 +86,7 @@ const RecentlySoldCard = ({ item }: { item: any }) => {
         >
           <Ionicons name="time-outline" size={10} color={theme.subtext} />
           <Text style={[styles.pillText, { color: theme.subtext }]}>
-            {formatDate(item.lastSaleDate)}
+            {formatDate(isBatchView ? item.saleDate : item.lastSaleDate)}
           </Text>
         </View>
       </View>
@@ -92,12 +117,30 @@ const RecentlySoldCard = ({ item }: { item: any }) => {
 
       <View style={styles.footer}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.quantityLabel, { color: theme.primary }]}>
-            {item.totalSold} Units Sold  •  ₦{item.totalRevenue?.toLocaleString() || 0}
-          </Text>
-          <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
-            {item.name}
-          </Text>
+          {isBatchView ? (
+            <>
+              <Text style={[styles.quantityLabel, { color: theme.primary }]}>
+                {item.quantitySold || 0} Units  •  ₦{item.totalAmount?.toLocaleString() || 0}
+              </Text>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              {item.batchNumber && item.batchNumber !== 'N/A' && (
+                <Text style={[styles.batchLabel, { color: theme.subtext }]} numberOfLines={1}>
+                  Batch: {item.batchNumber.slice(-6)}
+                </Text>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={[styles.quantityLabel, { color: theme.primary }]}>
+                {item.totalSold || 0} Units Sold  •  ₦{item.totalRevenue?.toLocaleString() || 0}
+              </Text>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+            </>
+          )}
         </View>
       </View>
     </Pressable>
@@ -111,10 +154,32 @@ export default function Dashboard() {
 
   const [activeTab, setActiveTab] = useState<"stocked" | "sold">("stocked");
   const [displayLimit, setDisplayLimit] = useState(6);
+  const [viewByProduct, setViewByProduct] = useState(true); // Toggle for recently sold view
+  const [recentlySoldBatches, setRecentlySoldBatches] = useState<any[]>([]);
 
   const backgroundImage = isDark
   ? require("../../assets/images/Background7.png")
   : require("../../assets/images/Background9.png");
+
+  // Fetch batch-level sales data when not viewing by product
+  useEffect(() => {
+    const fetchBatchSales = async () => {
+      if (!viewByProduct && activeTab === "sold") {
+        try {
+          const response = await axios.get(
+            `${process.env.EXPO_PUBLIC_API_URL}/analytics/recently-sold-batches?limit=20`
+          );
+          if (response.data.success) {
+            setRecentlySoldBatches(response.data.data || []);
+          }
+        } catch (error) {
+          console.error("Error fetching batch sales:", error);
+          setRecentlySoldBatches([]);
+        }
+      }
+    };
+    fetchBatchSales();
+  }, [viewByProduct, activeTab]);
 
   const fefoItems = useMemo(() => {
     return products
@@ -133,20 +198,30 @@ export default function Dashboard() {
   }, [products]);
 
   const visibleData = useMemo(() => {
-    const baseData =
-      activeTab === "stocked"
-        ? [...products].sort(
-            (a, b) =>
-              new Date(b.updatedAt || 0).getTime() -
-              new Date(a.updatedAt || 0).getTime()
-          )
-        : recentlySold; // Use recently sold data instead of out of stock
+    let baseData;
+    
+    if (activeTab === "stocked") {
+      baseData = [...products].sort(
+        (a, b) =>
+          new Date(b.updatedAt || 0).getTime() -
+          new Date(a.updatedAt || 0).getTime()
+      );
+    } else {
+      // Recently sold tab
+      baseData = viewByProduct ? recentlySold : recentlySoldBatches;
+    }
 
     return baseData.slice(0, displayLimit);
-  }, [products, recentlySold, activeTab, displayLimit]);
+  }, [products, recentlySold, recentlySoldBatches, activeTab, displayLimit, viewByProduct]);
 
   const handleLoadMore = () => {
-    const maxLength = activeTab === "stocked" ? products.length : recentlySold.length;
+    let maxLength;
+    if (activeTab === "stocked") {
+      maxLength = products.length;
+    } else {
+      maxLength = viewByProduct ? recentlySold.length : recentlySoldBatches.length;
+    }
+    
     if (displayLimit < maxLength) {
       setDisplayLimit((prev) => prev + 6);
     }
@@ -447,16 +522,40 @@ export default function Dashboard() {
                   activeTab === "sold" && { borderBottomColor: theme.primary },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    {
-                      color: activeTab === "sold" ? theme.text : theme.subtext,
-                    },
-                  ]}
-                >
-                  Recently Sold
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      {
+                        color: activeTab === "sold" ? theme.text : theme.subtext,
+                      },
+                    ]}
+                  >
+                    Recently Sold
+                  </Text>
+                  {activeTab === "sold" && (
+                    <Pressable
+                      onPress={() => {
+                        setViewByProduct(!viewByProduct);
+                        setDisplayLimit(6);
+                      }}
+                      style={[
+                        styles.inlineToggle, 
+                        { 
+                          backgroundColor: viewByProduct ? theme.primary + "20" : theme.primary,
+                          borderColor: theme.primary 
+                        }
+                      ]}
+                    >
+                      <Text style={[
+                        styles.inlineToggleText, 
+                        { color: viewByProduct ? theme.primary : "#FFF" }
+                      ]}>
+                        {viewByProduct ? "BY_PRODUCT" : "BY_BATCH"}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
               </Pressable>
             </View>
           </View>
@@ -465,14 +564,19 @@ export default function Dashboard() {
           loading ? (
             <ProductCardSkeleton />
           ) : activeTab === "sold" ? (
-            <RecentlySoldCard item={item} />
+            <RecentlySoldCard item={item} isBatchView={!viewByProduct} />
           ) : (
             <ProductCard item={item} />
           )
         }
         ListFooterComponent={
           (() => {
-            const maxLength = activeTab === "stocked" ? products.length : recentlySold.length;
+            let maxLength;
+            if (activeTab === "stocked") {
+              maxLength = products.length;
+            } else {
+              maxLength = viewByProduct ? recentlySold.length : recentlySoldBatches.length;
+            }
             return displayLimit < maxLength && !loading ? (
               <ActivityIndicator
                 style={{ marginVertical: 20 }}
@@ -609,6 +713,17 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabText: { fontSize: 14, fontWeight: "800" },
+  inlineToggle: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  inlineToggleText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
   row: { justifyContent: "space-between" },
   
   // Recently Sold Card Styles (reusing ProductCard styles)
@@ -663,5 +778,10 @@ const styles = StyleSheet.create({
   name: { 
     fontSize: 15, 
     fontWeight: "800" 
+  },
+  batchLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
   },
 });

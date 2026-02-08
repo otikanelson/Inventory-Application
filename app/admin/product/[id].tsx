@@ -5,17 +5,17 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
@@ -42,6 +42,7 @@ export default function AdminProductDetails() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGlobalProduct, setIsGlobalProduct] = useState(false); // Track if this is a global registry product
 
   // Edit state
   const [editedName, setEditedName] = useState("");
@@ -73,14 +74,48 @@ export default function AdminProductDetails() {
 
   const loadProduct = async () => {
     if (!id) return;
-    const data = await getProductById(id as string);
-    if (data) {
-      setProduct(data);
-      setEditedName(data.name);
-      setEditedCategory(data.category || "");
-      setEditedImage(data.imageUrl || "");
-      setEditedGenericPrice(data.genericPrice?.toString() || "");
+    
+    try {
+      // First try to get from inventory
+      const data = await getProductById(id as string);
+      
+      if (data) {
+        setProduct(data);
+        setIsGlobalProduct(false);
+        setEditedName(data.name);
+        setEditedCategory(data.category || "");
+        setEditedImage(data.imageUrl || "");
+        setEditedGenericPrice(data.genericPrice?.toString() || "");
+        setLoading(false);
+        return;
+      }
+    } catch (error) {
+      // Inventory lookup failed, will try global registry below
     }
+    
+    // If not in inventory, try global registry
+    try {
+      const response = await axios.get(
+        `${process.env.EXPO_PUBLIC_API_URL}/products/registry/${id}`
+      );
+      
+      if (response.data.success) {
+        const globalData = response.data.data;
+        setProduct({
+          ...globalData,
+          totalQuantity: 0,
+          batches: [],
+        });
+        setIsGlobalProduct(true);
+        setEditedName(globalData.name);
+        setEditedCategory(globalData.category || "");
+        setEditedImage(globalData.imageUrl || "");
+        setEditedGenericPrice(globalData.genericPrice?.toString() || "");
+      }
+    } catch (error) {
+      console.error("Error loading product from both inventory and registry:", error);
+    }
+    
     setLoading(false);
   };
 
@@ -112,6 +147,15 @@ export default function AdminProductDetails() {
         type: "error",
         text1: "Validation Error",
         text2: "Product name is required",
+      });
+      return;
+    }
+
+    if (!editedCategory.trim()) {
+      Toast.show({
+        type: "error",
+        text1: "Validation Error",
+        text2: "Category is required",
       });
       return;
     }
@@ -171,30 +215,42 @@ export default function AdminProductDetails() {
       }
 
       // Save product with final image URL (either Cloudinary or existing URL)
-      await axios.patch(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/${id}`,
-        {
-          name: editedName.trim(),
-          category: editedCategory.trim(),
-          imageUrl: finalImageUrl,
-        }
-      );
+      // Use different endpoint based on whether it's a global product
+      const endpoint = isGlobalProduct
+        ? `${process.env.EXPO_PUBLIC_API_URL}/products/registry/${id}`
+        : `${process.env.EXPO_PUBLIC_API_URL}/products/${id}`;
+      
+      // Build update payload - only include category if it's not empty
+      const updatePayload: any = {
+        name: editedName.trim(),
+        imageUrl: finalImageUrl,
+      };
+      
+      // Only include category if it has a value
+      if (editedCategory && editedCategory.trim()) {
+        updatePayload.category = editedCategory.trim();
+      }
+      
+      await axios.patch(endpoint, updatePayload);
 
       Toast.show({
         type: "success",
-        text1: "Product Updated",
+        text1: isGlobalProduct ? "Global Product Updated" : "Product Updated",
         text2: "Changes saved successfully",
       });
 
       setIsEditing(false);
-      await refresh();
+      if (!isGlobalProduct) {
+        await refresh();
+      }
       await loadProduct();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Save error:", error);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || "Could not save changes";
       Toast.show({
         type: "error",
         text1: "Update Failed",
-        text2: "Could not save changes",
+        text2: errorMessage,
       });
     } finally {
       setIsSaving(false);
@@ -242,14 +298,23 @@ export default function AdminProductDetails() {
   const handleDelete = async () => {
     try {
       const requirePin = await AsyncStorage.getItem('admin_require_pin_delete');
+      const hasPin = await AsyncStorage.getItem('admin_pin');
       
-      if (requirePin === 'true') {
+      console.log('Delete check - requirePin:', requirePin, 'hasPin:', hasPin ? 'SET' : 'NOT SET');
+      
+      // Only require PIN if setting is enabled AND a PIN is actually set
+      if (requirePin === 'true' && hasPin && hasPin.length > 0) {
+        console.log('PIN required - showing PIN modal');
         setShowDeleteWarning(false);
         setShowPinModal(true);
       } else {
+        console.log('PIN not required - proceeding with delete');
+        // If no PIN is set or setting is disabled, proceed with delete
+        setShowDeleteWarning(false);
         await performDelete();
       }
     } catch (error) {
+      console.error('Delete check error:', error);
       Toast.show({
         type: "error",
         text1: "Error",
@@ -260,23 +325,36 @@ export default function AdminProductDetails() {
 
   const performDelete = async () => {
     try {
-      await axios.delete(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/${id}`
-      );
+      // Use different endpoint based on whether it's a global product
+      const endpoint = isGlobalProduct
+        ? `${process.env.EXPO_PUBLIC_API_URL}/products/registry/${id}`
+        : `${process.env.EXPO_PUBLIC_API_URL}/products/${id}`;
+      
+      console.log(`Attempting to delete ${isGlobalProduct ? 'global' : 'inventory'} product at:`, endpoint);
+      
+      const response = await axios.delete(endpoint);
+      
+      console.log('Delete response:', response.data);
 
       Toast.show({
         type: "success",
-        text1: "Product Deleted",
-        text2: "Product removed from inventory",
+        text1: isGlobalProduct ? "Global Product Deleted" : "Product Deleted",
+        text2: isGlobalProduct 
+          ? "Product removed from global registry" 
+          : "Product removed from inventory",
       });
 
-      await refresh();
+      if (!isGlobalProduct) {
+        await refresh();
+      }
       router.back();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || "Could not delete product";
       Toast.show({
         type: "error",
         text1: "Delete Failed",
-        text2: "Could not delete product",
+        text2: errorMessage,
       });
     }
   };
@@ -378,7 +456,7 @@ export default function AdminProductDetails() {
             onPress={() => router.push("../inventory")}
             style={[styles.headerBtn, { backgroundColor: theme.surface }]}
           >
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </Pressable>
 
           <View style={styles.headerActions}>
@@ -482,7 +560,7 @@ export default function AdminProductDetails() {
                 </Text>
                 <View style={styles.metaRow}>
                   <View style={[styles.categoryBadge, { backgroundColor: theme.primary + "15" }]}>
-                    <Text style={[styles.categoryText, { color: theme.primary }]}>
+                    <Text style={[styles.categoryText, { color: theme.primary }]} numberOfLines={1}>
                       {product.category || "Uncategorized"}
                     </Text>
                   </View>
@@ -544,6 +622,33 @@ export default function AdminProductDetails() {
             </Pressable>
           </View>
         </View>
+
+        {/* Global Product Indicator */}
+        {isGlobalProduct && (
+          <View
+            style={[
+              styles.statusBanner,
+              {
+                backgroundColor: theme.primary + "15",
+                borderColor: theme.primary,
+                marginBottom: 15,
+              },
+            ]}
+          >
+            <Ionicons name="globe-outline" size={16} color={theme.primary} />
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: theme.primary,
+                  marginLeft: 8,
+                },
+              ]}
+            >
+              GLOBAL REGISTRY PRODUCT (No Inventory)
+            </Text>
+          </View>
+        )}
 
         {/* Status Banner */}
         <View
@@ -918,6 +1023,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    flex: 1,
+    minWidth: 0, // Important for text truncation
   },
   categoryText: {
     fontSize: 10,
@@ -970,7 +1077,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     alignItems: "center",
   },
@@ -979,7 +1086,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "900",
     marginBottom: 4,
   },

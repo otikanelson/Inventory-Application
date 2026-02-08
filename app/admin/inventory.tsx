@@ -3,15 +3,15 @@ import axios from "axios";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-    FlatList,
-    Image,
-    ImageBackground,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
@@ -106,28 +106,11 @@ export default function AdminInventory() {
             params: { id: localProduct._id },
           });
         } else {
-          // Product NOT in local inventory - show info and offer to add stock
-          Toast.show({
-            type: "info",
-            text1: "Not In Stock",
-            text2: `${item.name} is in registry but has no stock. Scan to add inventory.`,
-            visibilityTime: 4000,
+          // Product NOT in local inventory - navigate to global product detail page
+          router.push({
+            pathname: "/admin/product/[id]",
+            params: { id: item._id }, // Use global product ID
           });
-          
-          // Optional: Navigate to add-products screen pre-filled
-          // router.push({
-          //   pathname: "/admin/add-products",
-          //   params: { 
-          //     mode: "inventory",
-          //     barcode: item.barcode,
-          //     prefilledData: JSON.stringify({
-          //       name: item.name,
-          //       category: item.category,
-          //       isPerishable: item.isPerishable,
-          //       imageUrl: item.imageUrl
-          //     })
-          //   }
-          // });
         }
       } catch (error) {
         console.error("Error checking product:", error);
@@ -153,8 +136,11 @@ export default function AdminInventory() {
 
       <View style={styles.container}>
         <View style={styles.topSection}>
+          <Text style={[styles.subtitle, { color: theme.primary }]}>
+            ADMIN_PANEL
+          </Text>
           <Text style={[styles.title, { color: theme.text }]}>
-            Admin Inventory
+            INVENTORY
           </Text>
 
           <View style={styles.searchRow}>
@@ -365,7 +351,8 @@ export default function AdminInventory() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60 },
   topSection: { paddingHorizontal: 20, marginBottom: 10 },
-  title: { fontSize: 32, fontWeight: "900", marginBottom: 20 },
+  subtitle: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  title: { fontSize: 25, fontWeight: "900", letterSpacing: -1, marginBottom: 20 },
   searchRow: { flexDirection: "row", gap: 10, marginBottom: 15 },
   searchBar: {
     flex: 1,

@@ -162,8 +162,11 @@ export const useProducts = () => {
         // Ensure batches is always an array
         batches: Array.isArray(item.batches) ? item.batches : [],
       };
-    } catch (err) {
-      console.error(`Detail Fetch Error for [${identifier}]:`, err);
+    } catch (err: any) {
+      // Don't log 404 errors as they're expected when product is not in inventory
+      if (err.response?.status !== 404) {
+        console.error(`Detail Fetch Error for [${identifier}]:`, err);
+      }
       return null;
     }
   };

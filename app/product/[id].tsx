@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   ImageBackground,
   Pressable,
@@ -14,8 +13,6 @@ import {
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
-
-const { width } = Dimensions.get("window");
 
 interface Batch {
   batchNumber: string;
@@ -33,6 +30,10 @@ export default function ProductDetails() {
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
 
   useEffect(() => {
     loadProduct();
@@ -52,7 +53,6 @@ export default function ProductDetails() {
     const genericPrice = product.genericPrice || null;
     const batches = product.batches || [];
     
-    // Calculate batch price statistics
     const batchesWithPrice = batches.filter((b: Batch) => b.price && b.price > 0);
     
     if (batchesWithPrice.length === 0) {
@@ -110,7 +110,13 @@ export default function ProductDetails() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.text }]}>
+            Loading product...
+          </Text>
+        </View>
       </View>
     );
   }
@@ -118,9 +124,13 @@ export default function ProductDetails() {
   if (!product) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Text style={[styles.errorText, { color: theme.text }]}>
-          Product not found
-        </Text>
+        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color={theme.subtext} />
+          <Text style={[styles.errorText, { color: theme.text }]}>
+            Product not found
+          </Text>
+        </View>
       </View>
     );
   }
@@ -140,14 +150,13 @@ export default function ProductDetails() {
         : "#10B981";
 
   return (
-    <ImageBackground
-      source={require("../../assets/images/Background9.png")}
-      style={styles.background}
-      resizeMode="cover"
-    >
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
       <ScrollView
-        style={[styles.container, { backgroundColor: "transparent" }]}
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -157,14 +166,19 @@ export default function ProductDetails() {
           >
             <Ionicons name="arrow-back" size={24} color={theme.text} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            Product Details
-          </Text>
-          <View style={{ width: 40 }} />
+          
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerLabel, { color: theme.primary }]}>
+              PRODUCT_DETAILS
+            </Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
+              {product.name}
+            </Text>
+          </View>
         </View>
 
-        {/* Product Image */}
-        <View style={[styles.imageContainer, { backgroundColor: theme.surface }]}>
+        {/* Wide Product Image */}
+        <View style={[styles.imageContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Image
             source={
               product.imageUrl
@@ -177,66 +191,69 @@ export default function ProductDetails() {
         </View>
 
         {/* Product Info Card */}
-        <View style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.productName, { color: theme.text }]}>
-            {product.name}
-          </Text>
-          <Text style={[styles.category, { color: theme.subtext }]}>
-            {product.category}
-          </Text>
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Ionicons name="cube-outline" size={20} color={theme.primary} />
-              <Text style={[styles.infoLabel, { color: theme.subtext }]}>
-                Stock
+        <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.infoHeader}>
+            <View style={styles.infoMain}>
+              <Text style={[styles.productCategory, { color: theme.subtext }]}>
+                {product.category}
               </Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>
+              <View style={[styles.statusBadge, { backgroundColor: stockColor + '20', borderColor: stockColor }]}>
+                <Ionicons name="alert-circle" size={14} color={stockColor} />
+                <Text style={[styles.statusText, { color: stockColor }]}>
+                  {stockStatus}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statsGrid}>
+            <View style={styles.statItem}>
+              <Ionicons name="cube-outline" size={24} color={theme.primary} />
+              <Text style={[styles.statValue, { color: theme.text }]}>
                 {product.totalQuantity}
               </Text>
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>
+                In Stock
+              </Text>
             </View>
 
-            <View style={styles.infoItem}>
-              <Ionicons name="barcode-outline" size={20} color={theme.primary} />
-              <Text style={[styles.infoLabel, { color: theme.subtext }]}>
-                Barcode
-              </Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>
+            <View style={styles.statItem}>
+              <Ionicons name="barcode-outline" size={24} color={theme.primary} />
+              <Text style={[styles.statValue, { color: theme.text }]} numberOfLines={1}>
                 {product.barcode || "N/A"}
               </Text>
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>
+                Barcode
+              </Text>
             </View>
 
-            <View style={styles.infoItem}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={20}
-                color={stockColor}
-              />
-              <Text style={[styles.infoLabel, { color: theme.subtext }]}>
-                Status
+            <View style={styles.statItem}>
+              <Ionicons name="layers-outline" size={24} color={theme.primary} />
+              <Text style={[styles.statValue, { color: theme.text }]}>
+                {product.batches?.length || 0}
               </Text>
-              <Text style={[styles.infoValue, { color: stockColor }]}>
-                {stockStatus}
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>
+                Batches
               </Text>
             </View>
           </View>
         </View>
 
         {/* Price Information */}
-        {priceAnalytics && (
-          <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="cash-outline" size={20} color={theme.primary} />
-              <Text style={[styles.cardTitle, { color: theme.text }]}>
-                Price Information
-              </Text>
-            </View>
+        {priceAnalytics && (priceAnalytics.genericPrice || priceAnalytics.hasBatchPrices) && (
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.cardTitle, { color: theme.primary }]}>
+              PRICE INFORMATION
+            </Text>
 
             {priceAnalytics.genericPrice && (
               <View style={styles.priceRow}>
-                <Text style={[styles.priceLabel, { color: theme.subtext }]}>
-                  Generic Price:
-                </Text>
+                <View style={styles.priceInfo}>
+                  <Ionicons name="cash-outline" size={20} color={theme.subtext} />
+                  <Text style={[styles.priceLabel, { color: theme.subtext }]}>
+                    Generic Price
+                  </Text>
+                </View>
                 <Text style={[styles.priceValue, { color: theme.text }]}>
                   ${priceAnalytics.genericPrice.toFixed(2)}
                 </Text>
@@ -246,17 +263,23 @@ export default function ProductDetails() {
             {priceAnalytics.hasBatchPrices && (
               <>
                 <View style={styles.priceRow}>
-                  <Text style={[styles.priceLabel, { color: theme.subtext }]}>
-                    Avg Batch Price:
-                  </Text>
+                  <View style={styles.priceInfo}>
+                    <Ionicons name="trending-up-outline" size={20} color={theme.subtext} />
+                    <Text style={[styles.priceLabel, { color: theme.subtext }]}>
+                      Avg Batch Price
+                    </Text>
+                  </View>
                   <Text style={[styles.priceValue, { color: theme.text }]}>
                     ${priceAnalytics.avgBatchPrice?.toFixed(2)}
                   </Text>
                 </View>
                 <View style={styles.priceRow}>
-                  <Text style={[styles.priceLabel, { color: theme.subtext }]}>
-                    Price Range:
-                  </Text>
+                  <View style={styles.priceInfo}>
+                    <Ionicons name="swap-horizontal-outline" size={20} color={theme.subtext} />
+                    <Text style={[styles.priceLabel, { color: theme.subtext }]}>
+                      Price Range
+                    </Text>
+                  </View>
                   <Text style={[styles.priceValue, { color: theme.text }]}>
                     ${priceAnalytics.minBatchPrice?.toFixed(2)} - $
                     {priceAnalytics.maxBatchPrice?.toFixed(2)}
@@ -269,16 +292,16 @@ export default function ProductDetails() {
 
         {/* Expiry Analytics */}
         {product.isPerishable && expiryAnalytics && (
-          <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="time-outline" size={20} color={theme.primary} />
-              <Text style={[styles.cardTitle, { color: theme.text }]}>
-                Expiry Status
-              </Text>
-            </View>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.cardTitle, { color: theme.primary }]}>
+              EXPIRY STATUS
+            </Text>
 
             <View style={styles.expiryGrid}>
               <View style={styles.expiryItem}>
+                <View style={[styles.expiryIcon, { backgroundColor: '#F59E0B' + '20' }]}>
+                  <Ionicons name="time-outline" size={24} color="#F59E0B" />
+                </View>
                 <Text style={[styles.expiryCount, { color: "#F59E0B" }]}>
                   {expiryAnalytics.expiringSoonCount}
                 </Text>
@@ -288,6 +311,9 @@ export default function ProductDetails() {
               </View>
 
               <View style={styles.expiryItem}>
+                <View style={[styles.expiryIcon, { backgroundColor: '#EF4444' + '20' }]}>
+                  <Ionicons name="alert-circle-outline" size={24} color="#EF4444" />
+                </View>
                 <Text style={[styles.expiryCount, { color: "#EF4444" }]}>
                   {expiryAnalytics.expiredCount}
                 </Text>
@@ -297,6 +323,9 @@ export default function ProductDetails() {
               </View>
 
               <View style={styles.expiryItem}>
+                <View style={[styles.expiryIcon, { backgroundColor: theme.primary + '20' }]}>
+                  <Ionicons name="checkmark-circle-outline" size={24} color={theme.primary} />
+                </View>
                 <Text style={[styles.expiryCount, { color: theme.primary }]}>
                   {expiryAnalytics.totalBatches}
                 </Text>
@@ -310,13 +339,10 @@ export default function ProductDetails() {
 
         {/* Batches */}
         {product.batches && product.batches.length > 0 && (
-          <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="layers-outline" size={20} color={theme.primary} />
-              <Text style={[styles.cardTitle, { color: theme.text }]}>
-                Batches ({product.batches.length})
-              </Text>
-            </View>
+          <View style={styles.batchesSection}>
+            <Text style={[styles.cardTitle, { color: theme.primary }]}>
+              BATCH INVENTORY ({product.batches.length})
+            </Text>
 
             {product.batches.map((batch: Batch, index: number) => {
               const expiryDate = new Date(batch.expiryDate);
@@ -339,54 +365,45 @@ export default function ProductDetails() {
                   key={index}
                   style={[
                     styles.batchItem,
-                    { borderLeftColor: expiryColor, borderLeftWidth: 4 },
+                    { 
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                      borderLeftColor: expiryColor,
+                    },
                   ]}
                 >
                   <View style={styles.batchHeader}>
-                    <Text style={[styles.batchNumber, { color: theme.text }]}>
-                      {batch.batchNumber}
-                    </Text>
-                    <Text style={[styles.batchQuantity, { color: theme.primary }]}>
-                      Qty: {batch.quantity}
-                    </Text>
+                    <View style={styles.batchInfo}>
+                      <Text style={[styles.batchNumber, { color: theme.text }]}>
+                        {batch.batchNumber}
+                      </Text>
+                      <Text style={[styles.batchQuantity, { color: theme.primary }]}>
+                        {batch.quantity} units
+                      </Text>
+                    </View>
+                    
+                    {batch.price && (
+                      <Text style={[styles.batchPrice, { color: theme.text }]}>
+                        ${batch.price.toFixed(2)}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.batchDetails}>
-                    <View style={styles.batchDetailRow}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={16}
-                        color={theme.subtext}
-                      />
+                    <View style={styles.batchDetail}>
+                      <Ionicons name="calendar-outline" size={16} color={theme.subtext} />
                       <Text style={[styles.batchDetailText, { color: theme.subtext }]}>
                         Expires: {expiryDate.toLocaleDateString()}
                       </Text>
                     </View>
 
-                    {batch.price && (
-                      <View style={styles.batchDetailRow}>
-                        <Ionicons
-                          name="cash-outline"
-                          size={16}
-                          color={theme.subtext}
-                        />
-                        <Text style={[styles.batchDetailText, { color: theme.subtext }]}>
-                          Price: ${batch.price.toFixed(2)}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={styles.batchDetailRow}>
-                      <Ionicons
-                        name="alert-circle-outline"
-                        size={16}
-                        color={expiryColor}
-                      />
+                    <View style={styles.batchDetail}>
+                      <Ionicons name="alert-circle-outline" size={16} color={expiryColor} />
                       <Text style={[styles.batchDetailText, { color: expiryColor }]}>
                         {isExpired
                           ? "Expired"
                           : isExpiringSoon
-                            ? `Expires in ${daysUntilExpiry} days`
+                            ? `${daysUntilExpiry} days left`
                             : "Good condition"}
                       </Text>
                     </View>
@@ -397,152 +414,247 @@ export default function ProductDetails() {
           </View>
         )}
       </ScrollView>
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-  },
   container: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+  scrollView: {
+    flex: 1,
   },
+  scrollContent: {
+    padding: 20,
+    paddingTop: 60,
+    paddingBottom: 100,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 25,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  headerLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 2,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: "600",
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.5,
   },
+  
+  // Wide Image Container
   imageContainer: {
     width: "100%",
-    height: 200,
-    borderRadius: 12,
+    height: 220,
+    borderRadius: 20,
+    borderWidth: 1,
     overflow: "hidden",
-    marginBottom: 16,
+    marginBottom: 20,
     alignItems: "center",
     justifyContent: "center",
+    padding: 20,
   },
   productImage: {
-    width: "80%",
-    height: "80%",
+    width: "100%",
+    height: "100%",
   },
-  card: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  
+  // Info Card
+  infoCard: {
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 20,
   },
-  productName: {
-    fontSize: 24,
-    fontWeight: "bold",
+  infoHeader: {
+    marginBottom: 20,
+  },
+  infoMain: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  productCategory: {
+    fontSize: 14,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: 15,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 8,
     marginBottom: 4,
   },
-  category: {
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 8,
-  },
-  infoItem: {
-    alignItems: "center",
-    gap: 4,
-  },
-  infoLabel: {
-    fontSize: 12,
-  },
-  infoValue: {
-    fontSize: 16,
+  statLabel: {
+    fontSize: 10,
     fontWeight: "600",
+    textAlign: "center",
   },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
+  
+  // Cards
+  card: {
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 20,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    marginBottom: 15,
   },
+  
+  // Price Rows
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 8,
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
+  },
+  priceInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   priceLabel: {
     fontSize: 14,
-  },
-  priceValue: {
-    fontSize: 14,
     fontWeight: "600",
   },
+  priceValue: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  
+  // Expiry Grid
   expiryGrid: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 8,
+    gap: 15,
   },
   expiryItem: {
+    flex: 1,
     alignItems: "center",
-    gap: 4,
+  },
+  expiryIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
   },
   expiryCount: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 4,
   },
   expiryLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  
+  // Batches Section
+  batchesSection: {
+    marginBottom: 20,
   },
   batchItem: {
-    padding: 12,
-    marginBottom: 12,
-    borderRadius: 8,
-    backgroundColor: "rgba(0,0,0,0.02)",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    marginTop: 12,
   },
   batchHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  batchInfo: {
+    flex: 1,
   },
   batchNumber: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "800",
+    marginBottom: 4,
   },
   batchQuantity: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  batchPrice: {
+    fontSize: 18,
+    fontWeight: "900",
   },
   batchDetails: {
-    gap: 6,
+    gap: 8,
   },
-  batchDetailRow: {
+  batchDetail: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   batchDetailText: {
-    fontSize: 14,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

@@ -24,7 +24,10 @@ router.post("/process-sale", processSale);
 // External Registry routes (must come before /:id)
 router.get("/registry/lookup/:barcode", registryController.lookupBarcode);
 router.post("/registry/add", registryController.addToRegistry);
-// ADD THIS TO productRoutes.js
+router.get("/registry/all", registryController.getAllGlobalProducts);
+router.get("/registry/:id", registryController.getGlobalProductById);
+router.patch("/registry/:id", registryController.updateGlobalProduct);
+router.delete("/registry/:id", registryController.deleteGlobalProduct);
 
 router.get("/barcode/:barcode", async (req, res) => {
   try {
@@ -52,7 +55,6 @@ router.get("/barcode/:barcode", async (req, res) => {
     });
   }
 });
-router.get("/registry/all", registryController.getAllGlobalProducts); // ← ADD THIS LINE
 
 // Route for /api/products/:id (CRUD operations)
 // Update generic price

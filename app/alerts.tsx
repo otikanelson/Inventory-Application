@@ -2,16 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ImageBackground,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    ImageBackground,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../context/ThemeContext";
@@ -88,11 +88,11 @@ export default function Alerts() {
       >
         <View style={styles.header}>
           <View>
-            <Text style={[styles.title, { color: theme.text }]}>
-              Alerts
+            <Text style={[styles.subtitle, { color: theme.primary }]}>
+              NOTIFICATION_CENTER
             </Text>
-            <Text style={[styles.subtitle, { color: theme.subtext }]}>
-              {filteredAlerts.length} items requiring attention
+            <Text style={[styles.title, { color: theme.text }]}>
+              ALERTS
             </Text>
           </View>
           <Pressable

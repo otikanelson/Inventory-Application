@@ -12,7 +12,13 @@
     "dev": "nodemon src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["inventory", "management", "api", "nodejs", "express"],
+  "keywords": [
+    "inventory",
+    "management",
+    "api",
+    "nodejs",
+    "express"
+  ],
   "author": "Your Name",
   "license": "ISC",
   "dependencies": {
@@ -23,7 +29,9 @@
     "express": "^5.2.1",
     "mongoose": "^9.1.1",
     "morgan": "^1.10.1",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "node-cache": "^5.1.2",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

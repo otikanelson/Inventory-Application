@@ -8,7 +8,18 @@ const {
   getCategoryAnalytics,
   recordSale,
   getRecentlySold,
-  getProductSales
+  getRecentlySoldBatches,
+  getProductSales,
+  // New AI prediction endpoints
+  getQuickInsightsEndpoint,
+  getProductPrediction,
+  getCategoryInsightsEndpoint,
+  getBatchPredictions,
+  getNotifications,
+  markNotificationAsRead,
+  dismissNotification,
+  markAllNotificationsAsRead,
+  recalculatePrediction
 } = require('../controllers/analyticsController');
 
 // @route   GET /api/analytics/dashboard
@@ -36,6 +47,11 @@ router.get('/by-category', getCategoryAnalytics);
 // @access  Admin
 router.get('/recently-sold', getRecentlySold);
 
+// @route   GET /api/analytics/recently-sold-batches
+// @desc    Get recently sold products with batch breakdown
+// @access  Admin
+router.get('/recently-sold-batches', getRecentlySoldBatches);
+
 // @route   GET /api/analytics/product-sales/:productId
 // @desc    Get sales history for a specific product
 // @access  Admin
@@ -45,5 +61,54 @@ router.get('/product-sales/:productId', getProductSales);
 // @desc    Record a sale transaction
 // @access  Staff/Admin
 router.post('/record-sale', recordSale);
+
+// ============================================================================
+// NEW AI PREDICTION ROUTES
+// ============================================================================
+
+// @route   GET /api/analytics/quick-insights
+// @desc    Get quick insights for dashboard badge (lightweight)
+// @access  Public
+router.get('/quick-insights', getQuickInsightsEndpoint);
+
+// @route   GET /api/analytics/product/:id/predictions
+// @desc    Get full prediction for a single product
+// @access  Public
+router.get('/product/:id/predictions', getProductPrediction);
+
+// @route   GET /api/analytics/category/:category/insights
+// @desc    Get category-level insights
+// @access  Public
+router.get('/category/:category/insights', getCategoryInsightsEndpoint);
+
+// @route   POST /api/analytics/batch-predictions
+// @desc    Get predictions for multiple products
+// @access  Public
+router.post('/batch-predictions', getBatchPredictions);
+
+// @route   GET /api/analytics/notifications
+// @desc    Get all notifications for user
+// @access  Public
+router.get('/notifications', getNotifications);
+
+// @route   PATCH /api/analytics/notifications/:id/read
+// @desc    Mark notification as read
+// @access  Public
+router.patch('/notifications/:id/read', markNotificationAsRead);
+
+// @route   PATCH /api/analytics/notifications/:id/dismiss
+// @desc    Dismiss notification
+// @access  Public
+router.patch('/notifications/:id/dismiss', dismissNotification);
+
+// @route   PATCH /api/analytics/notifications/read-all
+// @desc    Mark all notifications as read
+// @access  Public
+router.patch('/notifications/read-all', markAllNotificationsAsRead);
+
+// @route   POST /api/analytics/recalculate/:productId
+// @desc    Manually trigger prediction recalculation
+// @access  Admin
+router.post('/recalculate/:productId', recalculatePrediction);
 
 module.exports = router;

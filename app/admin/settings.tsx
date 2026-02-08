@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Switch,
-  TextInput,
-  Modal,
-  ImageBackground,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../context/ThemeContext";
-import { useRouter } from "expo-router";
-import { useAlerts } from "../../hooks/useAlerts";
-import Toast from "react-native-toast-message";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { useTheme } from "../../context/ThemeContext";
+import { useAlerts } from "../../hooks/useAlerts";
 
 export default function AdminSettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -37,6 +39,8 @@ export default function AdminSettingsScreen() {
   const [enableBackup, setEnableBackup] = useState(false);
   const [hasPin, setHasPin] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [lastBackupDate, setLastBackupDate] = useState<string | null>(null);
 
   // Load settings on mount
   useEffect(() => {
@@ -49,11 +53,15 @@ export default function AdminSettingsScreen() {
       const pinRequired = await AsyncStorage.getItem('admin_require_pin_delete');
       const logoutEnabled = await AsyncStorage.getItem('admin_auto_logout');
       const logoutTime = await AsyncStorage.getItem('admin_auto_logout_time');
+      const backupEnabled = await AsyncStorage.getItem('admin_auto_backup');
+      const lastBackup = await AsyncStorage.getItem('last_backup_date');
       
       setHasPin(!!pin);
       if (pinRequired !== null) setRequirePinForDelete(pinRequired === 'true');
       if (logoutEnabled !== null) setAutoLogout(logoutEnabled === 'true');
       if (logoutTime !== null) setAutoLogoutTime(parseInt(logoutTime));
+      if (backupEnabled !== null) setEnableBackup(backupEnabled === 'true');
+      if (lastBackup) setLastBackupDate(lastBackup);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -293,6 +301,198 @@ export default function AdminSettingsScreen() {
     }
   };
 
+  const handleAutoBackupToggle = async (value: boolean) => {
+    setEnableBackup(value);
+    try {
+      await AsyncStorage.setItem('admin_auto_backup', value.toString());
+      
+      if (value) {
+        // Perform initial backup when enabled
+        await performBackup();
+      }
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Setting Updated',
+        text2: `Auto-backup ${value ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Could not save setting'
+      });
+    }
+  };
+
+  const performBackup = async () => {
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      const response = await axios.get(`${API_URL}/products`);
+      
+      if (response.data.success) {
+        const products = response.data.data;
+        
+        // Create backup object
+        const backup = {
+          timestamp: new Date().toISOString(),
+          version: '1.0',
+          productCount: products.length,
+          data: products
+        };
+        
+        const backupJson = JSON.stringify(backup, null, 2);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+        const filename = `inventory_backup_${timestamp}.json`;
+        
+        if (Platform.OS === 'web') {
+          // Web: Download backup
+          const blob = new Blob([backupJson], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          link.click();
+          URL.revokeObjectURL(url);
+        } else {
+          // Mobile: Save backup to device
+          const fileUri = FileSystem.documentDirectory + filename;
+          await FileSystem.writeAsStringAsync(fileUri, backupJson, {
+            encoding: FileSystem.EncodingType.UTF8
+          });
+          
+          // Store backup metadata
+          const backupDate = new Date().toISOString();
+          await AsyncStorage.setItem('last_backup_date', backupDate);
+          await AsyncStorage.setItem('last_backup_file', fileUri);
+          setLastBackupDate(backupDate);
+        }
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Backup Complete',
+          text2: `${products.length} products backed up`
+        });
+      }
+    } catch (error) {
+      console.error('Backup error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Backup Failed',
+        text2: 'Could not create backup'
+      });
+    }
+  };
+
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      const response = await axios.get(`${API_URL}/products`);
+      
+      if (response.data.success) {
+        const products = response.data.data;
+        
+        // Convert to CSV format
+        const headers = ['Name', 'Category', 'Barcode', 'Total Quantity', 'Is Perishable', 'Batch Number', 'Batch Quantity', 'Expiry Date', 'Price'];
+        const rows: string[][] = [];
+        
+        products.forEach((product: any) => {
+          if (product.batches && product.batches.length > 0) {
+            product.batches.forEach((batch: any) => {
+              rows.push([
+                product.name || '',
+                product.category || '',
+                product.barcode || '',
+                String(product.totalQuantity || 0),
+                product.isPerishable ? 'Yes' : 'No',
+                batch.batchNumber || '',
+                String(batch.quantity || 0),
+                batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString() : '',
+                batch.price ? String(batch.price) : ''
+              ]);
+            });
+          } else {
+            rows.push([
+              product.name || '',
+              product.category || '',
+              product.barcode || '',
+              String(product.totalQuantity || 0),
+              product.isPerishable ? 'Yes' : 'No',
+              '',
+              '',
+              '',
+              ''
+            ]);
+          }
+        });
+        
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        // Save to device storage
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `inventory_export_${timestamp}.csv`;
+        
+        if (Platform.OS === 'web') {
+          // Web: Download file
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          link.click();
+          URL.revokeObjectURL(url);
+          
+          Toast.show({
+            type: 'success',
+            text1: 'Export Complete',
+            text2: `${products.length} products exported`
+          });
+        } else {
+          // Mobile: Save and share file
+          const fileUri = FileSystem.documentDirectory + filename;
+          await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+            encoding: FileSystem.EncodingType.UTF8
+          });
+          
+          // Check if sharing is available
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: 'Export Inventory Data',
+              UTI: 'public.comma-separated-values-text'
+            });
+            
+            Toast.show({
+              type: 'success',
+              text1: 'Export Complete',
+              text2: `${products.length} products exported to ${filename}`
+            });
+          } else {
+            Toast.show({
+              type: 'success',
+              text1: 'Export Saved',
+              text2: `File saved to ${fileUri}`
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Export Failed',
+        text2: 'Could not export inventory data'
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
@@ -336,11 +536,11 @@ export default function AdminSettingsScreen() {
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            Admin Settings
+          <Text style={[styles.headerSub, { color: theme.primary }]}>
+            ADMIN_PANEL
           </Text>
-          <Text style={[styles.headerSub, { color: theme.subtext }]}>
-            System Configuration & Security
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
+            SETTINGS
           </Text>
         </View>
 
@@ -492,22 +692,35 @@ export default function AdminSettingsScreen() {
           <SettingRow
             icon="cloud-upload-outline"
             label="Auto Backup"
-            description="Automatically backup inventory data"
+            description={lastBackupDate ? `Last backup: ${new Date(lastBackupDate).toLocaleString()}` : "Automatically backup inventory data"}
           >
             <Switch
               value={enableBackup}
-              onValueChange={setEnableBackup}
+              onValueChange={handleAutoBackupToggle}
               trackColor={{ true: theme.primary }}
             />
+          </SettingRow>
+
+          <SettingRow
+            icon="save-outline"
+            label="Backup Now"
+            description="Create manual backup of all inventory data"
+            onPress={performBackup}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </SettingRow>
 
           <SettingRow
             icon="download-outline"
             label="Export Data"
             description="Download inventory as CSV"
-            onPress={() => Toast.show({ type: 'info', text1: 'Coming Soon', text2: 'Export feature in development' })}
+            onPress={handleExportData}
           >
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            {isExporting ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            )}
           </SettingRow>
         </View>
 
@@ -656,8 +869,8 @@ export default function AdminSettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
   header: { marginTop: 70, marginBottom: 30 },
-  headerTitle: { fontSize: 32, fontWeight: "900" },
-  headerSub: { fontSize: 14, marginTop: 4 },
+  headerSub: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  headerTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
   section: { marginBottom: 35 },
   sectionHeader: {
     flexDirection: "row",

@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
-  FlatList,
-  ImageBackground,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View
+    FlatList,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
@@ -98,11 +98,9 @@ export default function FEFOScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={styles.headerArea}>
-            <View style={styles.navRow}>
-              <Text style={[styles.systemTag, { color: theme.primary }]}>
-                SYSTEM_STATUS_v2.0
-              </Text>
-            </View>
+            <Text style={[styles.systemTag, { color: theme.primary }]}>
+              EXPIRY_MANAGEMENT
+            </Text>
             <View
               style={{
                 flexDirection: "row",

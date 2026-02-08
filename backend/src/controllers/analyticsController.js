@@ -262,22 +262,87 @@ exports.getRecentlySold = async (req, res) => {
     
     res.status(200).json({
       success: true,
-      data: recentSales.map(sale => ({
-        _id: sale._id,
-        name: sale.productName,
-        category: sale.category,
-        lastSaleDate: sale.lastSaleDate,
-        totalSold: sale.totalSold,
-        totalRevenue: sale.totalRevenue,
-        imageUrl: sale.productDetails?.imageUrl || 'cube',
-        totalQuantity: sale.productDetails?.totalQuantity || 0,
-        isPerishable: sale.productDetails?.isPerishable || false,
-        batches: sale.productDetails?.batches || []
-      }))
+      data: recentSales
+        .filter(sale => sale.productDetails) // Filter out deleted products
+        .map(sale => ({
+          _id: sale._id,
+          name: sale.productName,
+          category: sale.category,
+          lastSaleDate: sale.lastSaleDate,
+          totalSold: sale.totalSold,
+          totalRevenue: sale.totalRevenue,
+          imageUrl: sale.productDetails?.imageUrl || 'cube',
+          totalQuantity: sale.productDetails?.totalQuantity || 0,
+          isPerishable: sale.productDetails?.isPerishable || false,
+          batches: sale.productDetails?.batches || []
+        }))
     });
     
   } catch (error) {
     console.error('Recently Sold Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get recently sold products with batch breakdown
+ * @route   GET /api/analytics/recently-sold-batches
+ * @access  Admin
+ */
+exports.getRecentlySoldBatches = async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    
+    // Get recent sales with batch details
+    const recentSales = await Sale.aggregate([
+      {
+        $sort: { saleDate: -1 }
+      },
+      {
+        $limit: parseInt(limit)
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'productId',
+          foreignField: '_id',
+          as: 'productDetails'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productDetails',
+          preserveNullAndEmptyArrays: true
+        }
+      }
+    ]);
+    
+    // Filter out deleted products and map to batch-level data
+    const batchSales = recentSales
+      .filter(sale => sale.productDetails)
+      .map(sale => ({
+        _id: sale._id,
+        productId: sale.productId,
+        name: sale.productName,
+        category: sale.category,
+        batchNumber: sale.batchNumber || 'N/A',
+        saleDate: sale.saleDate,
+        quantitySold: sale.quantitySold,
+        totalAmount: sale.totalAmount,
+        imageUrl: sale.productDetails?.imageUrl || 'cube',
+        isPerishable: sale.productDetails?.isPerishable || false,
+      }));
+    
+    res.status(200).json({
+      success: true,
+      data: batchSales
+    });
+    
+  } catch (error) {
+    console.error('Recently Sold Batches Error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -314,12 +379,346 @@ exports.getProductSales = async (req, res) => {
   }
 };
 
-module.exports = {
-  getProductAnalytics: exports.getProductAnalytics,
-  getDashboardStats: exports.getDashboardStats,
-  getSalesTrends: exports.getSalesTrends,
-  getCategoryAnalytics: exports.getCategoryAnalytics,
-  recordSale: exports.recordSale,
-  getRecentlySold: exports.getRecentlySold,
-  getProductSales: exports.getProductSales
+// Exports are done via exports.functionName pattern throughout the file
+
+
+// ============================================================================
+// NEW AI PREDICTION ENDPOINTS
+// ============================================================================
+
+const {
+  getQuickInsights,
+  getCategoryInsights,
+  batchUpdatePredictions,
+  savePredictionToDatabase
+} = require('../services/predicitveAnalytics');
+const Prediction = require('../models/Prediction');
+const Notification = require('../models/Notification');
+const cacheService = require('../services/cacheService');
+
+/**
+ * @desc    Get quick insights for dashboard badge (lightweight)
+ * @route   GET /api/analytics/quick-insights
+ * @access  Public
+ */
+exports.getQuickInsightsEndpoint = async (req, res) => {
+  try {
+    // Try to get from cache first (30 second TTL)
+    const insights = await cacheService.getOrSet(
+      cacheService.CACHE_KEYS.quickInsights,
+      async () => await getQuickInsights(),
+      30 // 30 seconds TTL
+    );
+    
+    res.status(200).json({
+      success: true,
+      data: insights
+    });
+    
+  } catch (error) {
+    console.error('Quick Insights Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get full prediction for a single product
+ * @route   GET /api/analytics/product/:id/predictions
+ * @access  Public
+ */
+exports.getProductPrediction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Try to get from cache first (60 second TTL)
+    const prediction = await cacheService.getOrSet(
+      cacheService.CACHE_KEYS.productPrediction(id),
+      async () => {
+        let pred = await Prediction.findOne({ productId: id })
+          .populate('productId', 'name category imageUrl totalQuantity');
+        
+        // If no prediction exists, create one
+        if (!pred) {
+          pred = await savePredictionToDatabase(id);
+        }
+        
+        return pred;
+      },
+      60 // 60 seconds TTL
+    );
+    
+    if (!prediction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Prediction not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: prediction
+    });
+    
+  } catch (error) {
+    console.error('Product Prediction Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get category-level insights
+ * @route   GET /api/analytics/category/:category/insights
+ * @access  Public
+ */
+exports.getCategoryInsightsEndpoint = async (req, res) => {
+  try {
+    const { category } = req.params;
+    
+    // Try to get from cache first (60 second TTL)
+    const insights = await cacheService.getOrSet(
+      cacheService.CACHE_KEYS.categoryInsights(category),
+      async () => await getCategoryInsights(category),
+      60 // 60 seconds TTL
+    );
+    
+    if (!insights) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found or no predictions available'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: insights
+    });
+    
+  } catch (error) {
+    console.error('Category Insights Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get batch predictions for multiple products
+ * @route   POST /api/analytics/batch-predictions
+ * @access  Public
+ */
+exports.getBatchPredictions = async (req, res) => {
+  try {
+    const { productIds } = req.body;
+    
+    if (!productIds || !Array.isArray(productIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'productIds array is required'
+      });
+    }
+    
+    // Fetch predictions in parallel
+    const predictions = await Promise.all(
+      productIds.map(async (id) => {
+        try {
+          let pred = await Prediction.findOne({ productId: id })
+            .populate('productId', 'name category imageUrl totalQuantity');
+          
+          if (!pred) {
+            pred = await savePredictionToDatabase(id);
+          }
+          
+          return pred;
+        } catch (error) {
+          console.error(`Error fetching prediction for ${id}:`, error);
+          return null;
+        }
+      })
+    );
+    
+    // Filter out nulls
+    const validPredictions = predictions.filter(p => p !== null);
+    
+    res.status(200).json({
+      success: true,
+      data: validPredictions,
+      count: validPredictions.length
+    });
+    
+  } catch (error) {
+    console.error('Batch Predictions Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get all notifications for user
+ * @route   GET /api/analytics/notifications
+ * @access  Public
+ */
+exports.getNotifications = async (req, res) => {
+  try {
+    const { userId = 'admin' } = req.query;
+    
+    const notifications = await Notification.getUnread(userId);
+    const unreadCount = await Notification.getUnreadCount(userId);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        notifications,
+        unreadCount
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get Notifications Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Mark notification as read
+ * @route   PATCH /api/analytics/notifications/:id/read
+ * @access  Public
+ */
+exports.markNotificationAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const notification = await Notification.findById(id);
+    
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+    
+    await notification.markAsRead();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+    
+  } catch (error) {
+    console.error('Mark Notification Read Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Dismiss notification
+ * @route   PATCH /api/analytics/notifications/:id/dismiss
+ * @access  Public
+ */
+exports.dismissNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const notification = await Notification.findById(id);
+    
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+    
+    await notification.dismiss();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Notification dismissed'
+    });
+    
+  } catch (error) {
+    console.error('Dismiss Notification Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Mark all notifications as read
+ * @route   PATCH /api/analytics/notifications/read-all
+ * @access  Public
+ */
+exports.markAllNotificationsAsRead = async (req, res) => {
+  try {
+    const { userId = 'admin' } = req.body;
+    
+    await Notification.markAllAsRead(userId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'All notifications marked as read'
+    });
+    
+  } catch (error) {
+    console.error('Mark All Read Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Manually trigger prediction recalculation
+ * @route   POST /api/analytics/recalculate/:productId
+ * @access  Admin
+ */
+exports.recalculatePrediction = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    
+    // Invalidate cache
+    const product = await Product.findById(productId);
+    if (product) {
+      cacheService.invalidatePredictionCache(productId, product.category);
+    }
+    
+    // Recalculate prediction
+    const prediction = await savePredictionToDatabase(productId);
+    
+    if (!prediction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Failed to calculate prediction'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Prediction recalculated successfully',
+      data: prediction
+    });
+    
+  } catch (error) {
+    console.error('Recalculate Prediction Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 };

@@ -1,18 +1,18 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  ImageBackground,
-  RefreshControl,
-  Pressable,
-  Dimensions,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+    Dimensions,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { useAnalytics } from "../../hooks/useAnalytics";
-import { useRouter } from "expo-router";
 
 const { width } = Dimensions.get("window");
 
@@ -51,11 +51,11 @@ export default function AdminStats() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>
-              Predictive Analytics
+            <Text style={[styles.headerSub, { color: theme.primary }]}>
+              AI_ANALYTICS
             </Text>
-            <Text style={[styles.headerSub, { color: theme.subtext }]}>
-              AI-Driven Insights & Forecasting
+            <Text style={[styles.headerTitle, { color: theme.text }]}>
+              PREDICTIVE_INSIGHTS
             </Text>
           </View>
         </View>
@@ -316,8 +316,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 25,
   },
-  headerTitle: { fontSize: 26, fontWeight: "900" },
-  headerSub: { fontSize: 13, marginTop: 4 },
+  headerSub: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  headerTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
   backBtn: {
     width: 45,
     height: 45,

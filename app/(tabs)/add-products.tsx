@@ -299,7 +299,17 @@ export default function AddProducts() {
   };
 
   const handleFieldChange = (field: string, value: string) => {
-    const sanitizedValue = value.trim().replace(/\s+/g, ' ');
+    // For name field, allow spaces while typing, only collapse multiple spaces
+    // For other fields, keep the sanitization
+    let sanitizedValue = value;
+    if (field === 'name') {
+      // Only collapse multiple consecutive spaces, don't trim while typing
+      sanitizedValue = value.replace(/\s{2,}/g, ' ');
+    } else {
+      // For other fields, trim and collapse spaces
+      sanitizedValue = value.trim().replace(/\s+/g, ' ');
+    }
+    
     setFormData((prev) => ({ ...prev, [field]: sanitizedValue }));
     setFormModified(true);
     
@@ -367,6 +377,7 @@ export default function AddProducts() {
     const newErrors: string[] = [];
     const highlightFields: string[] = [];
 
+    // Basic required fields
     if (!cleanBarcode) {
       newErrors.push("barcode");
       highlightFields.push("barcode");
@@ -380,6 +391,7 @@ export default function AddProducts() {
       highlightFields.push("category");
     }
 
+    // Image validation
     const hasExistingBatchesWithImage = existingProduct && existingProduct.imageUrl && existingProduct.batches && existingProduct.batches.length > 0;
     const imageRequired = !hasExistingBatchesWithImage;
     if (imageRequired && !image) {
@@ -387,26 +399,65 @@ export default function AddProducts() {
       highlightFields.push("image");
     }
 
+    // Inventory/Manual mode validations
     if (mode === "inventory" || mode === "manual") {
+      // Quantity validation - must be > 0
       const qtyNum = Number(formData.quantity);
       if (!formData.quantity || isNaN(qtyNum) || qtyNum <= 0) {
         newErrors.push("quantity");
         highlightFields.push("quantity");
+        if (qtyNum === 0) {
+          setHighlightErrors(highlightFields);
+          setTimeout(() => setHighlightErrors([]), 2000);
+          return { isValid: false, error: "Quantity must be greater than 0", field: "Quantity" };
+        }
       }
       
+      // Price validation
       const priceNum = Number(formData.price);
       if (!formData.price || isNaN(priceNum) || priceNum < 0) {
         newErrors.push("price");
         highlightFields.push("price");
       }
 
+      // Expiry date validation for perishable items
       if (isPerishable) {
-        const expiryDate = new Date(formData.expiryDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (!formData.expiryDate || isNaN(expiryDate.getTime()) || expiryDate < today) {
+        if (!formData.expiryDate) {
           newErrors.push("expiryDate");
           highlightFields.push("expiryDate");
+        } else {
+          const expiryDate = new Date(formData.expiryDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          // Check if date is valid
+          if (isNaN(expiryDate.getTime())) {
+            newErrors.push("expiryDate");
+            highlightFields.push("expiryDate");
+            setHighlightErrors(highlightFields);
+            setTimeout(() => setHighlightErrors([]), 2000);
+            return { isValid: false, error: "Invalid expiry date", field: "Expiry Date" };
+          }
+          
+          // Check if date is not in the past
+          if (expiryDate < today) {
+            newErrors.push("expiryDate");
+            highlightFields.push("expiryDate");
+            setHighlightErrors(highlightFields);
+            setTimeout(() => setHighlightErrors([]), 2000);
+            return { isValid: false, error: "Expiry date cannot be in the past", field: "Expiry Date" };
+          }
+          
+          // Check if date is not too far in the future (max 10 years)
+          const maxDate = new Date();
+          maxDate.setFullYear(maxDate.getFullYear() + 10);
+          if (expiryDate > maxDate) {
+            newErrors.push("expiryDate");
+            highlightFields.push("expiryDate");
+            setHighlightErrors(highlightFields);
+            setTimeout(() => setHighlightErrors([]), 2000);
+            return { isValid: false, error: "Expiry date too far in future (max 10 years)", field: "Expiry Date" };
+          }
         }
       }
     }
@@ -414,7 +465,6 @@ export default function AddProducts() {
     // Flash red highlights for missing fields
     if (highlightFields.length > 0) {
       setHighlightErrors(highlightFields);
-      // Remove highlights after animation
       setTimeout(() => setHighlightErrors([]), 2000);
     }
 
@@ -422,12 +472,17 @@ export default function AddProducts() {
       return { isValid: false, error: "Please fill all required fields correctly", field: "Validation" };
     }
 
+    // Category lock validation for existing products (inventory mode)
     if (mode === "inventory" && existingProduct) {
       const registeredCategory = (existingProduct.category || "").trim().toLowerCase();
       if (registeredCategory && cleanCategory.toLowerCase() !== registeredCategory) {
         setHighlightErrors(["category"]);
         setTimeout(() => setHighlightErrors([]), 2000);
-        return { isValid: false, error: `Category mismatch! Must be "${existingProduct.category}"`, field: "Category" };
+        return { 
+          isValid: false, 
+          error: `Category is locked! Must be "${existingProduct.category}"`, 
+          field: "Category" 
+        };
       }
     }
 
@@ -1081,15 +1136,31 @@ export default function AddProducts() {
             <View style={styles.labelRow}>
               <Text style={[styles.label, { color: theme.subtext }]}>CATEGORY</Text>
               <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+              {mode === "inventory" && existingProduct && existingProduct.category && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
+                  <Ionicons name="lock-closed" size={14} color={theme.subtext} />
+                  <Text style={{ color: theme.subtext, fontSize: 11, marginLeft: 4 }}>Locked</Text>
+                </View>
+              )}
             </View>
             
             <Pressable
-              onPress={() => setShowCategoryPicker(true)}
+              onPress={() => {
+                // Disable category picker when in inventory mode with existing product
+                const isCategoryLocked = mode === "inventory" && existingProduct && Boolean(existingProduct.category);
+                if (isCategoryLocked) {
+                  return;
+                }
+                setShowCategoryPicker(true);
+              }}
+              disabled={Boolean(mode === "inventory" && existingProduct && existingProduct.category)}
               style={[
                 styles.input,
                 isLocked && styles.locked,
                 {
-                  backgroundColor: theme.surface,
+                  backgroundColor: (mode === "inventory" && existingProduct && existingProduct.category) 
+                    ? theme.border + '40' // Semi-transparent to show disabled state
+                    : theme.surface,
                   borderColor: highlightErrors.includes('category')
                     ? theme.notification
                     : fieldErrors.category 
@@ -1101,17 +1172,23 @@ export default function AddProducts() {
                   justifyContent: "center",
                   flexDirection: "row",
                   alignItems: "center",
+                  opacity: (mode === "inventory" && existingProduct && existingProduct.category) ? 0.6 : 1,
                 },
                 highlightErrors.includes('category') && styles.errorHighlight,
               ]}
             >
+              {mode === "inventory" && existingProduct && existingProduct.category && (
+                <Ionicons name="lock-closed" size={18} color={theme.subtext} style={{ marginRight: 8 }} />
+              )}
               <Text style={{ 
                 color: formData.category ? theme.text : theme.subtext,
                 flex: 1,
               }}>
                 {formData.category || "Select or enter category"}
               </Text>
-              <Ionicons name="chevron-down" size={20} color={theme.subtext} />
+              {!(mode === "inventory" && existingProduct && existingProduct.category) && (
+                <Ionicons name="chevron-down" size={20} color={theme.subtext} />
+              )}
             </Pressable>
             
             {fieldErrors.category && (

@@ -1,23 +1,23 @@
-import React, { useState, useRef, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  Pressable,
-  Modal,
-  TextInput,
-  Animated,
-  Dimensions,
-} from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useAudioPlayer } from "expo-audio";
-import axios from "axios";
-import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { useAudioPlayer } from "expo-audio";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+    Animated,
+    Dimensions,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { useTheme } from "../../context/ThemeContext";
 
 const { height } = Dimensions.get("window");
 
@@ -43,6 +43,7 @@ export default function ScanScreen() {
   const [isNewProduct, setIsNewProduct] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
   const [adminPin, setAdminPin] = useState("");
+  const [rapidScanEnabled, setRapidScanEnabled] = useState(false);
 
   // CRITICAL: Key to force camera remount when screen focuses
   const [cameraKey, setCameraKey] = useState(0);
@@ -52,6 +53,20 @@ export default function ScanScreen() {
   const RegPlayer = useAudioPlayer(
     require("../../assets/sounds/beep-beep.mp3")
   );
+
+  // Load rapid scan setting
+  useEffect(() => {
+    loadRapidScanSetting();
+  }, []);
+
+  const loadRapidScanSetting = async () => {
+    try {
+      const enabled = await AsyncStorage.getItem('rapid_scan_enabled');
+      setRapidScanEnabled(enabled === 'true');
+    } catch (error) {
+      console.error('Error loading rapid scan setting:', error);
+    }
+  };
 
   // Scanner animation
   const scanAnim = useRef(new Animated.Value(0)).current;
@@ -158,20 +173,39 @@ export default function ScanScreen() {
         
         // Store complete product data for auto-fill
         const productData = response.data.productData;
-        setPendingData({
+        const dataToPass = {
           barcode: data,
           name: productData.name || "",
           category: productData.category || "",
           imageUrl: productData.imageUrl || "",
           isPerishable: String(productData.isPerishable || false),
-        });
-        setConfirmModal(true);
+        };
+        
+        // RAPID SCAN MODE: Skip confirmation, go directly to add-products
+        if (rapidScanEnabled) {
+          setScanned(false);
+          router.push({
+            pathname: "/add-products",
+            params: { 
+              ...dataToPass, 
+              mode: "inventory", 
+              locked: "true" 
+            },
+          });
+        } else {
+          // Normal mode: Show confirmation
+          setPendingData(dataToPass);
+          setConfirmModal(true);
+        }
       } else {
         // Product NOT in registry - need to register
         RegPlayer.play();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setIsNewProduct(true);
         setPendingData({ barcode: data });
+        
+        // RAPID SCAN MODE: For new products, still need PIN (security requirement)
+        // So we show confirmation even in rapid mode
         setConfirmModal(true);
       }
     } catch (err) {
@@ -411,9 +445,19 @@ export default function ScanScreen() {
 
         {/* BOTTOM HINTS AND BUTTONS */}
         <View style={styles.bottomBar}>
+          {rapidScanEnabled && (
+            <View style={[styles.rapidScanBadge, { backgroundColor: '#00FF00' + '20', borderColor: '#00FF00' }]}>
+              <Ionicons name="flash" size={16} color="#00FF00" />
+              <Text style={[styles.rapidScanText, { color: '#00FF00' }]}>
+                RAPID SCAN
+              </Text>
+            </View>
+          )}
           <Text style={styles.hintText}>
             {tab === "lookup" ?
               "Scan to find a product"
+            : rapidScanEnabled ? 
+              "Rapid mode: Instant batch entry"
             : "Scan to Register or Add Batch"}
           </Text>
           {tab === "registry" && (
@@ -676,6 +720,21 @@ const styles = StyleSheet.create({
     borderRadius: 30,
   },
   manualBtnText: { color: "#000", fontWeight: "800", fontSize: 14 },
+  rapidScanBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 2,
+    marginBottom: 10,
+  },
+  rapidScanText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
