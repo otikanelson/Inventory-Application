@@ -303,8 +303,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  title: { fontSize: 28, fontWeight: "900" },
-  subtitle: { fontSize: 14, marginTop: 4 },
+  title: { fontSize: 28, fontWeight: "900", letterSpacing: -1 },
+  subtitle: { fontSize: 10, marginTop: 4, fontWeight: "900", letterSpacing: 2 },
   settingsBtn: {
     width: 40,
     height: 40,
