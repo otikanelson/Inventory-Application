@@ -10,7 +10,8 @@ import {
     Switch,
     Text,
     TextInput,
-    View,
+    ImageBackground,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../context/ThemeContext";
@@ -20,6 +21,10 @@ export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const router = useRouter();
   const { settings: alertSettings, updateSettings } = useAlerts();
+
+  const backgroundImage = isDark
+    ? require("../assets/images/Background7.png")
+    : require("../assets/images/Background9.png");
 
   // Local state for system settings
   const [apiUrl, setApiUrl] = useState(process.env.EXPO_PUBLIC_API_URL || "");
@@ -221,18 +226,21 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={[styles.headerSub, { color: theme.primary }]}>
-          SYSTEM_CONFIGURATION
-        </Text>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          SETTINGS
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.headerSub, { color: theme.primary }]}>
+            SYSTEM_CONFIGURATION
+          </Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
+            SETTINGS
+          </Text>
+        </View>
 
       {/* APPEARANCE SECTION */}
       <View style={styles.section}>
@@ -273,69 +281,6 @@ export default function SettingsScreen() {
           </View>
         </SettingRow>
       </View>
-
-      {/* Admin Login Modal */}
-      <Modal visible={pinModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
-          >
-            <View style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}>
-              <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
-            </View>
-            
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {hasAdminPin ? "Admin Access" : "First Time Access"}
-            </Text>
-            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
-              {hasAdminPin 
-                ? "Enter your admin PIN to continue"
-                : "No PIN set yet. You'll be prompted to create one inside."
-              }
-            </Text>
-
-            {hasAdminPin && (
-              <TextInput
-                style={[
-                  styles.pinInput,
-                  { color: theme.text, borderColor: theme.border },
-                ]}
-                placeholder="Enter PIN"
-                placeholderTextColor={theme.subtext}
-                secureTextEntry
-                keyboardType="numeric"
-                maxLength={4}
-                value={pin}
-                onChangeText={setPin}
-                autoFocus
-              />
-            )}
-
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[
-                  styles.modalBtn,
-                  { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
-                ]}
-                onPress={() => {
-                  setPinModal(false);
-                  setPin("");
-                }}
-              >
-                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
-                onPress={handleAdminAuth}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  {hasAdminPin ? "VERIFY" : "CONTINUE"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* SCANNER SECTION */}
       <View style={styles.section}>
@@ -478,18 +423,82 @@ export default function SettingsScreen() {
 
       <View style={{ height: 10 }} />
         <Text style={styles.versionText}>
-          Build v2.0.4 - Production Environment
+          Build v2.0.5 - Production Environment
         </Text>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Admin Login Modal */}
+      <Modal visible={pinModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+          >
+            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="shield-checkmark" size={32} color={theme.primary} />
+            </View>
+            
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              {hasAdminPin ? "Admin Access" : "First Time Access"}
+            </Text>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              {hasAdminPin 
+                ? "Enter your admin PIN to continue"
+                : "No PIN set yet. You'll be prompted to create one inside."
+              }
+            </Text>
+
+            {hasAdminPin && (
+              <TextInput
+                style={[
+                  styles.pinInput,
+                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                ]}
+                placeholder="Enter PIN"
+                placeholderTextColor={theme.subtext}
+                secureTextEntry
+                keyboardType="numeric"
+                maxLength={4}
+                value={pin}
+                onChangeText={setPin}
+                autoFocus
+              />
+            )}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[
+                  styles.modalBtn,
+                  { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+                ]}
+                onPress={() => {
+                  setPinModal(false);
+                  setPin("");
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={handleAdminAuth}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  {hasAdminPin ? "VERIFY" : "CONTINUE"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
   header: { marginTop: 70, marginBottom: 30 },
-  headerTitle: { fontSize: 32, fontWeight: "900" },
-  headerSub: { fontSize: 14, marginTop: 4 },
-  section: { marginBottom: 25 },
+  headerSub: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
+  headerTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
+  section: { marginBottom: 35 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "800",
@@ -576,18 +585,28 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
   },
   modalContent: {
-    width: "85%",
+    width: "100%",
+    maxWidth: 400,
     padding: 30,
     borderRadius: 30,
     alignItems: "center",
+  },
+  modalIconBox: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
   },
   versionText: {
     textAlign: "center",
     color: "#888",
     fontSize: 10,
-    marginBottom: 25,
+    marginBottom: 100,
     letterSpacing: 1,
   },
   modalTitle: {
@@ -604,22 +623,26 @@ const styles = StyleSheet.create({
   },
   pinInput: {
     width: "100%",
-    height: 60,
+    height: 55,
     borderWidth: 1,
     borderRadius: 15,
+    paddingHorizontal: 20,
+    marginBottom: 15,
     textAlign: "center",
-    fontSize: 28,
-    marginBottom: 20,
+    fontSize: 18,
+    fontWeight: "600",
   },
   modalActions: {
     flexDirection: "row",
     gap: 12,
+    marginTop: 10,
     width: "100%",
   },
   modalBtn: {
     flex: 1,
-    padding: 16,
+    height: 50,
     borderRadius: 15,
+    justifyContent: "center",
     alignItems: "center",
   },
 });

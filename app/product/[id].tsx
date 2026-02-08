@@ -246,7 +246,7 @@ export default function ProductDetails() {
           </View>
         </View>
 
-        {/* AI Prediction Card */}
+        {/* AI Prediction Card - Simplified for Users */}
         <PredictionCard 
           prediction={prediction} 
           loading={predictionLoading}

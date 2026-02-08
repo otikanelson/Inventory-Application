@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
+import { useAIPredictions } from "../../../hooks/useAIPredictions";
 import { useImageUpload } from "../../../hooks/useImageUpload";
 import { useProducts } from "../../../hooks/useProducts";
 
@@ -37,6 +38,11 @@ export default function AdminProductDetails() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { getProductById, refresh } = useProducts();
+  const { prediction, loading: predictionLoading } = useAIPredictions({ 
+    productId: id as string,
+    enableWebSocket: true,
+    autoFetch: true
+  });
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -694,6 +700,196 @@ export default function AdminProductDetails() {
           </Text>
         </View>
 
+        {/* AI Insights Section - Admin Only */}
+        {!isGlobalProduct && prediction && (
+          <View style={[styles.section, { backgroundColor: theme.surface }]}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="analytics" size={18} color={theme.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                AI Insights & Analytics
+              </Text>
+            </View>
+
+            {/* Risk Score Meter */}
+            <View style={[styles.riskMeter, { backgroundColor: theme.background }]}>
+              <View style={styles.riskMeterHeader}>
+                <Text style={[styles.riskMeterLabel, { color: theme.subtext }]}>
+                  Risk Score
+                </Text>
+                <Text style={[styles.riskMeterValue, { 
+                  color: prediction.metrics.riskScore >= 70 ? '#FF3B30' 
+                    : prediction.metrics.riskScore >= 40 ? '#FF9500' 
+                    : '#34C759' 
+                }]}>
+                  {prediction.metrics.riskScore}/100
+                </Text>
+              </View>
+              <View style={[styles.riskMeterBar, { backgroundColor: theme.border }]}>
+                <View 
+                  style={[
+                    styles.riskMeterFill, 
+                    { 
+                      width: `${prediction.metrics.riskScore}%`,
+                      backgroundColor: prediction.metrics.riskScore >= 70 ? '#FF3B30' 
+                        : prediction.metrics.riskScore >= 40 ? '#FF9500' 
+                        : '#34C759'
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={[styles.riskMeterDesc, { color: theme.subtext }]}>
+                {prediction.metrics.riskScore >= 70 ? 'Critical - Immediate action required' 
+                  : prediction.metrics.riskScore >= 40 ? 'Moderate - Monitor closely' 
+                  : 'Low - Product is performing well'}
+              </Text>
+            </View>
+
+            {/* Key Metrics Grid */}
+            <View style={styles.analyticsRow}>
+              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Ionicons name="speedometer-outline" size={24} color={theme.primary} />
+                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
+                  Velocity
+                </Text>
+                <Text style={[styles.analyticsValue, { color: theme.text }]}>
+                  {prediction.metrics.velocity.toFixed(1)}
+                </Text>
+                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
+                  units/day
+                </Text>
+              </View>
+
+              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
+                  Days to Stockout
+                </Text>
+                <Text style={[styles.analyticsValue, { 
+                  color: prediction.metrics.daysUntilStockout <= 7 ? '#FF3B30' 
+                    : prediction.metrics.daysUntilStockout <= 14 ? '#FF9500' 
+                    : theme.text 
+                }]}>
+                  {prediction.metrics.daysUntilStockout}
+                </Text>
+                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
+                  days left
+                </Text>
+              </View>
+
+              <View style={[styles.analyticsCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Ionicons name="trending-up-outline" size={24} color={theme.primary} />
+                <Text style={[styles.analyticsLabel, { color: theme.subtext }]}>
+                  Confidence
+                </Text>
+                <Text style={[styles.analyticsValue, { color: theme.text }]}>
+                  {prediction.forecast.confidence === 'high' ? '90+' : prediction.forecast.confidence === 'medium' ? '70-89' : '50-69'}%
+                </Text>
+                <Text style={[styles.analyticsSubtext, { color: theme.subtext }]}>
+                  {prediction.forecast.confidence}
+                </Text>
+              </View>
+            </View>
+
+            {/* Demand Forecast */}
+            {prediction.forecast && (
+              <>
+                <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+                  Demand Forecast
+                </Text>
+                <View style={styles.predictionsGrid}>
+                  <View style={styles.predictionItem}>
+                    <Text style={[styles.predictionValue, { color: theme.primary }]}>
+                      {prediction.forecast.next7Days}
+                    </Text>
+                    <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
+                      Next 7 Days
+                    </Text>
+                  </View>
+                  <View style={styles.predictionItem}>
+                    <Text style={[styles.predictionValue, { color: theme.primary }]}>
+                      {prediction.forecast.next14Days}
+                    </Text>
+                    <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
+                      Next 14 Days
+                    </Text>
+                  </View>
+                  <View style={styles.predictionItem}>
+                    <Text style={[styles.predictionValue, { color: theme.primary }]}>
+                      {prediction.forecast.next30Days}
+                    </Text>
+                    <Text style={[styles.predictionLabel, { color: theme.subtext }]}>
+                      Next 30 Days
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* AI Recommendations */}
+            {prediction.recommendations && prediction.recommendations.length > 0 && (
+              <>
+                <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+                  AI Recommendations
+                </Text>
+                {prediction.recommendations.map((rec: any, index: number) => (
+                  <View 
+                    key={index}
+                    style={[
+                      styles.alertBanner, 
+                      { 
+                        backgroundColor: rec.priority === 'high' ? '#FF3B30' + '10' 
+                          : rec.priority === 'medium' ? '#FF9500' + '10' 
+                          : theme.primary + '10',
+                        borderColor: rec.priority === 'high' ? '#FF3B30' 
+                          : rec.priority === 'medium' ? '#FF9500' 
+                          : theme.primary
+                      }
+                    ]}
+                  >
+                    <Ionicons 
+                      name={rec.priority === 'high' ? 'alert-circle' : 'information-circle'} 
+                      size={14} 
+                      color={rec.priority === 'high' ? '#FF3B30' 
+                        : rec.priority === 'medium' ? '#FF9500' 
+                        : theme.primary} 
+                    />
+                    <Text style={[
+                      styles.alertText, 
+                      { 
+                        color: rec.priority === 'high' ? '#FF3B30' 
+                          : rec.priority === 'medium' ? '#FF9500' 
+                          : theme.primary,
+                        flex: 1
+                      }
+                    ]}>
+                      {rec.message}
+                    </Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Low Confidence Warning */}
+            {prediction.forecast.confidence === 'low' && (
+              <View style={[styles.alertBanner, { backgroundColor: '#FFD60A' + '10', borderColor: '#FFD60A' }]}>
+                <Ionicons name="warning" size={14} color="#FFD60A" />
+                <Text style={[styles.alertText, { color: '#FFD60A', flex: 1 }]}>
+                  Low confidence prediction. More sales data needed for accurate forecasting.
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {predictionLoading && !isGlobalProduct && (
+          <View style={[styles.section, { backgroundColor: theme.surface }]}>
+            <ActivityIndicator size="small" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.subtext }]}>
+              Loading AI insights...
+            </Text>
+          </View>
+        )}
+
         {/* Batch Timeline */}
         {product.batches && product.batches.length > 0 && (
           <View style={[styles.section, { backgroundColor: theme.surface }]}>
@@ -1137,6 +1333,54 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "800",
+  },
+
+  subsectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 16,
+    marginBottom: 12,
+  },
+
+  loadingText: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  riskMeter: {
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  riskMeterHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  riskMeterLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  riskMeterValue: {
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  riskMeterBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  riskMeterFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  riskMeterDesc: {
+    fontSize: 10,
+    fontWeight: "600",
   },
 
   analyticsRow: {

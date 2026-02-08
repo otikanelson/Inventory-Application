@@ -43,9 +43,14 @@ export default function AdminSettingsScreen() {
   const [requirePinForDelete, setRequirePinForDelete] = useState(true);
   const [enableBackup, setEnableBackup] = useState(false);
   const [hasPin, setHasPin] = useState(false);
-  const [showSetupModal, setShowSetupModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [lastBackupDate, setLastBackupDate] = useState<string | null>(null);
+
+  // AI Settings State
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [riskThreshold, setRiskThreshold] = useState(70);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [confidenceFilter, setConfidenceFilter] = useState(60);
 
   // Load settings on mount
   useEffect(() => {
@@ -61,12 +66,24 @@ export default function AdminSettingsScreen() {
       const backupEnabled = await AsyncStorage.getItem('admin_auto_backup');
       const lastBackup = await AsyncStorage.getItem('last_backup_date');
       
+      // Load AI settings
+      const aiEnabledSetting = await AsyncStorage.getItem('ai_enabled');
+      const riskThresholdSetting = await AsyncStorage.getItem('ai_risk_threshold');
+      const notifEnabledSetting = await AsyncStorage.getItem('ai_notifications_enabled');
+      const confidenceFilterSetting = await AsyncStorage.getItem('ai_confidence_filter');
+      
       setHasPin(!!pin);
       if (pinRequired !== null) setRequirePinForDelete(pinRequired === 'true');
       if (logoutEnabled !== null) setAutoLogout(logoutEnabled === 'true');
       if (logoutTime !== null) setAutoLogoutTime(parseInt(logoutTime));
       if (backupEnabled !== null) setEnableBackup(backupEnabled === 'true');
       if (lastBackup) setLastBackupDate(lastBackup);
+      
+      // Set AI settings
+      if (aiEnabledSetting !== null) setAiEnabled(aiEnabledSetting === 'true');
+      if (riskThresholdSetting !== null) setRiskThreshold(parseInt(riskThresholdSetting));
+      if (notifEnabledSetting !== null) setNotificationsEnabled(notifEnabledSetting === 'true');
+      if (confidenceFilterSetting !== null) setConfidenceFilter(parseInt(confidenceFilterSetting));
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -442,7 +459,6 @@ export default function AdminSettingsScreen() {
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL;
       const response = await axios.get(`${API_URL}/products`);
       
       if (response.data.success) {
@@ -545,6 +561,79 @@ export default function AdminSettingsScreen() {
       });
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  // AI Settings Handlers
+  const handleAiToggle = async (value: boolean) => {
+    setAiEnabled(value);
+    try {
+      await AsyncStorage.setItem('ai_enabled', value.toString());
+      Toast.show({
+        type: 'success',
+        text1: 'AI Features',
+        text2: `AI predictions ${value ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Could not save setting'
+      });
+    }
+  };
+
+  const handleRiskThresholdChange = async (value: number) => {
+    setRiskThreshold(value);
+    try {
+      await AsyncStorage.setItem('ai_risk_threshold', value.toString());
+      Toast.show({
+        type: 'success',
+        text1: 'Risk Threshold Updated',
+        text2: `Critical risk set to ${value}+`
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Could not save setting'
+      });
+    }
+  };
+
+  const handleNotificationsToggle = async (value: boolean) => {
+    setNotificationsEnabled(value);
+    try {
+      await AsyncStorage.setItem('ai_notifications_enabled', value.toString());
+      Toast.show({
+        type: 'success',
+        text1: 'Notifications',
+        text2: `AI notifications ${value ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Could not save setting'
+      });
+    }
+  };
+
+  const handleConfidenceFilterChange = async (value: number) => {
+    setConfidenceFilter(value);
+    try {
+      await AsyncStorage.setItem('ai_confidence_filter', value.toString());
+      Toast.show({
+        type: 'success',
+        text1: 'Confidence Filter Updated',
+        text2: `Minimum confidence set to ${value}%`
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Could not save setting'
+      });
     }
   };
 
@@ -736,6 +825,109 @@ export default function AdminSettingsScreen() {
               trackColor={{ true: theme.primary }}
             />
           </SettingRow>
+        </View>
+
+        {/* AI SETTINGS SECTION */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+              AI PREDICTIONS
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: aiEnabled ? '#34C759' + '15' : theme.border, borderColor: aiEnabled ? '#34C759' : theme.border }]}>
+              <Ionicons name={aiEnabled ? "checkmark-circle" : "close-circle"} size={14} color={aiEnabled ? '#34C759' : theme.subtext} />
+              <Text style={[styles.statusBadgeText, { color: aiEnabled ? '#34C759' : theme.subtext }]}>
+                {aiEnabled ? 'ACTIVE' : 'DISABLED'}
+              </Text>
+            </View>
+          </View>
+
+          <SettingRow
+            icon="analytics-outline"
+            label="Enable AI Features"
+            description="Turn on AI-powered predictions and insights"
+          >
+            <Switch
+              value={aiEnabled}
+              onValueChange={handleAiToggle}
+              trackColor={{ true: theme.primary }}
+            />
+          </SettingRow>
+
+          {aiEnabled && (
+            <>
+              <SettingRow
+                icon="notifications-outline"
+                label="AI Notifications"
+                description="Get alerts for critical predictions"
+              >
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={handleNotificationsToggle}
+                  trackColor={{ true: theme.primary }}
+                />
+              </SettingRow>
+
+              <View style={[styles.sliderSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <View style={styles.sliderHeader}>
+                  <Text style={[styles.sliderLabel, { color: theme.text }]}>Risk Threshold</Text>
+                  <Text style={[styles.sliderValue, { color: theme.primary }]}>{riskThreshold}</Text>
+                </View>
+                <Text style={[styles.sliderDesc, { color: theme.subtext }]}>
+                  Products with risk score above this value are marked as critical
+                </Text>
+                <View style={styles.sliderButtons}>
+                  <Pressable
+                    style={[styles.sliderBtn, { backgroundColor: riskThreshold === 60 ? theme.primary : theme.surface, borderColor: theme.border }]}
+                    onPress={() => handleRiskThresholdChange(60)}
+                  >
+                    <Text style={[styles.sliderBtnText, { color: riskThreshold === 60 ? '#FFF' : theme.text }]}>60</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.sliderBtn, { backgroundColor: riskThreshold === 70 ? theme.primary : theme.surface, borderColor: theme.border }]}
+                    onPress={() => handleRiskThresholdChange(70)}
+                  >
+                    <Text style={[styles.sliderBtnText, { color: riskThreshold === 70 ? '#FFF' : theme.text }]}>70</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.sliderBtn, { backgroundColor: riskThreshold === 80 ? theme.primary : theme.surface, borderColor: theme.border }]}
+                    onPress={() => handleRiskThresholdChange(80)}
+                  >
+                    <Text style={[styles.sliderBtnText, { color: riskThreshold === 80 ? '#FFF' : theme.text }]}>80</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={[styles.sliderSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <View style={styles.sliderHeader}>
+                  <Text style={[styles.sliderLabel, { color: theme.text }]}>Confidence Filter</Text>
+                  <Text style={[styles.sliderValue, { color: theme.primary }]}>{confidenceFilter}%</Text>
+                </View>
+                <Text style={[styles.sliderDesc, { color: theme.subtext }]}>
+                  Only show predictions with confidence above this percentage
+                </Text>
+                <View style={styles.sliderButtons}>
+                  <Pressable
+                    style={[styles.sliderBtn, { backgroundColor: confidenceFilter === 50 ? theme.primary : theme.surface, borderColor: theme.border }]}
+                    onPress={() => handleConfidenceFilterChange(50)}
+                  >
+                    <Text style={[styles.sliderBtnText, { color: confidenceFilter === 50 ? '#FFF' : theme.text }]}>50%</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.sliderBtn, { backgroundColor: confidenceFilter === 60 ? theme.primary : theme.surface, borderColor: theme.border }]}
+                    onPress={() => handleConfidenceFilterChange(60)}
+                  >
+                    <Text style={[styles.sliderBtnText, { color: confidenceFilter === 60 ? '#FFF' : theme.text }]}>60%</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.sliderBtn, { backgroundColor: confidenceFilter === 70 ? theme.primary : theme.surface, borderColor: theme.border }]}
+                    onPress={() => handleConfidenceFilterChange(70)}
+                  >
+                    <Text style={[styles.sliderBtnText, { color: confidenceFilter === 70 ? '#FFF' : theme.text }]}>70%</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         {/* DATA MANAGEMENT */}
@@ -1117,5 +1309,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
+  },
+  sliderSection: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sliderHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sliderLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  sliderValue: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  sliderDesc: {
+    fontSize: 12,
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  sliderButtons: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  sliderBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  sliderBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

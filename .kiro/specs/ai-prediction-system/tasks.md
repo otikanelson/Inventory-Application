@@ -299,49 +299,49 @@
 ## Phase 5: Notifications & Settings (Days 12-13)
 
 ### 5.1 Push Notifications
-- [ ] 5.1.1 Set up Expo Notifications
+- [x] 5.1.1 Set up Expo Notifications
   - Install expo-notifications
   - Configure app.json
   - Request permissions
-- [ ] 5.1.2 Implement notification triggers
+- [x] 5.1.2 Implement notification triggers
   - Critical risk (score >= 70)
   - Stockout warning (< 3 days)
   - Bulk alert (5+ urgent items)
-- [ ] 5.1.3 Add notification handling
+- [x] 5.1.3 Add notification handling
   - Show notification when app is open
   - Navigate to product on tap
   - Mark as read automatically
-- [ ] 5.1.4 Test notification delivery
+- [x] 5.1.4 Test notification delivery
   - Test on iOS
   - Test on Android
   - Test background/foreground scenarios
 
 ### 5.2 Notification Center
-- [ ] 5.2.1 Create notifications page (`app/notifications.tsx`)
+- [x] 5.2.1 Create notifications page (`app/notifications.tsx`)
   - List all notifications
   - Group by date
   - Show read/unread status
-- [ ] 5.2.2 Add notification actions
+- [x] 5.2.2 Add notification actions
   - Mark as read
   - Dismiss notification
   - Navigate to product
   - Clear all notifications
-- [ ] 5.2.3 Add notification badge
+- [x] 5.2.3 Add notification badge
   - Show unread count in tab bar
   - Update in real-time
   - Clear when notifications viewed
 
 ### 5.3 AI Settings
-- [ ] 5.3.1 Add AI section to admin settings (`app/admin/settings.tsx`)
+- [x] 5.3.1 Add AI section to admin settings (`app/admin/settings.tsx`)
   - Enable/Disable AI Features toggle
   - Risk threshold sliders
   - Notification preferences
   - Confidence level filter
-- [ ] 5.3.2 Implement settings persistence
+- [x] 5.3.2 Implement settings persistence
   - Save to AsyncStorage
   - Apply settings globally
   - Sync with backend
-- [ ] 5.3.3 Add per-product overrides
+- [x] 5.3.3 Add per-product overrides
   - Exclude product from predictions
   - Custom demand patterns
   - Manual forecast adjustments
