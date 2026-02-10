@@ -10,6 +10,7 @@ const {
   getRecentlySold,
   getRecentlySoldBatches,
   getProductSales,
+  getAllSales,
   // New AI prediction endpoints
   getQuickInsightsEndpoint,
   getProductPrediction,
@@ -36,6 +37,11 @@ router.get('/product/:productId', getProductAnalytics);
 // @desc    Get sales trends for charts (query: ?days=30)
 // @access  Admin
 router.get('/sales-trends', getSalesTrends);
+
+// @route   GET /api/analytics/all-sales
+// @desc    Get all sales records (for admin sales history)
+// @access  Admin
+router.get('/all-sales', getAllSales);
 
 // @route   GET /api/analytics/by-category
 // @desc    Get category-wise analytics

@@ -54,6 +54,43 @@ exports.getDashboardStats = async (req, res) => {
 };
 
 /**
+ * @desc    Get all sales records (for admin sales history)
+ * @route   GET /api/analytics/all-sales
+ * @access  Admin
+ */
+exports.getAllSales = async (req, res) => {
+  try {
+    const { limit = 100, days = 30 } = req.query;
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    
+    // Get all sales with product details
+    const sales = await Sale.find({
+      saleDate: { $gte: startDate }
+    })
+      .sort({ saleDate: -1 })
+      .limit(parseInt(limit))
+      .lean();
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        sales: sales,
+        count: sales.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get All Sales Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
  * @desc    Get sales trends (for charts)
  * @route   GET /api/analytics/sales-trends
  * @access  Admin

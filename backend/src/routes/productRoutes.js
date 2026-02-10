@@ -8,6 +8,7 @@ const {
   getProductById,
   updateProduct, // ← Make sure this is imported
   updateGenericPrice,
+  applyDiscount, // ← Add this
   deleteProduct, // ← Make sure this is imported
   deleteBatch,
   processSale,
@@ -59,6 +60,9 @@ router.get("/barcode/:barcode", async (req, res) => {
 // Route for /api/products/:id (CRUD operations)
 // Update generic price
 router.put("/:id/generic-price", updateGenericPrice);
+
+// Apply discount
+router.post("/:id/discount", applyDiscount);
 
 router
   .route("/:id")

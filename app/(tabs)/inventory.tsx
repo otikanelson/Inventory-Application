@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -12,42 +13,44 @@ import {
     View,
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
-import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { Product, useProducts } from "../../hooks/useProducts";
-import { Prediction } from "../../types/ai-predictions";
 
 export default function InventoryScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
-  const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
   const [displayMode, setDisplayMode] = useState<"card" | "list">("card");
-  const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
+  const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
 
-  // Fetch predictions for all products
+  // Fetch analytics for all products
   useEffect(() => {
-    const fetchPredictions = async () => {
+    const fetchAnalytics = async () => {
       if (products.length > 0) {
-        const productIds = products.map(p => p._id);
         try {
-          const batchPredictions = await fetchBatchPredictions(productIds);
-          const predictionsMap: Record<string, Prediction> = {};
-          batchPredictions.forEach((pred: Prediction) => {
-            if (pred.productId) {
-              predictionsMap[pred.productId] = pred;
-            }
-          });
-          setPredictions(predictionsMap);
+          console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+          const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+          console.log('Analytics response:', response.data);
+          if (response.data.success) {
+            const analyticsMap: Record<string, { velocity: number; riskScore: number }> = {};
+            response.data.data.productAnalytics.forEach((item: any) => {
+              analyticsMap[item.productId] = {
+                velocity: item.velocity,
+                riskScore: item.riskScore
+              };
+            });
+            console.log('Analytics map:', analyticsMap);
+            setAnalytics(analyticsMap);
+          }
         } catch (error) {
-          console.error('Error fetching predictions:', error);
+          console.error('Error fetching analytics:', error);
         }
       }
     };
-    fetchPredictions();
-  }, [products, fetchBatchPredictions]);
+    fetchAnalytics();
+  }, [products]);
 
   // Helper functions
   const getRiskColor = (riskScore: number) => {
@@ -84,12 +87,12 @@ export default function InventoryScreen() {
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
       if (sortField === "risk") {
-        const riskA = predictions[a._id]?.metrics?.riskScore || 0;
-        const riskB = predictions[b._id]?.metrics?.riskScore || 0;
+        const riskA = analytics[a._id]?.riskScore || 0;
+        const riskB = analytics[b._id]?.riskScore || 0;
         return riskB - riskA; // Highest risk first
       } else if (sortField === "velocity") {
-        const velA = predictions[a._id]?.metrics?.velocity || 0;
-        const velB = predictions[b._id]?.metrics?.velocity || 0;
+        const velA = analytics[a._id]?.velocity || 0;
+        const velB = analytics[b._id]?.velocity || 0;
         return velB - velA; // Highest velocity first
       } else {
         const valA = (a[sortField] || "").toString().toLowerCase();
@@ -97,7 +100,7 @@ export default function InventoryScreen() {
         return valA.localeCompare(valB);
       }
     });
-  }, [filteredProducts, sortField, predictions]);
+  }, [filteredProducts, sortField, analytics]);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -207,9 +210,9 @@ export default function InventoryScreen() {
             />
           }
           renderItem={({ item }) => {
-            const prediction = predictions[item._id];
-            const riskScore = prediction?.metrics?.riskScore || 0;
-            const velocity = prediction?.metrics?.velocity || 0;
+            const productAnalytics = analytics[item._id];
+            const riskScore = productAnalytics?.riskScore || 0;
+            const velocity = productAnalytics?.velocity || 0;
             const riskColor = getRiskColor(riskScore);
             const velocityIndicator = getVelocityIndicator(velocity);
 
@@ -256,19 +259,43 @@ export default function InventoryScreen() {
                     </Text>
                   </View>
                   <View style={{ flex: 1, alignItems: "flex-end" }}>
-                    <Text
-                      style={[
-                        styles.listQty,
-                        {
-                          color:
-                            item.totalQuantity < 10
-                              ? theme.notification
-                              : theme.text,
-                        },
-                      ]}
-                    >
-                      {item.totalQuantity} units
-                    </Text>
+                    {sortField === "risk" && productAnalytics ? (
+                      <Text
+                        style={[
+                          styles.listQty,
+                          {
+                            color: riskColor || theme.text,
+                          },
+                        ]}
+                      >
+                        Risk: {Math.round(riskScore)}
+                      </Text>
+                    ) : sortField === "velocity" && productAnalytics ? (
+                      <Text
+                        style={[
+                          styles.listQty,
+                          {
+                            color: velocityIndicator?.color || theme.text,
+                          },
+                        ]}
+                      >
+                        {velocity.toFixed(1)}/day
+                      </Text>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.listQty,
+                          {
+                            color:
+                              item.totalQuantity < 10
+                                ? theme.notification
+                                : theme.text,
+                          },
+                        ]}
+                      >
+                        {item.totalQuantity} units
+                      </Text>
+                    )}
                   </View>
                 </Pressable>
               );
@@ -325,22 +352,58 @@ export default function InventoryScreen() {
                     </Text>
                   </View>
                   <View style={styles.qtyBox}>
-                    <Text
-                      style={[
-                        styles.qtyValue,
-                        {
-                          color:
-                            item.totalQuantity < 10
-                              ? theme.notification
-                              : theme.primary,
-                        },
-                      ]}
-                    >
-                      {item.totalQuantity}
-                    </Text>
-                    <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
-                      QTY
-                    </Text>
+                    {sortField === "risk" && productAnalytics ? (
+                      <>
+                        <Text
+                          style={[
+                            styles.qtyValue,
+                            {
+                              color: riskColor || theme.primary,
+                            },
+                          ]}
+                        >
+                          {Math.round(riskScore)}
+                        </Text>
+                        <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                          RISK
+                        </Text>
+                      </>
+                    ) : sortField === "velocity" && productAnalytics ? (
+                      <>
+                        <Text
+                          style={[
+                            styles.qtyValue,
+                            {
+                              color: velocityIndicator?.color || theme.primary,
+                            },
+                          ]}
+                        >
+                          {velocity.toFixed(1)}
+                        </Text>
+                        <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                          /DAY
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text
+                          style={[
+                            styles.qtyValue,
+                            {
+                              color:
+                                item.totalQuantity < 10
+                                  ? theme.notification
+                                  : theme.primary,
+                            },
+                          ]}
+                        >
+                          {item.totalQuantity}
+                        </Text>
+                        <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                          QTY
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </View>
               </Pressable>

@@ -5,21 +5,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  BackHandler,
-  FlatList,
-  Image,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    BackHandler,
+    FlatList,
+    Image,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
@@ -272,6 +272,30 @@ export default function AddProducts() {
         } else if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
           result = { isValid: false, error: "Date must be in YYYY-MM-DD format" };
         } else if (value) {
+          // Parse date components
+          const [year, month, day] = value.split('-').map(Number);
+          
+          // Validate month range
+          if (month < 1 || month > 12) {
+            result = { isValid: false, error: "Invalid month (must be 01-12)" };
+            break;
+          }
+          
+          // Validate day range based on month
+          const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+          
+          // Check for leap year
+          const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+          if (isLeapYear) {
+            daysInMonth[1] = 29; // February has 29 days in leap year
+          }
+          
+          // Validate day
+          if (day < 1 || day > daysInMonth[month - 1]) {
+            result = { isValid: false, error: `Invalid day for ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month-1]} (max ${daysInMonth[month - 1]})` };
+            break;
+          }
+          
           const expiryDate = new Date(value);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -1771,6 +1795,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%",
+    maxWidth: "100%",
+    width: "100%",
     marginTop: "auto",
   },
   helpModalHeader: {

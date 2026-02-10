@@ -3,56 +3,58 @@ import axios from "axios";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    FlatList,
-    Image,
-    ImageBackground,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
-import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useProducts } from "../../hooks/useProducts";
-import { Prediction } from "../../types/ai-predictions";
 
 export default function AdminInventory() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
-  const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<"name" | "totalQuantity" | "risk" | "velocity">("name");
   const [activeTab, setActiveTab] = useState<"registry" | "inventory">("inventory");
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
-  const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
+  const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
 
-  // Fetch predictions for inventory products
+  // Fetch analytics for inventory products
   useEffect(() => {
-    const fetchPredictions = async () => {
+    const fetchAnalytics = async () => {
       if (activeTab === "inventory" && products.length > 0) {
-        const productIds = products.map(p => p._id);
         try {
-          const batchPredictions = await fetchBatchPredictions(productIds);
-          const predictionsMap: Record<string, Prediction> = {};
-          batchPredictions.forEach((pred: Prediction) => {
-            if (pred.productId) {
-              predictionsMap[pred.productId] = pred;
-            }
-          });
-          setPredictions(predictionsMap);
+          console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+          const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+          console.log('Analytics response:', response.data);
+          if (response.data.success) {
+            const analyticsMap: Record<string, { velocity: number; riskScore: number }> = {};
+            response.data.data.productAnalytics.forEach((item: any) => {
+              analyticsMap[item.productId] = {
+                velocity: item.velocity,
+                riskScore: item.riskScore
+              };
+            });
+            console.log('Analytics map:', analyticsMap);
+            setAnalytics(analyticsMap);
+          }
         } catch (error) {
-          console.error('Error fetching predictions:', error);
+          console.error('Error fetching analytics:', error);
         }
       }
     };
-    fetchPredictions();
-  }, [products, activeTab, fetchBatchPredictions]);
+    fetchAnalytics();
+  }, [products, activeTab]);
 
   // Helper functions
   const getRiskColor = (riskScore: number) => {
@@ -118,12 +120,12 @@ export default function AdminInventory() {
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
       if (sortField === "risk" && activeTab === "inventory") {
-        const riskA = predictions[a._id]?.metrics?.riskScore || 0;
-        const riskB = predictions[b._id]?.metrics?.riskScore || 0;
+        const riskA = analytics[a._id]?.riskScore || 0;
+        const riskB = analytics[b._id]?.riskScore || 0;
         return riskB - riskA;
       } else if (sortField === "velocity" && activeTab === "inventory") {
-        const velA = predictions[a._id]?.metrics?.velocity || 0;
-        const velB = predictions[b._id]?.metrics?.velocity || 0;
+        const velA = analytics[a._id]?.velocity || 0;
+        const velB = analytics[b._id]?.velocity || 0;
         return velB - velA;
       } else if (sortField === "name") {
         return a.name.localeCompare(b.name);
@@ -131,7 +133,7 @@ export default function AdminInventory() {
         return (b.totalQuantity || 0) - (a.totalQuantity || 0);
       }
     });
-  }, [filteredProducts, sortField, predictions, activeTab]);
+  }, [filteredProducts, sortField, analytics, activeTab]);
 
   const handleRefresh = () => {
     if (activeTab === "inventory") {
@@ -310,10 +312,10 @@ export default function AdminInventory() {
               ? products.some((p) => p.barcode === item.barcode)
               : true;
 
-            // Get prediction data (only for inventory tab)
-            const prediction = activeTab === "inventory" ? predictions[item._id] : null;
-            const riskScore = prediction?.metrics?.riskScore || 0;
-            const velocity = prediction?.metrics?.velocity || 0;
+            // Get analytics data (only for inventory tab)
+            const productAnalytics = activeTab === "inventory" ? analytics[item._id] : null;
+            const riskScore = productAnalytics?.riskScore || 0;
+            const velocity = productAnalytics?.velocity || 0;
             const riskColor = getRiskColor(riskScore);
             const velocityIndicator = getVelocityIndicator(velocity);
 
@@ -388,27 +390,99 @@ export default function AdminInventory() {
                     )}
                   </View>
                   <View style={styles.qtyBox}>
-                    <Text
-                      style={[
-                        styles.qtyValue,
-                        {
-                          color:
-                            activeTab === "inventory" &&
-                            (item.totalQuantity || 0) < 10
-                              ? theme.notification
-                              : theme.primary,
-                        },
-                      ]}
-                    >
-                      {activeTab === "inventory"
-                        ? item.totalQuantity || 0
-                        : inLocalInventory 
-                        ? products.find((p) => p.barcode === item.barcode)?.totalQuantity || 0
-                        : "—"}
-                    </Text>
-                    <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
-                      {activeTab === "inventory" ? "QTY" : "REG"}
-                    </Text>
+                    {sortField === "risk" && activeTab === "inventory" ? (
+                      productAnalytics && riskScore > 0 ? (
+                        <>
+                          <Text
+                            style={[
+                              styles.qtyValue,
+                              {
+                                color: riskColor || theme.primary,
+                              },
+                            ]}
+                          >
+                            {Math.round(riskScore)}
+                          </Text>
+                          <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                            RISK
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text
+                            style={[
+                              styles.qtyValue,
+                              {
+                                color: theme.subtext,
+                              },
+                            ]}
+                          >
+                            —
+                          </Text>
+                          <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                            RISK
+                          </Text>
+                        </>
+                      )
+                    ) : sortField === "velocity" && activeTab === "inventory" ? (
+                      productAnalytics && velocity > 0 ? (
+                        <>
+                          <Text
+                            style={[
+                              styles.qtyValue,
+                              {
+                                color: velocityIndicator?.color || theme.primary,
+                              },
+                            ]}
+                          >
+                            {velocity.toFixed(1)}
+                          </Text>
+                          <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                            /DAY
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text
+                            style={[
+                              styles.qtyValue,
+                              {
+                                color: theme.subtext,
+                              },
+                            ]}
+                          >
+                            —
+                          </Text>
+                          <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                            /DAY
+                          </Text>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <Text
+                          style={[
+                            styles.qtyValue,
+                            {
+                              color:
+                                activeTab === "inventory" &&
+                                (item.totalQuantity || 0) < 10
+                                  ? theme.notification
+                                  : theme.primary,
+                            },
+                          ]}
+                        >
+                          {activeTab === "inventory"
+                            ? item.totalQuantity || 0
+                            : inLocalInventory 
+                            ? products.find((p) => p.barcode === item.barcode)?.totalQuantity || 0
+                            : "—"}
+                        </Text>
+                        <Text style={[styles.qtyLabel, { color: theme.subtext }]}>
+                          {activeTab === "inventory" ? "QTY" : "REG"}
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </View>
               </Pressable>

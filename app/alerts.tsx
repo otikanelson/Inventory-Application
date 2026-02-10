@@ -2,30 +2,36 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    ImageBackground,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ImageBackground,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../context/ThemeContext";
+import { useAdminAuth } from "../hooks/useAdminAuth";
 import { Alert, AlertAction, useAlerts } from "../hooks/useAlerts";
 
 export default function Alerts() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const { alerts, summary, loading, refresh, acknowledgeAlert } = useAlerts();
+  const { validatePin } = useAdminAuth();
 
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [selectedAction, setSelectedAction] = useState<AlertAction | null>(null);
   const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const backgroundImage =
     isDark ?
@@ -44,7 +50,107 @@ export default function Alerts() {
 
   const handleAction = (alert: Alert, action: AlertAction) => {
     setSelectedAlert(alert);
-    setActionModalVisible(true);
+    setSelectedAction(action);
+    
+    // Check if action requires admin password
+    if (action.type === 'remove' || action.type === 'markdown') {
+      setPasswordModalVisible(true);
+      setAdminPin("");
+      setPasswordError("");
+    } else {
+      setActionModalVisible(true);
+    }
+  };
+
+  const verifyPassword = async () => {
+    const isValid = await validatePin(adminPin);
+    
+    if (isValid) {
+      setPasswordModalVisible(false);
+      setPasswordError("");
+      executeAction();
+    } else {
+      setPasswordError("Incorrect PIN");
+    }
+  };
+
+  const executeAction = async () => {
+    if (!selectedAlert || !selectedAction) return;
+
+    try {
+      if (selectedAction.type === 'remove') {
+        // Delete the product
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}`,
+          { method: 'DELETE' }
+        );
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          Toast.show({
+            type: "success",
+            text1: "Product Removed",
+            text2: `${selectedAlert.productName} has been deleted`,
+          });
+          await acknowledgeAlert(selectedAlert.alertId, "Removed");
+          refresh();
+        } else {
+          throw new Error(data.message || 'Failed to delete product');
+        }
+      } else if (selectedAction.type === 'markdown') {
+        // Apply discount based on the label
+        let discountPercent = 40; // Default
+        
+        // Parse discount from label (e.g., "Discount 30-50%" or "Discount 15-25%")
+        if (selectedAction.label.includes('30-50')) {
+          discountPercent = 40; // Middle of 30-50%
+        } else if (selectedAction.label.includes('15-25')) {
+          discountPercent = 20; // Middle of 15-25%
+        }
+        
+        console.log('Applying discount:', {
+          productId: selectedAlert.productId,
+          discountPercent,
+          url: `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}/discount`
+        });
+        
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}/discount`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ discountPercent })
+          }
+        );
+        
+        const data = await response.json();
+        console.log('Discount response:', { status: response.status, data });
+        
+        if (response.ok && data.success) {
+          Toast.show({
+            type: "success",
+            text1: "Discount Applied",
+            text2: `${discountPercent}% discount applied to ${selectedAlert.productName}`,
+          });
+          await acknowledgeAlert(selectedAlert.alertId, "Discounted");
+          refresh();
+        } else {
+          throw new Error(data.message || 'Failed to apply discount');
+        }
+      }
+      
+      setSelectedAlert(null);
+      setSelectedAction(null);
+      setAdminPin("");
+    } catch (error: any) {
+      console.error('Action error:', error);
+      Toast.show({
+        type: "error",
+        text1: "Action Failed",
+        text2: error.message || "Please try again",
+      });
+    }
   };
 
   const confirmAction = async () => {
@@ -286,6 +392,72 @@ export default function Alerts() {
           </View>
         </View>
       </Modal>
+
+      {/* Admin Password Modal */}
+      <Modal visible={passwordModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+          >
+            <Ionicons name="lock-closed" size={40} color={theme.primary} style={{ marginBottom: 15 }} />
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Admin Authentication
+            </Text>
+            <Text style={[styles.modalText, { color: theme.subtext, marginBottom: 20 }]}>
+              {selectedAction?.type === 'remove' 
+                ? `Remove ${selectedAlert?.productName} from inventory?`
+                : `Apply ${selectedAction?.label.includes('30-50') ? '40%' : '20%'} discount to ${selectedAlert?.productName}?`
+              }
+            </Text>
+            
+            <View style={[styles.passwordInput, { backgroundColor: theme.background, borderColor: passwordError ? '#FF4444' : theme.border }]}>
+              <Ionicons name="key-outline" size={18} color={theme.subtext} />
+              <TextInput
+                placeholder="Enter 4-digit admin PIN"
+                placeholderTextColor={theme.subtext}
+                style={[styles.passwordField, { color: theme.text }]}
+                value={adminPin}
+                onChangeText={(text) => {
+                  setAdminPin(text);
+                  setPasswordError("");
+                }}
+                secureTextEntry
+                keyboardType="numeric"
+                maxLength={4}
+                autoFocus
+                onSubmitEditing={verifyPassword}
+              />
+            </View>
+            
+            {passwordError ? (
+              <Text style={[styles.errorText, { color: '#FF4444' }]}>
+                {passwordError}
+              </Text>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => {
+                  setPasswordModalVisible(false);
+                  setAdminPin("");
+                  setPasswordError("");
+                }}
+                style={[styles.modalBtn, { backgroundColor: theme.background }]}
+              >
+                <Text style={{ color: theme.text }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={verifyPassword}
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  Confirm
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -390,5 +562,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
+  },
+  passwordInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 10,
+    width: '100%',
+  },
+  passwordField: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 15,
+  },
+  errorText: {
+    fontSize: 12,
+    marginBottom: 15,
+    fontWeight: '600',
   },
 });

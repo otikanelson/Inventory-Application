@@ -1,21 +1,23 @@
-import React, { useEffect, useState } from "react";
-import { Tabs, useRouter, useSegments, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  View,
-  StyleSheet,
-  Dimensions,
-  Platform,
-  Modal,
-  TextInput,
-  Text,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
-import { Svg, Path } from "react-native-svg";
-import { useTheme } from "../../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Tabs, useFocusEffect, useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+    ActivityIndicator,
+    Dimensions,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { Path, Svg } from "react-native-svg";
 import Toast from "react-native-toast-message";
+import { AdminTourOverlay } from "../../components/AdminTourOverlay";
+import { AdminTourProvider } from "../../context/AdminTourContext";
+import { useTheme } from "../../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 
@@ -254,29 +256,30 @@ export default function AdminLayout() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: theme.subtext,
-          tabBarHideOnKeyboard: true,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: "800",
-            marginBottom: Platform.OS === "ios" ? 0 : 10,
-          },
-          tabBarStyle: {
-            position: "absolute",
-            backgroundColor: "transparent",
-            borderTopWidth: 0,
-            elevation: 0,
-            height: Platform.OS === "ios" ? 80 : 70,
-            bottom: Platform.OS === "ios" ? 20 : 0,
-          },
-          tabBarBackground: () => <AdminTabBg color={theme.tabSurface} />,
-        }}
-      >
+    <AdminTourProvider>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarActiveTintColor: theme.primary,
+            tabBarInactiveTintColor: theme.subtext,
+            tabBarHideOnKeyboard: true,
+            tabBarLabelStyle: {
+              fontSize: 10,
+              fontWeight: "800",
+              marginBottom: Platform.OS === "ios" ? 0 : 10,
+            },
+            tabBarStyle: {
+              position: "absolute",
+              backgroundColor: "transparent",
+              borderTopWidth: 0,
+              elevation: 0,
+              height: Platform.OS === "ios" ? 80 : 70,
+              bottom: Platform.OS === "ios" ? 20 : 0,
+            },
+            tabBarBackground: () => <AdminTabBg color={theme.tabSurface} />,
+          }}
+        >
         <Tabs.Screen
           name="sales"
           options={{
@@ -358,6 +361,8 @@ export default function AdminLayout() {
         />
       </Tabs>
 
+      <AdminTourOverlay />
+
       {/* First-Time PIN Setup Modal */}
       <Modal visible={showSetupModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -421,7 +426,8 @@ export default function AdminLayout() {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </AdminTourProvider>
   );
 }
 

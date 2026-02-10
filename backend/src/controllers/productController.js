@@ -278,6 +278,7 @@ exports.processSale = async (req, res) => {
       if (!product) continue;
 
       let remainingToDeduct = item.quantity;
+      const batchesUsed = []; // Track which batches were used
 
       // FEFO Logic: Sort batches by expiry date (Oldest/Soonest first)
       product.batches.sort((a, b) => {
@@ -288,6 +289,16 @@ exports.processSale = async (req, res) => {
 
       for (let batch of product.batches) {
         if (remainingToDeduct <= 0) break;
+
+        const quantityFromBatch = Math.min(batch.quantity, remainingToDeduct);
+        
+        if (quantityFromBatch > 0) {
+          batchesUsed.push({
+            batchNumber: batch.batchNumber,
+            quantity: quantityFromBatch,
+            price: batch.price || item.price || 0
+          });
+        }
 
         if (batch.quantity >= remainingToDeduct) {
           batch.quantity -= remainingToDeduct;
@@ -302,19 +313,23 @@ exports.processSale = async (req, res) => {
       product.batches = product.batches.filter((b) => b.quantity > 0);
       await product.save();
 
-      // Record the sale for analytics
-      const saleRecord = new Sale({
-        productId: product._id,
-        productName: product.name,
-        category: product.category,
-        quantitySold: item.quantity,
-        priceAtSale: item.price || 0,
-        totalAmount: (item.price || 0) * item.quantity,
-        saleDate: new Date(),
-        paymentMethod: item.paymentMethod || 'cash'
-      });
+      // Record the sale for each batch used (for accurate tracking)
+      for (const batchUsed of batchesUsed) {
+        const saleRecord = new Sale({
+          productId: product._id,
+          productName: product.name,
+          batchNumber: batchUsed.batchNumber,
+          category: product.category,
+          quantitySold: batchUsed.quantity,
+          priceAtSale: batchUsed.price,
+          totalAmount: batchUsed.price * batchUsed.quantity,
+          saleDate: new Date(),
+          paymentMethod: item.paymentMethod || 'cash'
+        });
 
-      saleRecords.push(saleRecord);
+        saleRecords.push(saleRecord);
+      }
+
       updatedProducts.push({
         productId: product._id,
         category: product.category,
@@ -386,72 +401,6 @@ exports.processSale = async (req, res) => {
   }
 };
 
-// Update product (for admin edits)
-exports.updateProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, category, imageUrl } = req.body;
-
-    const product = await Product.findByIdAndUpdate(
-      id,
-      {
-        name,
-        category,
-        imageUrl,
-        updatedAt: Date.now(),
-      },
-      { new: true, runValidators: true },
-    );
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    // Invalidate cache after product update
-    const cacheService = require('../services/cacheService');
-    cacheService.invalidatePredictionCache(id, category);
-
-    res.status(200).json({
-      success: true,
-      data: product,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// Delete product (for admin)
-exports.deleteProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const product = await Product.findByIdAndDelete(id);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Product deleted successfully",
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
 // @desc    Update generic price for a product
 // @route   PUT /api/products/:id/generic-price
 // @access  Admin
@@ -490,6 +439,58 @@ exports.updateGenericPrice = async (req, res) => {
       .json({ success: true, message: "Generic price updated", data: product });
   } catch (error) {
     console.error("UpdateGenericPrice Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Apply discount to product (reduce price by percentage)
+// @route   POST /api/products/:id/discount
+// @access  Admin
+exports.applyDiscount = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { discountPercent } = req.body;
+
+    if (!discountPercent || discountPercent < 0 || discountPercent > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid discount percentage (must be 0-100)",
+      });
+    }
+
+    const product = await Product.findById(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    // Apply discount to all batches
+    product.batches.forEach((batch) => {
+      if (batch.price && batch.price > 0) {
+        const discountAmount = (batch.price * discountPercent) / 100;
+        batch.price = Math.max(0, batch.price - discountAmount);
+      }
+    });
+
+    // Also apply to generic price if it exists
+    if (product.genericPrice && product.genericPrice > 0) {
+      const discountAmount = (product.genericPrice * discountPercent) / 100;
+      product.genericPrice = Math.max(0, product.genericPrice - discountAmount);
+    }
+
+    product.updatedAt = Date.now();
+    await product.save();
+
+    res.status(200).json({
+      success: true,
+      message: `${discountPercent}% discount applied successfully`,
+      data: product,
+    });
+  } catch (error) {
+    console.error("ApplyDiscount Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

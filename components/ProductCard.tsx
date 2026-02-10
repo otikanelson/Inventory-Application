@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    Animated,
+    Dimensions,
+    Image,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { Product } from "../hooks/useProducts";
@@ -121,9 +121,10 @@ export const ProductCardSkeleton = () => {
 interface ProductCardProps {
   item: Product;
   prediction?: Prediction | null;
+  sortField?: 'name' | 'totalQuantity' | 'risk' | 'velocity';
 }
 
-export const ProductCard = React.memo(({ item, prediction }: ProductCardProps) => {
+export const ProductCard = React.memo(({ item, prediction, sortField = 'name' }: ProductCardProps) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const [isLoaded, setIsLoaded] = useState(false);
@@ -221,12 +222,34 @@ export const ProductCard = React.memo(({ item, prediction }: ProductCardProps) =
 
       <View style={styles.footer}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.quantityLabel, { color: theme.subtext }]}>
-            {item.totalQuantity} Items
-          </Text>
-          <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
-            {item.name}
-          </Text>
+          {sortField === 'risk' && prediction ? (
+            <>
+              <Text style={[styles.quantityLabel, { color: riskColor || theme.subtext }]}>
+                Risk Score
+              </Text>
+              <Text style={[styles.name, { color: riskColor || theme.text }]} numberOfLines={1}>
+                {Math.round(riskScore)}/100
+              </Text>
+            </>
+          ) : sortField === 'velocity' && prediction ? (
+            <>
+              <Text style={[styles.quantityLabel, { color: velocityIndicator?.color || theme.subtext }]}>
+                Velocity
+              </Text>
+              <Text style={[styles.name, { color: velocityIndicator?.color || theme.text }]} numberOfLines={1}>
+                {velocity.toFixed(1)}/day
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.quantityLabel, { color: theme.subtext }]}>
+                {item.totalQuantity} Items
+              </Text>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+            </>
+          )}
         </View>
         <View
           style={[

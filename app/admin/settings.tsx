@@ -19,6 +19,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { useAdminTour } from "../../context/AdminTourContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useAlerts } from "../../hooks/useAlerts";
 
@@ -28,6 +29,7 @@ export default function AdminSettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const router = useRouter();
   const { settings: alertSettings, updateSettings } = useAlerts();
+  const { resetTour, startTour } = useAdminTour();
 
   // PIN Update State
   const [showPinModal, setShowPinModal] = useState(false);
@@ -930,6 +932,41 @@ export default function AdminSettingsScreen() {
           )}
         </View>
 
+        {/* HELP & SUPPORT SECTION */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+            HELP & SUPPORT
+          </Text>
+          <SettingRow
+            icon="help-circle-outline"
+            label="Restart Admin Tour"
+            description="See the admin onboarding tour again to learn about all features"
+            onPress={async () => {
+              try {
+                await resetTour();
+                Toast.show({
+                  type: 'success',
+                  text1: 'Tour Reset',
+                  text2: 'Go to Admin Dashboard to see the tour again'
+                });
+                // Navigate to admin dashboard and start tour
+                router.push('../admin');
+                setTimeout(() => {
+                  startTour();
+                }, 500);
+              } catch (error) {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Error',
+                  text2: 'Could not reset tour'
+                });
+              }
+            }}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+        </View>
+
         {/* DATA MANAGEMENT */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>
@@ -991,6 +1028,7 @@ export default function AdminSettingsScreen() {
         <Text style={styles.versionText}>
           Build v2.0.5 - Production Environment
         </Text>
+
       </ScrollView>
 
       {/* PIN UPDATE MODAL */}
@@ -1158,6 +1196,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 16,
     borderBottomWidth: 1,
+  },
+  settingLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  settingText: {
+    flex: 1,
   },
   settingMain: { flexDirection: "row", alignItems: "center", flex: 1 },
   iconBox: {

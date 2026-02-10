@@ -3,21 +3,22 @@ import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  ImageBackground,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIInsightsBadge } from "../../components/AIInsightsBadge";
 import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
 import { useTheme } from "../../context/ThemeContext";
 import { useAIPredictions } from "../../hooks/useAIPredictions";
+import { useAlerts } from "../../hooks/useAlerts";
 import { useProducts } from "../../hooks/useProducts";
 import { Prediction } from "../../types/ai-predictions";
 
@@ -155,6 +156,7 @@ export default function Dashboard() {
   const { theme, isDark } = useTheme();
   const { products, recentlySold, loading, refresh, inventoryStats } = useProducts();
   const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
+  const { summary: alertSummary } = useAlerts();
 
   const [activeTab, setActiveTab] = useState<"stocked" | "sold">("stocked");
   const [displayLimit, setDisplayLimit] = useState(6);
@@ -321,12 +323,14 @@ export default function Dashboard() {
                     size={20}
                     color={theme.text}
                   />
-                  <View
-                    style={[
-                      styles.dot,
-                      { backgroundColor: theme.notification },
-                    ]}
-                  />
+                  {alertSummary && alertSummary.total > 0 && (
+                    <View
+                      style={[
+                        styles.dot,
+                        { backgroundColor: theme.notification },
+                      ]}
+                    />
+                  )}
                 </Pressable>
                 <Pressable
                   onPress={() => router.push("/settings" as any)}

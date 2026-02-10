@@ -16,6 +16,7 @@ export interface Batch {
   batchNumber: string;
   quantity: number;
   expiryDate: string;
+  price?: number;
 }
 
 export interface Product {

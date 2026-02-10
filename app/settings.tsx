@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+    ImageBackground,
     Modal,
     Pressable,
     ScrollView,
@@ -10,17 +11,18 @@ import {
     Switch,
     Text,
     TextInput,
-    ImageBackground,
     View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../context/ThemeContext";
+import { useTour } from "../context/TourContext";
 import { useAlerts } from "../hooks/useAlerts";
 
 export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const router = useRouter();
   const { settings: alertSettings, updateSettings } = useAlerts();
+  const { resetTour, startTour } = useTour();
 
   const backgroundImage = isDark
     ? require("../assets/images/Background7.png")
@@ -300,6 +302,41 @@ export default function SettingsScreen() {
         </SettingRow>
       </View>
 
+      {/* HELP & SUPPORT SECTION */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+          HELP & SUPPORT
+        </Text>
+        <SettingRow
+          icon="help-circle-outline"
+          label="Restart App Tour"
+          description="See the onboarding tour again to learn about all features"
+          onPress={async () => {
+            try {
+              await resetTour();
+              Toast.show({
+                type: 'success',
+                text1: 'Tour Reset',
+                text2: 'Go to Dashboard to see the tour again'
+              });
+              // Navigate to dashboard and start tour
+              router.push('/');
+              setTimeout(() => {
+                startTour();
+              }, 500);
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Could not reset tour'
+              });
+            }
+          }}
+        >
+          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+        </SettingRow>
+      </View>
+
       {/* ALERTS CONFIGURATION */}
       <View style={[styles.section, {marginBottom: 0}]}>
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
@@ -422,6 +459,7 @@ export default function SettingsScreen() {
       </View>
 
       <View style={{ height: 10 }} />
+
         <Text style={styles.versionText}>
           Build v2.0.5 - Production Environment
         </Text>

@@ -9,6 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
+import { useAlerts } from "../hooks/useAlerts";
 
 export default function WelcomeScreen() {
   const router = useRouter();
