@@ -1,5 +1,9 @@
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
+const tensorflowService = require('./tensorflowService');
+
+// TensorFlow feature flag (can be toggled via environment variable)
+const USE_TENSORFLOW = process.env.USE_TENSORFLOW === 'true' || false;
 
 /**
  * Calculate moving average for demand forecasting
@@ -147,6 +151,7 @@ const generateRecommendations = (product, velocity, riskScore, forecast) => {
 
 /**
  * Main function: Get predictive analytics for a product
+ * Uses TensorFlow LSTM if enabled and sufficient data exists, otherwise falls back to statistical methods
  */
 const getPredictiveAnalytics = async (productId) => {
   try {
@@ -154,7 +159,7 @@ const getPredictiveAnalytics = async (productId) => {
     const product = await Product.findById(productId);
     if (!product) throw new Error('Product not found');
     
-    // Get sales history (last 30 days)
+    // Get sales history (last 30 days for statistical, 90 for TensorFlow)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
@@ -166,28 +171,57 @@ const getPredictiveAnalytics = async (productId) => {
     // Extract daily quantities
     const dailyQuantities = salesHistory.map(s => s.quantitySold);
     
-    // Calculate metrics
+    // Calculate basic metrics (always needed)
     const velocity = calculateVelocity(salesHistory, 30);
     const movingAvg = calculateMovingAverage(dailyQuantities, 7);
     const trend = calculateTrend(dailyQuantities);
     const riskScore = calculateExpiryRisk(product, velocity);
-    
-    // Forecast next 7 days demand
-    const predictedDemand = Math.round(movingAvg * 7);
     
     // Calculate days until stockout
     const daysUntilStockout = velocity > 0 
       ? Math.ceil(product.totalQuantity / velocity)
       : 999;
     
-    // Generate forecast object
-    const forecast = {
-      next7Days: predictedDemand,
-      next14Days: Math.round(movingAvg * 14),
-      next30Days: Math.round(movingAvg * 30),
-      confidence: salesHistory.length >= 14 ? 'high' : salesHistory.length >= 7 ? 'medium' : 'low',
-      predicted: predictedDemand
-    };
+    let forecast;
+    let modelType = 'statistical';
+    
+    // Try TensorFlow prediction if enabled and sufficient data
+    if (USE_TENSORFLOW && salesHistory.length >= 14) {
+      try {
+        console.log(`Attempting TensorFlow forecast for product ${productId}...`);
+        const tfForecast = await tensorflowService.getTensorFlowForecast(productId, 30);
+        
+        if (tfForecast) {
+          forecast = {
+            next7Days: tfForecast.next7Days,
+            next14Days: tfForecast.next14Days,
+            next30Days: tfForecast.next30Days,
+            confidence: tfForecast.confidence,
+            predicted: tfForecast.next7Days,
+            dailyPredictions: tfForecast.dailyPredictions
+          };
+          modelType = 'LSTM';
+          console.log(`✅ TensorFlow forecast successful for ${productId}`);
+        } else {
+          throw new Error('TensorFlow forecast returned null');
+        }
+      } catch (tfError) {
+        console.log(`TensorFlow forecast failed, using statistical fallback: ${tfError.message}`);
+        // Fall through to statistical method
+      }
+    }
+    
+    // Fallback to statistical forecast if TensorFlow not used or failed
+    if (!forecast) {
+      const predictedDemand = Math.round(movingAvg * 7);
+      forecast = {
+        next7Days: predictedDemand,
+        next14Days: Math.round(movingAvg * 14),
+        next30Days: Math.round(movingAvg * 30),
+        confidence: salesHistory.length >= 14 ? 'high' : salesHistory.length >= 7 ? 'medium' : 'low',
+        predicted: predictedDemand
+      };
+    }
     
     // Generate recommendations
     const recommendations = generateRecommendations(product, velocity, riskScore, forecast);
@@ -196,6 +230,7 @@ const getPredictiveAnalytics = async (productId) => {
       productId: product._id,
       productName: product.name,
       currentStock: product.totalQuantity,
+      modelType, // 'LSTM' or 'statistical'
       metrics: {
         velocity: Math.round(velocity * 10) / 10, // Units per day
         movingAverage: Math.round(movingAvg * 10) / 10,
