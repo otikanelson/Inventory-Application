@@ -1,19 +1,21 @@
+import { HelpTooltip } from "@/components/HelpTooltip";
+import { ProductCard } from "@/components/ProductCard";
+import { useTheme } from "@/context/ThemeContext";
+import { Product, useProducts } from "@/hooks/useProducts";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    FlatList,
-    ImageBackground,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  FlatList,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
-import { useTheme } from "../../context/ThemeContext";
-import { Product, useProducts } from "../../hooks/useProducts";
 
 export default function InventoryScreen() {
   const router = useRouter();
@@ -22,7 +24,7 @@ export default function InventoryScreen() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
-  const [displayMode, setDisplayMode] = useState<"card" | "list">("card");
+  const [displayMode, setDisplayMode] = useState<"card" | "list" | "rect">("card");
   const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
 
   // Fetch analytics for all products
@@ -116,7 +118,21 @@ export default function InventoryScreen() {
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>STOCK_MANAGEMENT</Text>
-          <Text style={[styles.title, { color: theme.text }]}>INVENTORY</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.title, { color: theme.text }]}>INVENTORY</Text>
+            <HelpTooltip
+              title="Inventory Management"
+              content={[
+                "Search: Find products by name, category, or barcode. Use the barcode icon to scan and search.",
+                "Sort Options: Cycle through NAME, QUANTITY, RISK (AI-predicted waste risk), and VELOCITY (sales speed).",
+                "View Modes: Switch between card view (detailed) and list view (compact).",
+                "Risk Indicators: Red dots show high-risk items. Flash icon = fast-moving, hourglass = slow-moving."
+              ]}
+              icon="help-circle-outline"
+              iconSize={18}
+              iconColor={theme.primary}
+            />
+          </View>
 
           <View style={styles.searchRow}>
             <View
@@ -173,12 +189,15 @@ export default function InventoryScreen() {
                 styles.sortBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
-              onPress={() =>
-                setDisplayMode(displayMode === "card" ? "list" : "card")
-              }
+              onPress={() => {
+                const modes: Array<"card" | "list" | "rect"> = ["card", "list", "rect"];
+                const currentIndex = modes.indexOf(displayMode);
+                const nextIndex = (currentIndex + 1) % modes.length;
+                setDisplayMode(modes[nextIndex]);
+              }}
             >
               <Ionicons
-                name={displayMode === "card" ? "list" : "grid"}
+                name={displayMode === "card" ? "list" : displayMode === "list" ? "grid-outline" : "grid"}
                 size={20}
                 color={theme.primary}
               />
@@ -202,6 +221,9 @@ export default function InventoryScreen() {
           data={sortedProducts}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listPadding}
+          numColumns={displayMode === "rect" ? 2 : 1}
+          key={displayMode === "rect" ? "grid" : "list"}
+          columnWrapperStyle={displayMode === "rect" ? styles.columnWrapper : undefined}
           refreshControl={
             <RefreshControl
               refreshing={loading}
@@ -300,6 +322,25 @@ export default function InventoryScreen() {
                 </Pressable>
               );
             }
+            
+            if (displayMode === "rect") {
+              // Rectangular card view (like dashboard)
+              const prediction = productAnalytics ? {
+                metrics: {
+                  riskScore,
+                  velocity
+                }
+              } : null;
+              
+              return (
+                <ProductCard 
+                  item={item}
+                  prediction={prediction as any}
+                  sortField={sortField as any}
+                />
+              );
+            }
+            
             return (
               <Pressable
                 onPress={() => router.push(`/product/${item._id}` as Href)}
@@ -315,7 +356,7 @@ export default function InventoryScreen() {
                 
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
-                    {item.imageUrl && item.imageUrl !== "cube" ? (
+                    {item.imageUrl && item.imageUrl !== "cube" && item.imageUrl !== "" ? (
                       <ImageBackground
                         source={{ uri: item.imageUrl }}
                         style={styles.image}
@@ -508,5 +549,9 @@ const styles = StyleSheet.create({
   cardNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
   },
 });

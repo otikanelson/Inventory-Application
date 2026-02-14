@@ -1,23 +1,85 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Image,
-  ImageBackground,
-} from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+    Image,
+    ImageBackground,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { HelpTooltipIntroModal } from "@/components/HelpTooltipIntroModal";
+import { AIOnboardingModal } from "../components/AIOnboardingModal";
 import { useTheme } from "../context/ThemeContext";
-import { useAlerts } from "../hooks/useAlerts";
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
+  const [showAIOnboarding, setShowAIOnboarding] = useState(false);
+  const [showHelpTooltipIntro, setShowHelpTooltipIntro] = useState(false);
 
   const backgroundImage = isDark
     ? require("../assets/images/Background7.png")
     : require("../assets/images/Background9.png");
+
+  useEffect(() => {
+    checkFirstLaunch();
+  }, []);
+
+  const checkFirstLaunch = async () => {
+    try {
+      const hasSeenOnboarding = await AsyncStorage.getItem('ai_onboarding_seen');
+      const hasSeenHelpIntro = await AsyncStorage.getItem('help_tooltip_intro_seen');
+      
+      if (!hasSeenOnboarding) {
+        // Show AI onboarding after a short delay
+        setTimeout(() => {
+          setShowAIOnboarding(true);
+        }, 1000);
+      } else if (!hasSeenHelpIntro) {
+        // If AI onboarding was already seen but help intro wasn't, show help intro
+        setTimeout(() => {
+          setShowHelpTooltipIntro(true);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error checking first launch:', error);
+    }
+  };
+
+  const handleOnboardingClose = async () => {
+    try {
+      await AsyncStorage.setItem('ai_onboarding_seen', 'true');
+      setShowAIOnboarding(false);
+      
+      // Check if user has seen help tooltip intro
+      const hasSeenHelpIntro = await AsyncStorage.getItem('help_tooltip_intro_seen');
+      if (!hasSeenHelpIntro) {
+        // Show help tooltip intro after a short delay
+        setTimeout(() => {
+          setShowHelpTooltipIntro(true);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error saving onboarding status:', error);
+    }
+  };
+
+  const handleHelpIntroClose = async () => {
+    try {
+      await AsyncStorage.setItem('help_tooltip_intro_seen', 'true');
+      setShowHelpTooltipIntro(false);
+    } catch (error) {
+      console.error('Error saving help intro status:', error);
+    }
+  };
+
+  const handleLearnMore = () => {
+    setShowAIOnboarding(false);
+    router.push("/ai-info" as any);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -80,6 +142,19 @@ export default function WelcomeScreen() {
           </View>
         </Pressable>
       </View>
+
+      {/* AI Onboarding Modal */}
+      <AIOnboardingModal
+        visible={showAIOnboarding}
+        onClose={handleOnboardingClose}
+        onLearnMore={handleLearnMore}
+      />
+
+      {/* Help Tooltip Introduction Modal */}
+      <HelpTooltipIntroModal
+        visible={showHelpTooltipIntro}
+        onClose={handleHelpIntroClose}
+      />
     </View>
   );
 }

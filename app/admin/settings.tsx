@@ -1,3 +1,4 @@
+import { AIStatusIndicator } from "@/components/AIStatusIndicator";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -8,6 +9,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -19,6 +21,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useAdminTour } from "../../context/AdminTourContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useAlerts } from "../../hooks/useAlerts";
@@ -54,10 +57,62 @@ export default function AdminSettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [confidenceFilter, setConfidenceFilter] = useState(60);
 
+  // Alert Threshold State
+  const [thresholds, setThresholds] = useState({
+    critical: 7,
+    highUrgency: 14,
+    earlyWarning: 30
+  });
+
+  // Category Management State
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryThresholdsEnabled, setCategoryThresholdsEnabled] = useState(false);
+  const [categoryThresholds, setCategoryThresholds] = useState({
+    critical: 7,
+    highUrgency: 14,
+    earlyWarning: 30
+  });
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
   // Load settings on mount
   useEffect(() => {
     loadSettings();
+    loadAlertSettings();
+    loadCategories();
   }, []);
+
+  const loadAlertSettings = async () => {
+    try {
+      if (alertSettings?.thresholds) {
+        setThresholds({
+          critical: alertSettings.thresholds.critical || 7,
+          highUrgency: alertSettings.thresholds.highUrgency || 14,
+          earlyWarning: alertSettings.thresholds.earlyWarning || 30
+        });
+      }
+    } catch (error) {
+      console.error('Error loading alert settings:', error);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/categories`);
+      if (response.data.success) {
+        setCategories(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  // Update loadAlertSettings when alertSettings changes
+  useEffect(() => {
+    loadAlertSettings();
+  }, [alertSettings]);
 
   const loadSettings = async () => {
     try {
@@ -306,8 +361,18 @@ export default function AdminSettingsScreen() {
 
   const handleLogout = async () => {
     try {
+      // Clear admin session
       await AsyncStorage.removeItem('admin_session');
       await AsyncStorage.removeItem('admin_session_time');
+      
+      // Clear auth session
+      await AsyncStorage.multiRemove([
+        'auth_session_token',
+        'auth_last_login',
+        'auth_user_role',
+        'auth_user_id',
+        'auth_user_name',
+      ]);
       
       Toast.show({
         type: 'success',
@@ -315,7 +380,7 @@ export default function AdminSettingsScreen() {
         text2: 'Admin session ended'
       });
 
-      router.replace('../../(tabs)/');
+      router.replace('/auth/login' as any);
     } catch (error) {
       Toast.show({
         type: 'error',
@@ -639,6 +704,168 @@ export default function AdminSettingsScreen() {
     }
   };
 
+  // Alert Threshold Handlers
+  const handleSaveThresholds = async () => {
+    // Validate threshold ordering
+    if (thresholds.critical >= thresholds.highUrgency) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Configuration',
+        text2: 'Critical must be less than High Urgency'
+      });
+      return;
+    }
+
+    if (thresholds.highUrgency >= thresholds.earlyWarning) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Configuration',
+        text2: 'High Urgency must be less than Early Warning'
+      });
+      return;
+    }
+
+    const result = await updateSettings({ thresholds });
+
+    if (result.success) {
+      Toast.show({
+        type: 'success',
+        text1: 'Settings Saved',
+        text2: 'Global alert thresholds updated'
+      });
+    } else {
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Could not update settings'
+      });
+    }
+  };
+
+  // Category Management Handlers
+  const openCreateCategoryModal = () => {
+    setIsCreatingCategory(true);
+    setSelectedCategory(null);
+    setCategoryName("");
+    setCategoryThresholdsEnabled(false);
+    setCategoryThresholds({
+      critical: thresholds.critical,
+      highUrgency: thresholds.highUrgency,
+      earlyWarning: thresholds.earlyWarning
+    });
+    setCategoryModalVisible(true);
+  };
+
+  const openEditCategoryModal = (category: any) => {
+    setIsCreatingCategory(false);
+    setSelectedCategory(category);
+    setCategoryName(category.name);
+    setCategoryThresholdsEnabled(category.customAlertThresholds?.enabled || false);
+    setCategoryThresholds({
+      critical: category.customAlertThresholds?.critical || thresholds.critical,
+      highUrgency: category.customAlertThresholds?.highUrgency || thresholds.highUrgency,
+      earlyWarning: category.customAlertThresholds?.earlyWarning || thresholds.earlyWarning
+    });
+    setCategoryModalVisible(true);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!categoryName.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Name',
+        text2: 'Category name cannot be empty'
+      });
+      return;
+    }
+
+    // Validate thresholds if enabled
+    if (categoryThresholdsEnabled) {
+      if (categoryThresholds.critical >= categoryThresholds.highUrgency) {
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid Thresholds',
+          text2: 'Critical must be less than High Urgency'
+        });
+        return;
+      }
+
+      if (categoryThresholds.highUrgency >= categoryThresholds.earlyWarning) {
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid Thresholds',
+          text2: 'High Urgency must be less than Early Warning'
+        });
+        return;
+      }
+    }
+
+    try {
+      const payload = {
+        name: categoryName.trim(),
+        customAlertThresholds: categoryThresholdsEnabled ? {
+          enabled: true,
+          ...categoryThresholds
+        } : { enabled: false }
+      };
+
+      if (isCreatingCategory) {
+        // Create new category
+        const response = await axios.post(`${API_URL}/categories`, payload);
+        if (response.data.success) {
+          Toast.show({
+            type: 'success',
+            text1: 'Category Created',
+            text2: `${categoryName} has been added`
+          });
+          await loadCategories();
+          setCategoryModalVisible(false);
+        }
+      } else {
+        // Update existing category
+        const response = await axios.put(`${API_URL}/categories/${selectedCategory._id}`, payload);
+        if (response.data.success) {
+          Toast.show({
+            type: 'success',
+            text1: 'Category Updated',
+            text2: `${categoryName} has been updated`
+          });
+          await loadCategories();
+          setCategoryModalVisible(false);
+        }
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: isCreatingCategory ? 'Create Failed' : 'Update Failed',
+        text2: error.response?.data?.error || 'Could not save category'
+      });
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!selectedCategory) return;
+
+    try {
+      const response = await axios.delete(`${API_URL}/categories/${selectedCategory._id}`);
+      if (response.data.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Category Deleted',
+          text2: `${selectedCategory.name} has been removed`
+        });
+        await loadCategories();
+        setCategoryModalVisible(false);
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: error.response?.data?.error || 'Could not delete category'
+      });
+    }
+  };
+
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
@@ -682,12 +909,34 @@ export default function AdminSettingsScreen() {
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={[styles.headerSub, { color: theme.primary }]}>
-            ADMIN_PANEL
-          </Text>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            SETTINGS
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View>
+              <Text style={[styles.headerSub, { color: theme.primary }]}>
+                ADMIN_PANEL
+              </Text>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>
+                SETTINGS
+              </Text>
+            </View>
+            <HelpTooltip
+              style={{marginTop: 20}}
+              title="Admin Settings"
+              content={[
+                "Security PIN: 4-digit code to protect admin features. Set this up first to secure your inventory system. Without a PIN, anyone can access admin functions.",
+                "Auto-Logout: Automatically logs you out after 30/45/60 minutes of no activity. Prevents unauthorized access if you forget to log out.",
+                "Staff Management: Add staff members who can manage inventory without accessing admin settings. Each staff member gets their own 4-digit PIN for secure login.",
+                "Alert Thresholds: Configure when products trigger alerts based on days until expiry. Set global defaults that apply to all products unless overridden by category-specific thresholds.",
+                "Category Management: Create and organize product categories. Each category can have custom alert thresholds. Categories with products cannot be deleted but can be renamed (updates all products automatically).",
+                "Risk Threshold: The score (0-100) at which products are flagged as critical. Default is 70+. Lower numbers = more products flagged as risky.",
+                "Confidence Filter: Minimum confidence level (0-100%) for AI predictions to show. 60% means only show predictions the AI is at least 60% sure about. Higher = fewer but more reliable predictions.",
+                "Auto-Backup: System automatically saves all inventory, sales, and AI data every 7 days. You can download this backup file to restore data if needed.",
+                "Export CSV: Download current inventory as a spreadsheet file to open in Excel or Google Sheets for analysis or record-keeping."
+              ]}
+              icon="help-circle"
+              iconSize={18}
+              iconColor={theme.primary}
+            />
+          </View>
         </View>
 
         {/* SECURITY SECTION */}
@@ -810,31 +1059,91 @@ export default function AdminSettingsScreen() {
           )}
         </View>
 
-        {/* APPEARANCE SECTION */}
+        {/* STAFF MANAGEMENT SECTION */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-            APPEARANCE
-          </Text>
-          
-          <SettingRow
-            icon="moon-outline"
-            label="Dark Mode"
-            description="Switch between light and dark themes"
-          >
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ true: theme.primary }}
-            />
-          </SettingRow>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 0 }]}>
+                STAFF MANAGEMENT
+              </Text>
+              <HelpTooltip
+                title="Staff Management"
+                content={[
+                  "Add staff members who can access the app with limited permissions.",
+                  "Staff can view inventory, add products, process sales, and scan barcodes.",
+                  "Staff cannot access admin settings, delete products, or manage other staff.",
+                  "Each staff member gets their own 4-digit PIN for secure login.",
+                  "You can add multiple staff members from this section."
+                ]}
+                icon="help-circle-outline"
+                iconSize={14}
+                iconColor={theme.primary}
+              />
+            </View>
+            <Pressable
+              style={[styles.addCategoryBtn, { backgroundColor: theme.primary }]}
+              onPress={() => router.replace('/auth/staff-register' as any)}
+            >
+              <Ionicons name="person-add" size={20} color="#FFF" />
+              <Text style={styles.addCategoryText}>ADD STAFF</Text>
+            </Pressable>
+          </View>
+
+          <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={styles.infoRow}>
+              <View style={[styles.featureIcon, { backgroundColor: theme.primary + '15' }]}>
+                <Ionicons name="people" size={24} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.infoTitle, { color: theme.text }]}>
+                  Staff Access Control
+                </Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>
+                  Staff members can manage daily operations without accessing sensitive admin features
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.permissionsList}>
+              <Text style={[styles.permissionsLabel, { color: theme.text }]}>
+                Staff Permissions:
+              </Text>
+              <View style={styles.permissionItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                <Text style={[styles.permissionText, { color: theme.text }]}>
+                  View & manage inventory
+                </Text>
+              </View>
+              <View style={styles.permissionItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                <Text style={[styles.permissionText, { color: theme.text }]}>
+                  Add & edit products
+                </Text>
+              </View>
+              <View style={styles.permissionItem}>
+                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                <Text style={[styles.permissionText, { color: theme.text }]}>
+                  Process sales
+                </Text>
+              </View>
+              <View style={styles.permissionItem}>
+                <Ionicons name="close-circle" size={16} color="#FF3B30" />
+                <Text style={[styles.permissionText, { color: theme.subtext }]}>
+                  Access admin settings
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* AI SETTINGS SECTION */}
         <View style={styles.section}>
+                        
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.primary }]}>
               AI PREDICTIONS
             </Text>
+
             <View style={[styles.statusBadge, { backgroundColor: aiEnabled ? '#34C759' + '15' : theme.border, borderColor: aiEnabled ? '#34C759' : theme.border }]}>
               <Ionicons name={aiEnabled ? "checkmark-circle" : "close-circle"} size={14} color={aiEnabled ? '#34C759' : theme.subtext} />
               <Text style={[styles.statusBadgeText, { color: aiEnabled ? '#34C759' : theme.subtext }]}>
@@ -842,6 +1151,9 @@ export default function AdminSettingsScreen() {
               </Text>
             </View>
           </View>
+
+          {/* AI Status Indicator */}
+          <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
 
           <SettingRow
             icon="analytics-outline"
@@ -932,8 +1244,224 @@ export default function AdminSettingsScreen() {
           )}
         </View>
 
-        {/* HELP & SUPPORT SECTION */}
+
+        {/* ALERT THRESHOLDS SECTION */}
         <View style={styles.section}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 }}>
+            <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 0 }]}>
+              ALERT THRESHOLDS
+            </Text>
+            <HelpTooltip
+              title="Alert Thresholds"
+              content={[
+                "Configure when you receive alerts based on days until product expiry.",
+                "Critical Alert: Immediate action needed (default 7 days). Products at this stage should be discounted or removed.",
+                "High Urgency: Prioritize for sale (default 14 days). Start promoting these products.",
+                "Early Warning: Plan ahead (default 30 days). Monitor stock levels and adjust orders.",
+                "Thresholds must be in ascending order: Critical < High < Early.",
+                "These are global defaults. You can set category-specific thresholds below."
+              ]}
+              icon="help-circle-outline"
+              iconSize={14}
+              iconColor={theme.primary}
+            />
+          </View>
+
+          <View
+            style={[
+              styles.configCard,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+          >
+            <Text style={[styles.cardTitle, { color: theme.text }]}>
+              Global Expiry Thresholds
+            </Text>
+            <Text style={[styles.cardDesc, { color: theme.subtext }]}>
+              Default thresholds for all products (can be overridden per category)
+            </Text>
+
+            {/* Critical Alert */}
+            <View style={styles.thresholdRow}>
+              <View style={styles.thresholdInfo}>
+                <View style={[styles.thresholdDot, { backgroundColor: "#FF3B30" }]} />
+                <View style={styles.thresholdTextContainer}>
+                  <Text style={[styles.thresholdLabel, { color: theme.text }]}>
+                    Critical Alert
+                  </Text>
+                  <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
+                    Immediate action required
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.thresholdInput}>
+                <TextInput
+                  style={[
+                    styles.numberInput,
+                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                  ]}
+                  keyboardType="numeric"
+                  value={thresholds.critical.toString()}
+                  onChangeText={(val) =>
+                    setThresholds({ ...thresholds, critical: parseInt(val) || 0 })
+                  }
+                />
+                <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
+                  days
+                </Text>
+              </View>
+            </View>
+
+            {/* High Urgency Alert */}
+            <View style={styles.thresholdRow}>
+              <View style={styles.thresholdInfo}>
+                <View style={[styles.thresholdDot, { backgroundColor: "#FF9500" }]} />
+                <View style={styles.thresholdTextContainer}>
+                  <Text style={[styles.thresholdLabel, { color: theme.text }]}>
+                    High Urgency
+                  </Text>
+                  <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
+                    Prioritize for sale
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.thresholdInput}>
+                <TextInput
+                  style={[
+                    styles.numberInput,
+                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                  ]}
+                  keyboardType="numeric"
+                  value={thresholds.highUrgency.toString()}
+                  onChangeText={(val) =>
+                    setThresholds({ ...thresholds, highUrgency: parseInt(val) || 0 })
+                  }
+                />
+                <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
+                  days
+                </Text>
+              </View>
+            </View>
+
+            {/* Early Warning Alert */}
+            <View style={[styles.thresholdRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.thresholdInfo}>
+                <View style={[styles.thresholdDot, { backgroundColor: "#FFD60A" }]} />
+                <View style={styles.thresholdTextContainer}>
+                  <Text style={[styles.thresholdLabel, { color: theme.text }]}>
+                    Early Warning
+                  </Text>
+                  <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
+                    Plan ahead
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.thresholdInput}>
+                <TextInput
+                  style={[
+                    styles.numberInput,
+                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                  ]}
+                  keyboardType="numeric"
+                  value={thresholds.earlyWarning.toString()}
+                  onChangeText={(val) =>
+                    setThresholds({ ...thresholds, earlyWarning: parseInt(val) || 0 })
+                  }
+                />
+                <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
+                  days
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={[styles.saveBtn, { backgroundColor: theme.primary }]}
+              onPress={handleSaveThresholds}
+            >
+              <Text style={styles.saveBtnText}>SAVE GLOBAL THRESHOLDS</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* CATEGORY MANAGEMENT SECTION */}
+        <View style={styles.section}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 0 }]}>
+                CATEGORY MANAGEMENT
+              </Text>
+              <HelpTooltip
+                title="Category Management"
+                content={[
+                  "Create and manage product categories for your inventory.",
+                  "Categories help organize products and can have custom alert thresholds.",
+                  "Example: Set shorter thresholds for Dairy (5/10/20 days) vs Canned Goods (14/30/60 days).",
+                  "Products can only be assigned to categories you create here.",
+                  "Cannot delete categories that have products assigned to them."
+                ]}
+                icon="help-circle-outline"
+                iconSize={14}
+                iconColor={theme.primary}
+              />
+            </View>
+            <Pressable
+              style={[styles.addCategoryBtn, { backgroundColor: theme.primary }]}
+              onPress={openCreateCategoryModal}
+            >
+              <Ionicons name="add" size={20} color="#FFF" />
+              <Text style={styles.addCategoryText}>NEW</Text>
+            </Pressable>
+          </View>
+
+          {categories.length === 0 ? (
+            <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="pricetags-outline" size={48} color={theme.subtext} />
+              <Text style={[styles.emptyStateText, { color: theme.text }]}>
+                No Categories Yet
+              </Text>
+              <Text style={[styles.emptyStateDesc, { color: theme.subtext }]}>
+                Create categories to organize your products
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.categoryGrid}>
+              {categories.map((category) => (
+                <Pressable
+                  key={category._id}
+                  style={[
+                    styles.categoryCard,
+                    { 
+                      backgroundColor: theme.surface,
+                      borderColor: category.customAlertThresholds?.enabled ? theme.primary : theme.border
+                    }
+                  ]}
+                  onPress={() => openEditCategoryModal(category)}
+                >
+                  <View style={styles.categoryCardHeader}>
+                    <Text style={[styles.categoryCardName, { color: theme.text }]}>
+                      {category.name}
+                    </Text>
+                    {category.customAlertThresholds?.enabled && (
+                      <View style={[styles.customBadge, { backgroundColor: theme.primary + '20' }]}>
+                        <Ionicons name="settings" size={12} color={theme.primary} />
+                      </View>
+                    )}
+                  </View>
+                  {category.customAlertThresholds?.enabled && (
+                    <Text style={[styles.categoryCardThresholds, { color: theme.subtext }]}>
+                      {category.customAlertThresholds.critical}/{category.customAlertThresholds.highUrgency}/{category.customAlertThresholds.earlyWarning} days
+                    </Text>
+                  )}
+                  <Text style={[styles.categoryCardCount, { color: theme.subtext }]}>
+                    {category.productCount || 0} products
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* HELP & SUPPORT SECTION */}
+        <View style={[styles.section, {marginBottom: 20}]}>
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>
             HELP & SUPPORT
           </Text>
@@ -964,6 +1492,25 @@ export default function AdminSettingsScreen() {
             }}
           >
             <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+        </View>
+
+        {/* APPEARANCE SECTION */}
+        <View style={[styles.section, {marginBottom: 20}]}>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+            APPEARANCE
+          </Text>
+          
+          <SettingRow
+            icon="moon-outline"
+            label="Dark Mode"
+            description="Switch between light and dark themes"
+          >
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ true: theme.primary }}
+            />
           </SettingRow>
         </View>
 
@@ -1155,6 +1702,193 @@ export default function AdminSettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* CATEGORY MODAL */}
+      <Modal visible={categoryModalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable 
+            style={StyleSheet.absoluteFill} 
+            onPress={() => setCategoryModalVisible(false)} 
+          />
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.surface, maxHeight: '90%' }]}
+          >
+            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="pricetags" size={32} color={theme.primary} />
+            </View>
+            
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              {isCreatingCategory ? "Create Category" : "Edit Category"}
+            </Text>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              {isCreatingCategory 
+                ? "Add a new product category with optional custom thresholds"
+                : selectedCategory?.productCount > 0
+                  ? `This category has ${selectedCategory.productCount} product(s). Editing will update all products.`
+                  : "Update category name and alert thresholds"
+              }
+            </Text>
+
+            <ScrollView 
+              style={{ width: '100%' }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <TextInput
+                style={[
+                  styles.pinInput,
+                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background, textAlign: 'left' },
+                ]}
+                placeholder="Category Name"
+                placeholderTextColor={theme.subtext}
+                value={categoryName}
+                onChangeText={setCategoryName}
+                autoFocus={isCreatingCategory}
+              />
+
+              <View style={{ width: '100%', marginTop: 10 }}>
+                <View style={[styles.thresholdToggle, { borderColor: theme.border }]}>
+                  <Text style={[styles.thresholdToggleLabel, { color: theme.text }]}>
+                    Custom Alert Thresholds
+                  </Text>
+                  <Switch
+                    value={categoryThresholdsEnabled}
+                    onValueChange={setCategoryThresholdsEnabled}
+                    trackColor={{ true: theme.primary }}
+                  />
+                </View>
+
+                {categoryThresholdsEnabled && (
+                  <>
+                    <Text style={[styles.thresholdSectionDesc, { color: theme.subtext }]}>
+                      Override global thresholds for this category
+                    </Text>
+
+                    {/* Critical Alert */}
+                    <View style={styles.thresholdRow}>
+                      <View style={styles.thresholdInfo}>
+                        <View style={[styles.thresholdDot, { backgroundColor: "#FF3B30" }]} />
+                        <View style={styles.thresholdTextContainer}>
+                          <Text style={[styles.thresholdLabel, { color: theme.text }]}>
+                            Critical
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.thresholdInput}>
+                        <TextInput
+                          style={[
+                            styles.numberInput,
+                            { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                          ]}
+                          keyboardType="numeric"
+                          value={categoryThresholds.critical.toString()}
+                          onChangeText={(val) =>
+                            setCategoryThresholds({ ...categoryThresholds, critical: parseInt(val) || 0 })
+                          }
+                        />
+                        <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
+                          days
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* High Urgency Alert */}
+                    <View style={styles.thresholdRow}>
+                      <View style={styles.thresholdInfo}>
+                        <View style={[styles.thresholdDot, { backgroundColor: "#FF9500" }]} />
+                        <View style={styles.thresholdTextContainer}>
+                          <Text style={[styles.thresholdLabel, { color: theme.text }]}>
+                            High Urgency
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.thresholdInput}>
+                        <TextInput
+                          style={[
+                            styles.numberInput,
+                            { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                          ]}
+                          keyboardType="numeric"
+                          value={categoryThresholds.highUrgency.toString()}
+                          onChangeText={(val) =>
+                            setCategoryThresholds({ ...categoryThresholds, highUrgency: parseInt(val) || 0 })
+                          }
+                        />
+                        <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
+                          days
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Early Warning Alert */}
+                    <View style={[styles.thresholdRow, { borderBottomWidth: 0 }]}>
+                      <View style={styles.thresholdInfo}>
+                        <View style={[styles.thresholdDot, { backgroundColor: "#FFD60A" }]} />
+                        <View style={styles.thresholdTextContainer}>
+                          <Text style={[styles.thresholdLabel, { color: theme.text }]}>
+                            Early Warning
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.thresholdInput}>
+                        <TextInput
+                          style={[
+                            styles.numberInput,
+                            { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                          ]}
+                          keyboardType="numeric"
+                          value={categoryThresholds.earlyWarning.toString()}
+                          onChangeText={(val) =>
+                            setCategoryThresholds({ ...categoryThresholds, earlyWarning: parseInt(val) || 0 })
+                          }
+                        />
+                        <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
+                          days
+                        </Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[
+                  styles.modalBtn,
+                  { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+                ]}
+                onPress={() => setCategoryModalVisible(false)}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              
+              {!isCreatingCategory && selectedCategory?.productCount === 0 && (
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: '#FF3B30' }]}
+                  onPress={handleDeleteCategory}
+                >
+                  <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                    DELETE
+                  </Text>
+                </Pressable>
+              )}
+              
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={handleSaveCategory}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  {isCreatingCategory ? "CREATE" : "SAVE"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1164,7 +1898,13 @@ const styles = StyleSheet.create({
   header: { marginTop: 70, marginBottom: 30 },
   headerSub: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
   headerTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
-  section: { marginBottom: 35 },
+  section: { marginBottom: 50 },
+  sectionDivider: {
+    height: 2,
+    marginVertical: 25,
+    opacity: 0.3,
+    backgroundColor: '#af22e7ff',
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1217,15 +1957,20 @@ const styles = StyleSheet.create({
   textStack: { flex: 1 },
   settingLabel: { fontSize: 16, fontWeight: "600" },
   settingDesc: { fontSize: 12, marginTop: 2 },
-  configCard: { padding: 20, borderRadius: 20, borderWidth: 1 },
-  cardTitle: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
-  cardDesc: { fontSize: 12, marginBottom: 20, lineHeight: 18 },
+  configCard: { 
+    padding: 20, 
+    borderRadius: 20, 
+    borderWidth: 1,
+    marginBottom: 15 
+  },
+  cardTitle: { fontSize: 17, fontWeight: "800", marginBottom: 8 },
+  cardDesc: { fontSize: 13, marginBottom: 20, lineHeight: 19 },
   thresholdRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
-    paddingBottom: 15,
+    marginBottom: 18,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(150,150,150,0.1)",
   },
@@ -1246,13 +1991,13 @@ const styles = StyleSheet.create({
   },
   thresholdUnit: { fontSize: 12, fontWeight: "600" },
   saveBtn: {
-    height: 45,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 5,
+    marginTop: 8,
   },
-  saveBtnText: { color: "#FFF", fontWeight: "800", fontSize: 12 },
+  saveBtnText: { color: "#FFF", fontWeight: "800", fontSize: 13, letterSpacing: 0.5 },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1395,5 +2140,138 @@ const styles = StyleSheet.create({
   sliderBtnText: {
     fontSize: 13,
     fontWeight: "700",
+  },
+  addCategoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  addCategoryText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  emptyState: {
+    padding: 50,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 16,
+  },
+  emptyStateDesc: {
+    fontSize: 14,
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 15,
+  },
+  categoryCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 2,
+  },
+  categoryCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  categoryCardName: {
+    fontSize: 16,
+    fontWeight: '800',
+    flex: 1,
+  },
+  customBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryCardThresholds: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  categoryCardCount: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  thresholdToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  thresholdToggleLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  thresholdSectionDesc: {
+    fontSize: 12,
+    marginBottom: 15,
+    paddingHorizontal: 4,
+  },
+  infoCard: {
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  featureIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 16,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  infoDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  permissionsLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  permissionsList: {
+    gap: 8,
+  },
+  permissionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  permissionText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

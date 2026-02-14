@@ -63,20 +63,24 @@ app.get('/api', (req, res) => {
     message: 'InventiEase API',
     status: 'healthy',
     endpoints: {
+      auth: '/api/auth',
       products: '/api/products',
       analytics: '/api/analytics',
       upload: '/api/upload',
-      alerts: '/api/alerts'
+      alerts: '/api/alerts',
+      categories: '/api/categories'
     },
     timestamp: new Date().toISOString()
   });
 });
 
 // API Routes
+app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/alerts', require('./routes/alertsRoutes'));
+app.use('/api/categories', require('./routes/categoryRoutes'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

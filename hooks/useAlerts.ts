@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useCallback, useEffect, useState } from "react";
 
 export interface AlertAction {
   type: string;
@@ -16,14 +16,19 @@ export interface Alert {
   category?: string;
   batchNumber: string;
   quantity: number;
-  expiryDate: string;
-  daysUntilExpiry: number;
-  alertLevel: "expired" | "critical" | "high" | "early" | "normal";
+  expiryDate: string | null;
+  daysUntilExpiry: number | null;
+  alertLevel?: "expired" | "critical" | "high" | "early" | "normal" | "slow-moving";
+  level?: "expired" | "critical" | "high" | "early" | "normal" | "slow-moving";
   priority: number;
   color: string;
   actions: AlertAction[];
   imageUrl?: string;
   barcode?: string;
+  // Slow-moving product metadata
+  velocity?: string;
+  daysInStock?: number;
+  salesLast30Days?: number;
 }
 
 export interface AlertSummary {
@@ -32,6 +37,7 @@ export interface AlertSummary {
   critical: number;
   high: number;
   early: number;
+  slowMoving: number;
   totalValue: number;
   urgentActions: number;
 }
@@ -44,6 +50,7 @@ export interface AlertThresholds {
 
 export interface AlertSettings {
   thresholds: AlertThresholds;
+  categoryThresholds?: Record<string, AlertThresholds> | Map<string, AlertThresholds>;
   notificationPreferences?: {
     enablePush: boolean;
     enableEmail: boolean;

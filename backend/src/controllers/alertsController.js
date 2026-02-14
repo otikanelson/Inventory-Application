@@ -3,6 +3,40 @@
 
 const Product = require('../models/Product');
 const AlertSettings = require('../models/AlertSettings');
+const Category = require('../models/Category');
+
+/**
+ * Helper: Get effective thresholds for a product (category > product > global fallback)
+ */
+const getEffectiveThresholds = async (product, globalThresholds) => {
+  // Priority 1: Product-specific thresholds
+  if (product.customAlertThresholds?.enabled) {
+    return {
+      critical: product.customAlertThresholds.critical || globalThresholds.critical,
+      highUrgency: product.customAlertThresholds.highUrgency || globalThresholds.highUrgency,
+      earlyWarning: product.customAlertThresholds.earlyWarning || globalThresholds.earlyWarning,
+      isCustom: true,
+      source: 'product'
+    };
+  }
+  
+  // Priority 2: Category-specific thresholds
+  if (product.category) {
+    const category = await Category.findOne({ name: product.category });
+    if (category && category.customAlertThresholds?.enabled) {
+      return {
+        critical: category.customAlertThresholds.critical || globalThresholds.critical,
+        highUrgency: category.customAlertThresholds.highUrgency || globalThresholds.highUrgency,
+        earlyWarning: category.customAlertThresholds.earlyWarning || globalThresholds.earlyWarning,
+        isCustom: true,
+        source: 'category'
+      };
+    }
+  }
+  
+  // Priority 3: Global thresholds
+  return { ...globalThresholds, isCustom: false, source: 'global' };
+};
 
 /**
  * Helper: Determine alert level based on days until expiry
@@ -125,6 +159,9 @@ exports.getAlerts = async (req, res) => {
     
     // Generate alerts from each batch
     for (const product of products) {
+      // Get effective thresholds for this product
+      const effectiveThresholds = await getEffectiveThresholds(product, thresholds);
+      
       for (const batch of product.batches) {
         if (!batch.expiryDate) continue;
         
@@ -132,8 +169,8 @@ exports.getAlerts = async (req, res) => {
         const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
         
         // Only include items within earlyWarning threshold or expired
-        if (daysLeft <= thresholds.earlyWarning || daysLeft < 0) {
-          const alertInfo = getAlertLevel(daysLeft, thresholds);
+        if (daysLeft <= effectiveThresholds.earlyWarning || daysLeft < 0) {
+          const alertInfo = getAlertLevel(daysLeft, effectiveThresholds);
           const actions = getRecommendedActions(alertInfo.level, daysLeft, batch.quantity);
           
           alerts.push({
@@ -150,7 +187,91 @@ exports.getAlerts = async (req, res) => {
             priority: alertInfo.priority,
             actions,
             imageUrl: product.imageUrl,
-            barcode: product.barcode
+            barcode: product.barcode,
+            hasCustomThresholds: effectiveThresholds.isCustom
+          });
+        }
+      }
+    }
+    
+    // ============================================================================
+    // NEW: Slow-Moving Non-Perishable Product Detection (AI Analytics)
+    // ============================================================================
+    const Sale = require('../models/Sale');
+    
+    // Get all non-perishable products
+    const nonPerishableProducts = await Product.find({
+      isPerishable: false,
+      totalQuantity: { $gt: 0 } // Only products with stock
+    });
+    
+    // Calculate sales velocity for each non-perishable product
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    for (const product of nonPerishableProducts) {
+      // Get sales in last 30 days
+      const sales = await Sale.find({
+        productId: product._id,
+        saleDate: { $gte: thirtyDaysAgo }
+      });
+      
+      const totalSold = sales.reduce((sum, sale) => sum + sale.quantitySold, 0);
+      const velocity = totalSold / 30; // units per day
+      
+      // Flag as slow-moving if velocity < 0.5 units/day and has been in stock for 30+ days
+      if (velocity < 0.5 && product.totalQuantity > 5) {
+        // Check if product has been in inventory for at least 30 days
+        const oldestBatch = product.batches.reduce((oldest, batch) => {
+          const receivedDate = batch.receivedDate ? new Date(batch.receivedDate) : new Date();
+          return receivedDate < oldest ? receivedDate : oldest;
+        }, new Date());
+        
+        const daysInStock = Math.ceil((now - oldestBatch) / (1000 * 60 * 60 * 24));
+        
+        if (daysInStock >= 30) {
+          alerts.push({
+            alertId: `slow_${product._id}`,
+            productId: product._id,
+            productName: product.name,
+            category: product.category,
+            batchNumber: 'N/A',
+            quantity: product.totalQuantity,
+            expiryDate: null,
+            daysLeft: null,
+            level: 'slow-moving',
+            color: '#9B59B6', // Purple color for slow-moving
+            priority: 2, // Medium priority
+            actions: [
+              {
+                type: 'promote',
+                label: 'Promote Product',
+                icon: 'megaphone',
+                description: 'Feature in promotions',
+                urgent: false
+              },
+              {
+                type: 'markdown',
+                label: 'Apply Discount',
+                icon: 'pricetag',
+                description: 'Boost sales with discount',
+                urgent: false
+              },
+              {
+                type: 'review',
+                label: 'Review Pricing',
+                icon: 'analytics',
+                description: 'Check if price is competitive',
+                urgent: false
+              }
+            ],
+            imageUrl: product.imageUrl,
+            barcode: product.barcode,
+            hasCustomThresholds: false,
+            // Additional metadata for slow-moving products
+            velocity: velocity.toFixed(2),
+            daysInStock,
+            salesLast30Days: totalSold
           });
         }
       }
@@ -189,6 +310,7 @@ exports.getAlerts = async (req, res) => {
       critical: alerts.filter(a => a.level === 'critical').length,
       high: alerts.filter(a => a.level === 'high').length,
       early: alerts.filter(a => a.level === 'early').length,
+      slowMoving: alerts.filter(a => a.level === 'slow-moving').length,
       totalUnits: alerts.reduce((sum, a) => sum + a.quantity, 0),
       urgentCount: alerts.filter(a => a.priority >= 3).length
     };

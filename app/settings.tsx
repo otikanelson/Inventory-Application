@@ -3,86 +3,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { AIStatusIndicator } from "../components/AIStatusIndicator";
 import { useTheme } from "../context/ThemeContext";
 import { useTour } from "../context/TourContext";
-import { useAlerts } from "../hooks/useAlerts";
 
 export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const router = useRouter();
-  const { settings: alertSettings, updateSettings } = useAlerts();
   const { resetTour, startTour } = useTour();
 
   const backgroundImage = isDark
     ? require("../assets/images/Background7.png")
     : require("../assets/images/Background9.png");
-
-  // Local state for system settings
-  const [apiUrl, setApiUrl] = useState(process.env.EXPO_PUBLIC_API_URL || "");
-  const [rapidScan, setRapidScan] = useState(true);
-
-  // Alert threshold state
-  const [thresholds, setThresholds] = useState({
-    critical: 7,
-    highUrgency: 14,
-    earlyWarning: 30
-  });
-
-  // Load rapid scan setting from AsyncStorage
-  useEffect(() => {
-    loadRapidScanSetting();
-  }, []);
-
-  const loadRapidScanSetting = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('rapid_scan_enabled');
-      if (saved !== null) {
-        setRapidScan(saved === 'true');
-      }
-    } catch (error) {
-      console.error('Error loading rapid scan setting:', error);
-    }
-  };
-
-  const handleRapidScanToggle = async (value: boolean) => {
-    setRapidScan(value);
-    try {
-      await AsyncStorage.setItem('rapid_scan_enabled', value.toString());
-      Toast.show({
-        type: 'success',
-        text1: 'Setting Updated',
-        text2: `Rapid scan ${value ? 'enabled' : 'disabled'}`
-      });
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Update Failed',
-        text2: 'Could not save setting'
-      });
-    }
-  };
-
-  // Load alert settings when they become available
-  useEffect(() => {
-    if (alertSettings?.thresholds) {
-      setThresholds({
-        critical: alertSettings.thresholds.critical || 7,
-        highUrgency: alertSettings.thresholds.highUrgency || 14,
-        earlyWarning: alertSettings.thresholds.earlyWarning || 30
-      });
-    }
-  }, [alertSettings]);
 
   // Admin Login State
   const [pinModal, setPinModal] = useState(false);
@@ -142,52 +85,6 @@ export default function SettingsScreen() {
         type: 'error',
         text1: 'Authentication Error',
         text2: 'Could not verify credentials'
-      });
-    }
-  };
-
-  const handleSaveConfig = () => {
-    Toast.show({
-      type: 'success',
-      text1: 'Configuration Saved',
-      text2: 'The API endpoint has been updated for this session.'
-    });
-  };
-
-  // Save alert thresholds
-  const handleSaveThresholds = async () => {
-    // Validate threshold ordering
-    if (thresholds.critical >= thresholds.highUrgency) {
-      Toast.show({
-        type: 'error',
-        text1: 'Invalid Configuration',
-        text2: 'Critical must be less than High Urgency'
-      });
-      return;
-    }
-
-    if (thresholds.highUrgency >= thresholds.earlyWarning) {
-      Toast.show({
-        type: 'error',
-        text1: 'Invalid Configuration',
-        text2: 'High Urgency must be less than Early Warning'
-      });
-      return;
-    }
-
-    const result = await updateSettings({ thresholds });
-
-    if (result.success) {
-      Toast.show({
-        type: 'success',
-        text1: 'Settings Saved',
-        text2: 'Alert thresholds updated successfully'
-      });
-    } else {
-      Toast.show({
-        type: 'error',
-        text1: 'Save Failed',
-        text2: 'Could not update settings'
       });
     }
   };
@@ -284,36 +181,22 @@ export default function SettingsScreen() {
         </SettingRow>
       </View>
 
-      {/* SCANNER SECTION */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          SCANNER
-        </Text>
-        <SettingRow
-          icon="scan-outline"
-          label="Rapid Scan Mode"
-          description="Faster scanning with reduced validation"
-        >
-          <Switch
-            value={rapidScan}
-            onValueChange={handleRapidScanToggle}
-            trackColor={{ true: theme.primary }}
-          />
-        </SettingRow>
-      </View>
-
       {/* HELP & SUPPORT SECTION */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
           HELP & SUPPORT
         </Text>
+        
+        {/* AI Status Indicator */}
+        <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
+        
         <SettingRow
           icon="help-circle-outline"
           label="Restart App Tour"
           description="See the onboarding tour again to learn about all features"
           onPress={async () => {
             try {
-              await resetTour();
+              resetTour();
               Toast.show({
                 type: 'success',
                 text1: 'Tour Reset',
@@ -335,127 +218,6 @@ export default function SettingsScreen() {
         >
           <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
         </SettingRow>
-      </View>
-
-      {/* ALERTS CONFIGURATION */}
-      <View style={[styles.section, {marginBottom: 0}]}>
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-          ALERTS CONFIGURATION
-        </Text>
-
-        <View
-          style={[
-            styles.configCard,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
-          <Text style={[styles.cardTitle, { color: theme.text }]}>
-            Expiry Thresholds
-          </Text>
-          <Text style={[styles.cardDesc, { color: theme.subtext }]}>
-            Configure when alerts trigger based on days until expiration
-          </Text>
-
-          {/* Critical Alert */}
-          <View style={styles.thresholdRow}>
-            <View style={styles.thresholdInfo}>
-              <View style={[styles.thresholdDot, { backgroundColor: "#FF3B30" }]} />
-              <View style={styles.thresholdTextContainer}>
-                <Text style={[styles.thresholdLabel, { color: theme.text }]}>
-                  Critical Alert
-                </Text>
-                <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
-                  Immediate action required
-                </Text>
-              </View>
-            </View>
-            <View style={styles.thresholdInput}>
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
-                ]}
-                keyboardType="numeric"
-                value={thresholds.critical.toString()}
-                onChangeText={(val) =>
-                  setThresholds({ ...thresholds, critical: parseInt(val) || 0 })
-                }
-              />
-              <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
-                days
-              </Text>
-            </View>
-          </View>
-
-          {/* High Urgency Alert */}
-          <View style={styles.thresholdRow}>
-            <View style={styles.thresholdInfo}>
-              <View style={[styles.thresholdDot, { backgroundColor: "#FF9500" }]} />
-              <View style={styles.thresholdTextContainer}>
-                <Text style={[styles.thresholdLabel, { color: theme.text }]}>
-                  High Urgency
-                </Text>
-                <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
-                  Prioritize for sale
-                </Text>
-              </View>
-            </View>
-            <View style={styles.thresholdInput}>
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
-                ]}
-                keyboardType="numeric"
-                value={thresholds.highUrgency.toString()}
-                onChangeText={(val) =>
-                  setThresholds({ ...thresholds, highUrgency: parseInt(val) || 0 })
-                }
-              />
-              <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
-                days
-              </Text>
-            </View>
-          </View>
-
-          {/* Early Warning Alert */}
-          <View style={[styles.thresholdRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.thresholdInfo}>
-              <View style={[styles.thresholdDot, { backgroundColor: "#FFD60A" }]} />
-              <View style={styles.thresholdTextContainer}>
-                <Text style={[styles.thresholdLabel, { color: theme.text }]}>
-                  Early Warning
-                </Text>
-                <Text style={[styles.thresholdDesc, { color: theme.subtext }]}>
-                  Plan ahead
-                </Text>
-              </View>
-            </View>
-            <View style={styles.thresholdInput}>
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
-                ]}
-                keyboardType="numeric"
-                value={thresholds.earlyWarning.toString()}
-                onChangeText={(val) =>
-                  setThresholds({ ...thresholds, earlyWarning: parseInt(val) || 0 })
-                }
-              />
-              <Text style={[styles.thresholdUnit, { color: theme.subtext }]}>
-                days
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            style={[styles.saveBtn, { backgroundColor: theme.primary }]}
-            onPress={handleSaveThresholds}
-          >
-            <Text style={styles.saveBtnText}>SAVE THRESHOLDS</Text>
-          </Pressable>
-        </View>
       </View>
 
       <View style={{ height: 10 }} />
@@ -562,52 +324,6 @@ const styles = StyleSheet.create({
   textStack: { flex: 1 },
   settingLabel: { fontSize: 16, fontWeight: "600" },
   settingDesc: { fontSize: 12, marginTop: 2 },
-  configCard: { padding: 20, borderRadius: 20, borderWidth: 1 },
-  cardTitle: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
-  cardDesc: { fontSize: 12, marginBottom: 20, lineHeight: 18 },
-  thresholdRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(150,150,150,0.1)",
-  },
-  thresholdInfo: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  thresholdDot: { width: 12, height: 12, borderRadius: 6 },
-  thresholdTextContainer: { flex: 1 },
-  thresholdLabel: { fontSize: 14, fontWeight: "700" },
-  thresholdDesc: { fontSize: 11, marginTop: 2 },
-  thresholdInput: { flexDirection: "row", alignItems: "center", gap: 8 },
-  numberInput: {
-    width: 60,
-    height: 40,
-    borderWidth: 1,
-    borderRadius: 10,
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  thresholdUnit: { fontSize: 12, fontWeight: "600" },
-  saveBtn: {
-    height: 45,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 5,
-  },
-  saveBtnText: { color: "#FFF", fontWeight: "800", fontSize: 12 },
-  apiInput: {
-    width: "100%",
-    height: 50,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 15,
-  },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,

@@ -759,3 +759,84 @@ exports.recalculatePrediction = async (req, res) => {
     });
   }
 };
+
+
+/**
+ * @desc    Get AI status (for onboarding and status indicators)
+ * @route   GET /api/analytics/ai-status
+ * @access  Public
+ */
+exports.getAIStatus = async (req, res) => {
+  try {
+    // Get product count
+    const productCount = await Product.countDocuments();
+    
+    // Get sales count (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const salesCount = await Sale.countDocuments({
+      saleDate: { $gte: thirtyDaysAgo }
+    });
+    
+    // Get first sale date to calculate days active
+    const firstSale = await Sale.findOne().sort({ saleDate: 1 });
+    const daysActive = firstSale 
+      ? Math.ceil((Date.now() - new Date(firstSale.saleDate).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    
+    // Determine AI status
+    let status = 'collecting';
+    let progress = 0;
+    let message = '';
+    
+    if (productCount < 10 || salesCount < 20) {
+      status = 'collecting';
+      const productProgress = Math.min((productCount / 10) * 50, 50);
+      const salesProgress = Math.min((salesCount / 20) * 50, 50);
+      progress = Math.round(productProgress + salesProgress);
+      
+      const needProducts = Math.max(0, 10 - productCount);
+      const needSales = Math.max(0, 20 - salesCount);
+      
+      if (needProducts > 0 && needSales > 0) {
+        message = `Add ${needProducts} more products and record ${needSales} more sales to activate AI predictions.`;
+      } else if (needProducts > 0) {
+        message = `Add ${needProducts} more products to activate AI predictions.`;
+      } else {
+        message = `Record ${needSales} more sales to activate AI predictions.`;
+      }
+    } else if (daysActive < 7) {
+      status = 'learning';
+      progress = Math.min(Math.round((daysActive / 7) * 100), 99);
+      message = `AI is learning from your data. ${7 - daysActive} more days for optimal accuracy.`;
+    } else {
+      status = 'active';
+      progress = 100;
+      message = 'AI predictions are active and improving with each sale.';
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        status,
+        productCount,
+        salesCount,
+        daysActive,
+        progress,
+        message,
+        requirements: {
+          minProducts: 10,
+          minSales: 20,
+          minDays: 7,
+        },
+      },
+    });
+    
+  } catch (error) {
+    console.error('AI Status Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};

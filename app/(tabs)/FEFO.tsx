@@ -13,6 +13,7 @@ import {
   Text,
   View
 } from "react-native";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useProducts } from "../../hooks/useProducts";
@@ -29,7 +30,6 @@ export default function FEFOScreen() {
   const [sortByAI, setSortByAI] = useState(false);
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
   const [loadingPredictions, setLoadingPredictions] = useState(false);
-  const [showAIHelp, setShowAIHelp] = useState(false);
 
   const backgroundImage =
     isDark ?
@@ -170,9 +170,23 @@ export default function FEFOScreen() {
                 alignItems: "flex-end",
               }}
             >
-              <Text style={[styles.title, { color: theme.text }]}>
-                FEFO_QUEUE
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[styles.title, { color: theme.text }]}>
+                  PRIORITY_QUEUE
+                </Text>
+                <HelpTooltip
+                  title="FEFO System"
+                  content={[
+                    "FEFO (First Expired, First Out) helps you prioritize products by expiry date to minimize waste.",
+                    "Risk Scores: Items are color-coded - Red (expired/critical), Orange (high risk), Yellow (warning), Green (stable).",
+                    "View Modes: Switch between BY_BATCH (all batches) or BY_PRODUCT (earliest expiry per product).",
+                    "AI Risk Sorting: Uses machine learning to predict which items are most likely to expire before being sold, considering sales velocity and stock levels."
+                  ]}
+                  icon="help-circle-outline"
+                  iconSize={18}
+                  iconColor={theme.primary}
+                />
+              </View>
 
             <View style={styles.controlsRow}>
               <Pressable
@@ -199,16 +213,6 @@ export default function FEFOScreen() {
                   {sortByAI ? 'AI_RISK' : 'EXPIRY'}
                 </Text>
               </Pressable>
-              
-              {/* AI Help Button */}
-              {sortByAI && (
-                <Pressable
-                  onPress={() => setShowAIHelp(true)}
-                  style={styles.helpButton}
-                >
-                  <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
-                </Pressable>
-              )}
 
               <Pressable
                 onPress={() => setViewByProduct(!viewByProduct)}
@@ -366,116 +370,6 @@ export default function FEFOScreen() {
           : null
         }
       />
-
-      {/* AI Help Modal */}
-      <Modal visible={showAIHelp} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.helpModal, { backgroundColor: theme.surface }]}>
-            <View style={styles.helpModalHeader}>
-              <Text style={[styles.helpModalTitle, { color: theme.text }]}>
-                AI Risk Sorting
-              </Text>
-              <Pressable onPress={() => setShowAIHelp(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </Pressable>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.helpSection}>
-                <View style={[styles.helpIconBox, { backgroundColor: '#FF9500' + '15' }]}>
-                  <Ionicons name="sparkles" size={24} color="#FF9500" />
-                </View>
-                <Text style={[styles.helpSectionTitle, { color: theme.text }]}>
-                  What is AI Risk Sorting?
-                </Text>
-                <Text style={[styles.helpText, { color: theme.subtext }]}>
-                  AI Risk Sorting uses machine learning to analyze multiple factors beyond just expiry dates. It considers sales velocity, stock levels, and historical patterns to predict which items are most at risk of expiring before being sold.
-                </Text>
-              </View>
-
-              <View style={styles.helpSection}>
-                <View style={[styles.helpIconBox, { backgroundColor: '#FF3B30' + '15' }]}>
-                  <Ionicons name="warning" size={24} color="#FF3B30" />
-                </View>
-                <Text style={[styles.helpSectionTitle, { color: theme.text }]}>
-                  Risk Score Explained
-                </Text>
-                <Text style={[styles.helpText, { color: theme.subtext }]}>
-                  Risk scores range from 0-100:
-                </Text>
-                <View style={styles.riskLegend}>
-                  <View style={styles.riskItem}>
-                    <View style={[styles.riskDot, { backgroundColor: '#FF3B30' }]} />
-                    <Text style={[styles.riskLabel, { color: theme.text }]}>
-                      70-100: Critical Risk
-                    </Text>
-                  </View>
-                  <View style={styles.riskItem}>
-                    <View style={[styles.riskDot, { backgroundColor: '#FF9500' }]} />
-                    <Text style={[styles.riskLabel, { color: theme.text }]}>
-                      50-69: High Risk
-                    </Text>
-                  </View>
-                  <View style={styles.riskItem}>
-                    <View style={[styles.riskDot, { backgroundColor: '#FFCC00' }]} />
-                    <Text style={[styles.riskLabel, { color: theme.text }]}>
-                      30-49: Medium Risk
-                    </Text>
-                  </View>
-                  <View style={styles.riskItem}>
-                    <View style={[styles.riskDot, { backgroundColor: '#34C759' }]} />
-                    <Text style={[styles.riskLabel, { color: theme.text }]}>
-                      0-29: Low Risk
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.helpSection}>
-                <View style={[styles.helpIconBox, { backgroundColor: theme.primary + '15' }]}>
-                  <Ionicons name="analytics" size={24} color={theme.primary} />
-                </View>
-                <Text style={[styles.helpSectionTitle, { color: theme.text }]}>
-                  Factors Considered
-                </Text>
-                <View style={styles.factorsList}>
-                  <View style={styles.factorItem}>
-                    <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
-                    <Text style={[styles.factorText, { color: theme.subtext }]}>
-                      Days until expiry
-                    </Text>
-                  </View>
-                  <View style={styles.factorItem}>
-                    <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
-                    <Text style={[styles.factorText, { color: theme.subtext }]}>
-                      Sales velocity (units/day)
-                    </Text>
-                  </View>
-                  <View style={styles.factorItem}>
-                    <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
-                    <Text style={[styles.factorText, { color: theme.subtext }]}>
-                      Current stock levels
-                    </Text>
-                  </View>
-                  <View style={styles.factorItem}>
-                    <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
-                    <Text style={[styles.factorText, { color: theme.subtext }]}>
-                      Historical sales patterns
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={[styles.helpTip, { backgroundColor: theme.primary + '10', borderColor: theme.primary }]}>
-                <Ionicons name="bulb" size={20} color={theme.primary} />
-                <Text style={[styles.helpTipText, { color: theme.text }]}>
-                  Tip: Items with high risk scores should be prioritized for promotions or discounts to prevent waste.
-                </Text>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -490,7 +384,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   systemTag: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
-  title: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
+  title: { fontSize: 20, fontWeight: "900", letterSpacing: -1 },
   controlsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -575,119 +469,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
     letterSpacing: 1,
-  },
-  aiExplanation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginTop: 12,
-  },
-  aiExplanationText: {
-    flex: 1,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  helpButton: {
-    width: 22,
-    height: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'flex-end',
-  },
-  helpModal: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '85%',
-    paddingBottom: 40,
-  },
-  helpModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(150,150,150,0.1)',
-  },
-  helpModalTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  helpSection: {
-    padding: 24,
-    paddingTop: 20,
-  },
-  helpIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  helpSectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  helpText: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  riskLegend: {
-    marginTop: 12,
-    gap: 12,
-  },
-  riskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  riskDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  riskLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  factorsList: {
-    gap: 12,
-    marginTop: 8,
-  },
-  factorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  factorText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  helpTip: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginHorizontal: 24,
-    marginBottom: 24,
-  },
-  helpTipText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 20,
   },
 });

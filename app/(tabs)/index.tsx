@@ -3,18 +3,19 @@ import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    ImageBackground,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIInsightsBadge } from "../../components/AIInsightsBadge";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { ProductCard, ProductCardSkeleton } from "../../components/ProductCard";
 import { useTheme } from "../../context/ThemeContext";
 import { useAIPredictions } from "../../hooks/useAIPredictions";
@@ -138,7 +139,7 @@ const RecentlySoldCard = ({ item, isBatchView = false }: { item: any; isBatchVie
           ) : (
             <>
               <Text style={[styles.quantityLabel, { color: theme.primary }]}>
-                {item.totalSold || 0} Units Sold  •  ₦{item.totalRevenue?.toLocaleString() || 0}
+                {item.totalSold || 0}Units Sold  •  ₦{item.totalRevenue?.toLocaleString() || 0}
               </Text>
               <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
                 {item.name}
@@ -307,7 +308,7 @@ export default function Dashboard() {
             <View style={styles.header}>
               <View>
                 <Text style={[styles.greet, { color: theme.primary }]}>
-                  STAFF_FRONTLINE
+                  STAFF_DASHBOARD
                 </Text>
                 <Text style={[styles.title, { color: theme.text }]}>
                   STOCKQ
@@ -349,6 +350,23 @@ export default function Dashboard() {
             </View>
 
             {/* STATS HUD */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>
+                Inventory Stats
+              </Text>
+              <HelpTooltip
+                title="Dashboard Stats"
+                content={[
+                  "Total Records: Total number of product units in your inventory across all batches.",
+                  "Expiring Soon: Products that will expire within your alert threshold (default 7-30 days).",
+                  "Low Stock: Products below their minimum stock level that need restocking.",
+                  "Urgent Items: Products in the Priority Queue that need immediate attention to prevent waste."
+                ]}
+                icon="help-circle-outline"
+                iconSize={16}
+                iconColor={theme.primary}
+              />
+            </View>
             <View style={styles.statGrid}>
               <View
                 style={[styles.mainStat, { backgroundColor: theme.primary }]}
@@ -495,7 +513,7 @@ export default function Dashboard() {
             {/* FEFO SECTION */}
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                FEFO Priority
+                Priority Queue
               </Text>
               <Pressable onPress={() => router.push("/FEFO")}>
                 <Text
@@ -836,7 +854,8 @@ const styles = StyleSheet.create({
   },
   image: { 
     width: "85%", 
-    height: "85%" 
+    height: "85%",
+    borderRadius: 22,
   },
   footer: {
     flexDirection: "row",
@@ -845,7 +864,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   quantityLabel: { 
-    fontSize: 12, 
+    fontSize: 11, 
     fontWeight: "500", 
     marginBottom: 2 
   },

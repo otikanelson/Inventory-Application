@@ -20,7 +20,8 @@ const {
   markNotificationAsRead,
   dismissNotification,
   markAllNotificationsAsRead,
-  recalculatePrediction
+  recalculatePrediction,
+  getAIStatus
 } = require('../controllers/analyticsController');
 
 // @route   GET /api/analytics/dashboard
@@ -116,5 +117,10 @@ router.patch('/notifications/read-all', markAllNotificationsAsRead);
 // @desc    Manually trigger prediction recalculation
 // @access  Admin
 router.post('/recalculate/:productId', recalculatePrediction);
+
+// @route   GET /api/analytics/ai-status
+// @desc    Get AI status for onboarding and indicators
+// @access  Public
+router.get('/ai-status', getAIStatus);
 
 module.exports = router;

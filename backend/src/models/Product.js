@@ -4,6 +4,7 @@ const BatchSchema = new mongoose.Schema({
   batchNumber: { type: String, required: true },
   quantity: { type: Number, required: true, default: 0 },
   expiryDate: { type: Date, required: false },
+  manufacturerDate: { type: Date, required: false },
   receivedDate: { type: Date, default: Date.now },
   price: { type: Number }, // Cost price for this specific batch
 });
@@ -29,6 +30,14 @@ const ProductSchema = new mongoose.Schema(
     thresholdValue: { type: Number, default: 10 },
     demandRate: { type: Number, default: 0 },
     lastRestocked: { type: Date, default: Date.now },
+
+    // Per-product alert thresholds (overrides global settings)
+    customAlertThresholds: {
+      enabled: { type: Boolean, default: false },
+      critical: { type: Number, default: null, min: 1, max: 30 },
+      highUrgency: { type: Number, default: null, min: 1, max: 60 },
+      earlyWarning: { type: Number, default: null, min: 1, max: 90 },
+    },
   },
   { timestamps: true },
 );
