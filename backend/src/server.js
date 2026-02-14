@@ -21,7 +21,7 @@ app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? [
         'https://inventory-application-xjc5.onrender.com',
-        'https://your-frontend-domain.com' // Add your frontend domain
+        'https://frontend-domain.com'
       ]
     : true, // Allow all origins in development
   credentials: true

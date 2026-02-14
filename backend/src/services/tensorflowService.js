@@ -3,7 +3,8 @@
  * Uses LSTM neural networks for time-series prediction
  */
 
-const tf = require('@tensorflow/tfjs-node');
+const tf = require('@tensorflow/tfjs');
+require('@tensorflow/tfjs-backend-cpu');
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 
