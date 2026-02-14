@@ -8,7 +8,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext"; // Path to your context
+import { useTheme } from "../context/ThemeContext";
+import { useAlerts } from "../hooks/useAlerts";
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function WelcomeScreen() {
 
       {/* Semicircular Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>
-        <Text style={styles.headerTitle}>InventiEase</Text>
+        <Text style={styles.headerTitle}>StockQ</Text>
       </View>
 
       {/* Centered Content */}
@@ -37,7 +38,7 @@ export default function WelcomeScreen() {
           Smart tracking for products & expiry dates
         </Text>
         <Image
-          source={require("../assets/images/Logo.png")}
+          source={require("../assets/images/logo.png")}
           style={styles.logo}
           resizeMode="contain"
         />

@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: inventiease-backend
+    env: node
+    region: oregon
+    plan: free
+    # Point to the backend directory
+    rootDir: ./backend
+    # Build command (install dependencies)
+    buildCommand: npm install
+    # Start command (run the server)
+    startCommand: npm start
+    # Environment variables
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+      # Add your environment variables here
+      - key: MONGO_URI
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_API_SECRET
+        sync: false  # Set this in Render dashboard
+    # Health check
+    healthCheckPath: /
+    # Auto-deploy on push
+    autoDeploy: true

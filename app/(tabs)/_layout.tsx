@@ -38,12 +38,13 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: theme.primary,
           tabBarInactiveTintColor: theme.subtext,
+          tabBarHideOnKeyboard: true,
           tabBarStyle: {
             position: "absolute",
             backgroundColor: "transparent",
             borderTopWidth: 0,
             elevation: 0,
-            height: 70,
+            height: Platform.OS === "ios" ? 80 : 70,
             bottom: Platform.OS === "ios" ? 20 : 0,
           },
           tabBarBackground: () => <TabBg color={theme.tabSurface} />,
@@ -52,27 +53,32 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: "Home",
-            tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} />,
+            title: "Dashboard",
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="grid-outline" size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="inventory"
           options={{
             title: "Inventory",
-            tabBarIcon: ({ color }) => <Ionicons name="cube-outline" size={24} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="cube-outline" size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="scan"
           options={{
+            tabBarStyle: { display: "none" },
             title: "",
             tabBarIcon: ({ focused }) => (
               <View style={styles.scanIconWrapper}>
-                <Ionicons 
-                  name="scan-circle-outline" 
-                  size={32} 
-                  color={focused ? theme.primary : theme.text} 
+                <Ionicons
+                  name="scan-circle-outline"
+                  size={32}
+                  color={focused ? theme.primary : theme.text}
                 />
               </View>
             ),
@@ -82,14 +88,18 @@ export default function TabsLayout() {
           name="add-products"
           options={{
             title: "Add",
-            tabBarIcon: ({ color }) => <Ionicons name="add-circle-outline" size={24} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="add-circle-outline" size={24} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="FEFO"
           options={{
             title: "FEFO",
-            tabBarIcon: ({ color }) => <Ionicons name="list-outline" size={24} color={color} />,
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="hourglass" size={24} color={color} />
+            ),
           }}
         />
       </Tabs>
@@ -104,12 +114,10 @@ const styles = StyleSheet.create({
     width: width,
   },
   scanIconWrapper: {
-    // No background color or border here to keep it transparent
     justifyContent: "center",
     alignItems: "center",
     width: 60,
     height: 60,
-    // Adjust this to sit perfectly in the "U" dip
-    marginTop: Platform.OS === "ios" ? 10 : 5, 
+    marginTop: Platform.OS === "ios" ? 10 : 5,
   },
 });

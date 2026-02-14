@@ -1,10 +1,12 @@
 {
   "expo": {
-    "name": "Inventory",
-    "slug": "Inventory",
+    "name": "Stockq",
+    "slug": "stockq",
     "version": "1.0.0",
+    "privacy": "public",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "backgroundColor": "#000000",
     "scheme": "inventory",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,17 +15,16 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.son_the_nel.Inventory"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -39,11 +40,23 @@
           }
         }
       ],
-      "expo-barcode-scanner"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "03857279-1247-4e95-87fc-45c78d70c699"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/03857279-1247-4e95-87fc-45c78d70c699"
     }
   }
 }

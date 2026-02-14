@@ -1,46 +1,208 @@
-import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// Goal: Create a custom React Hook to manage product inventory with TypeScript support.
+// Features:
+// - Registry Sync: Fetch all products from the backend and maintain global inventory state.
+// - Type Safety: Define strict TypeScript interfaces for Product and Batch entities.
+// - Batch Tracking: Support nested arrays for multiple batches (batch number, qty, expiry) per product.
+// - Auto-Aggregation: Sum individual batch quantities to show total product stock.
+// - Internal Coding: Handle the hasBarcode flag to distinguish between UPC and system-generated IDs.
+// - Detail Fetching: Provide a method to retrieve a single product's full history for the View page.
+// - State Management: Export loading, error, and manual refresh functions for UI control.
+
+import axios from "axios";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+/** Types & Interfaces **/
+export interface Batch {
+  batchNumber: string;
+  quantity: number;
+  expiryDate: string;
+  price?: number;
+}
 
 export interface Product {
-  _id: string;               // MongoDB ID
-  id?: string;               // Optional alias for old code
+  _id: string;
   name: string;
-  category: string;
-  imageUrl: string;          // The image URL
-  expiryDate: string;        // We will pull this from the nearest batch
-  totalQuantity: number;     // Total stock
-  quantity?: number;         // Alias for UI consistency
-  receivedDate: string;      // From the database timestamp
+  category?: string;
+  totalQuantity: number;
+  imageUrl?: string;
+  isPerishable: boolean;
+  batches: Batch[];
+  barcode: string;
   hasBarcode: boolean;
-  barcode?: string;
-  internalCode?: string;
+  updatedAt: string;
+  genericPrice?: number | null;
 }
 
 export const useProducts = () => {
-  // Pass the Interface to useState <Product[]>
-  const [products, setProducts] = useState<Product[]>([]); 
+  const [products, setProducts] = useState<Product[]>([]);
+  const [recentlySold, setRecentlySold] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
+  const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
+
+  /** Fetch & Transform Data **/
   const fetchProducts = useCallback(async () => {
-  console.log("Attempting to fetch from:", process.env.EXPO_PUBLIC_API_URL); // LOG 1
-    setLoading(true);
     try {
-      const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/products`);
-      console.log("Fetch successful!"); // LOG 2
-      setProducts(response.data.data || []);
+      setLoading(true);
+      const response = await axios.get(API_URL);
+      
+      // Handle different response structures
+      let rawData = [];
+      if (response.data.status === 'success' && response.data.data?.products) {
+        rawData = response.data.data.products;
+      } else if (Array.isArray(response.data)) {
+        rawData = response.data;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        rawData = response.data.data;
+      }
+
+      // Ensure rawData is an array
+      if (!Array.isArray(rawData)) {
+        rawData = [];
+      }
+
+      // Transform: Use totalQuantity from backend (calculated via pre-save hook)
+      const formattedData = rawData.map((p: any) => ({
+        ...p,
+        name: p.productName || p.name, // Map productName to name for consistency
+        // Backend already calculates totalQuantity, but ensure it exists
+        totalQuantity:
+          p.totalQuantity ??
+          p.stockQuantity ??
+          p.batches?.reduce((acc: number, b: Batch) => acc + b.quantity, 0) ??
+          0,
+        // Ensure batches is always an array
+        batches: Array.isArray(p.batches) ? p.batches : [],
+      }));
+
+      setProducts(formattedData);
+      setError(null);
     } catch (err: any) {
-      // LOG 3: This will tell us if it's a Timeout, 404, or Connection Refused
-      console.error("DETAILED NETWORK ERROR:", err.toJSON ? err.toJSON() : err);
-      setError(err.message || "Failed to fetch products");
+      // Check if it's a server error (500) vs network error
+      if (err.response?.status === 500) {
+        setError("Database connection issue. Please check backend.");
+      } else {
+        setError("Unable to reach server. Check your connection.");
+      }
+      setProducts([]); // Set empty array so app doesn't crash
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [API_URL]);
 
+  /** Fetch Recently Sold Products **/
+  const fetchRecentlySold = useCallback(async () => {
+    try {
+      const response = await axios.get(`${ANALYTICS_URL}/recently-sold?limit=10`);
+      if (response.data.success) {
+        setRecentlySold(response.data.data || []);
+      }
+    } catch (err) {
+      // Silently fail - recently sold is not critical
+      // This prevents error spam when MongoDB is down
+      setRecentlySold([]);
+    }
+  }, [ANALYTICS_URL]);
+
+  /** Real-Time Analytics (Memoized for performance) **/
+  const inventoryStats = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(now.getDate() + 30);
+
+    return {
+      totalSkus: products.length,
+      totalUnits: products.reduce((acc, p) => acc + p.totalQuantity, 0),
+      lowStockCount: products.filter(
+        (p) => p.totalQuantity > 0 && p.totalQuantity < 10,
+      ).length,
+      expiringSoonCount: products.filter((p) =>
+        Array.isArray(p.batches) && p.batches.some((b) => {
+          const exp = new Date(b.expiryDate);
+          return exp > now && exp <= thirtyDaysFromNow;
+        }),
+      ).length,
+      outOfStockCount: products.filter((p) => p.totalQuantity === 0).length,
+    };
+  }, [products]);
+
+  /** Unified Detail Fetcher (ID or Barcode) **/
+  const getProductById = async (
+    identifier: string,
+  ): Promise<Product | null> => {
+    try {
+      const response = await axios.get(`${API_URL}/${identifier}`);
+      
+      // Handle different response structures
+      let item = null;
+      if (response.data.status === 'success' && response.data.data?.product) {
+        item = response.data.data.product;
+      } else if (response.data.data) {
+        item = response.data.data;
+      } else {
+        item = response.data;
+      }
+
+      if (!item) {
+        return null;
+      }
+
+      return {
+        ...item,
+        name: item.productName || item.name,
+        // Ensure totalQuantity is present
+        totalQuantity:
+          item.totalQuantity ??
+          item.batches?.reduce(
+            (acc: number, b: Batch) => acc + b.quantity,
+            0,
+          ) ??
+          0,
+        // Ensure batches is always an array
+        batches: Array.isArray(item.batches) ? item.batches : [],
+      };
+    } catch (err: any) {
+      // Don't log 404 errors as they're expected when product is not in inventory
+      if (err.response?.status !== 404) {
+        console.error(`Detail Fetch Error for [${identifier}]:`, err);
+      }
+      return null;
+    }
+  };
+
+  /** Local Filtering (Search) **/
+  const filterProducts = (query: string) => {
+    if (!query) return products;
+    const lowerQuery = query.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(lowerQuery) ||
+        p.barcode.includes(query) ||
+        p.category?.toLowerCase().includes(lowerQuery),
+    );
+  };
+
+  /** Initial Synchronization **/
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    fetchRecentlySold();
+  }, [fetchProducts, fetchRecentlySold]);
 
-  return { products, loading, error, refresh: fetchProducts };
+  /** Refresh function that updates both products and recently sold **/
+  const refresh = useCallback(async () => {
+    await Promise.all([fetchProducts(), fetchRecentlySold()]);
+  }, [fetchProducts, fetchRecentlySold]);
+
+  return {
+    products,
+    recentlySold,
+    inventoryStats,
+    loading,
+    error,
+    refresh,
+    getProductById,
+    filterProducts,
+  };
 };

@@ -1,168 +1,586 @@
-import { View, Text, StyleSheet, ScrollView, ImageBackground, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { products } from '../data/dummyProducts';
-import { useTheme } from '../context/ThemeContext';
-
-const getDaysLeft = (date: string) => {
-  const diff = new Date(date).getTime() - new Date().getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-};
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  ImageBackground,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { useTheme } from "../context/ThemeContext";
+import { useAdminAuth } from "../hooks/useAdminAuth";
+import { Alert, AlertAction, useAlerts } from "../hooks/useAlerts";
 
 export default function Alerts() {
   const { theme, isDark } = useTheme();
+  const router = useRouter();
+  const { alerts, summary, loading, refresh, acknowledgeAlert } = useAlerts();
+  const { validatePin } = useAdminAuth();
 
-  // Consistent background image logic
-  const backgroundImage = isDark 
-    ? require('../assets/images/Background7.png') 
-    : require('../assets/images/Background9.png');
+  const [selectedLevel, setSelectedLevel] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [selectedAction, setSelectedAction] = useState<AlertAction | null>(null);
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
-  const alerts = products
-    .map((p) => ({
-      ...p,
-      daysLeft: getDaysLeft(p.expiryDate),
-    }))
-    .filter((p) => p.daysLeft <= 14)
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const backgroundImage =
+    isDark ?
+      require("../assets/images/Background7.png")
+    : require("../assets/images/Background9.png");
+
+  const filteredAlerts = alerts.filter((alert) => {
+    const matchesLevel =
+      selectedLevel === "all" || alert.alertLevel === selectedLevel;
+    const matchesSearch =
+      !searchQuery ||
+      alert.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      alert.category?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesLevel && matchesSearch;
+  });
+
+  const handleAction = (alert: Alert, action: AlertAction) => {
+    setSelectedAlert(alert);
+    setSelectedAction(action);
+    
+    // Check if action requires admin password
+    if (action.type === 'remove' || action.type === 'markdown') {
+      setPasswordModalVisible(true);
+      setAdminPin("");
+      setPasswordError("");
+    } else {
+      setActionModalVisible(true);
+    }
+  };
+
+  const verifyPassword = async () => {
+    const isValid = await validatePin(adminPin);
+    
+    if (isValid) {
+      setPasswordModalVisible(false);
+      setPasswordError("");
+      executeAction();
+    } else {
+      setPasswordError("Incorrect PIN");
+    }
+  };
+
+  const executeAction = async () => {
+    if (!selectedAlert || !selectedAction) return;
+
+    try {
+      if (selectedAction.type === 'remove') {
+        // Delete the product
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}`,
+          { method: 'DELETE' }
+        );
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          Toast.show({
+            type: "success",
+            text1: "Product Removed",
+            text2: `${selectedAlert.productName} has been deleted`,
+          });
+          await acknowledgeAlert(selectedAlert.alertId, "Removed");
+          refresh();
+        } else {
+          throw new Error(data.message || 'Failed to delete product');
+        }
+      } else if (selectedAction.type === 'markdown') {
+        // Apply discount based on the label
+        let discountPercent = 40; // Default
+        
+        // Parse discount from label (e.g., "Discount 30-50%" or "Discount 15-25%")
+        if (selectedAction.label.includes('30-50')) {
+          discountPercent = 40; // Middle of 30-50%
+        } else if (selectedAction.label.includes('15-25')) {
+          discountPercent = 20; // Middle of 15-25%
+        }
+        
+        console.log('Applying discount:', {
+          productId: selectedAlert.productId,
+          discountPercent,
+          url: `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}/discount`
+        });
+        
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}/discount`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ discountPercent })
+          }
+        );
+        
+        const data = await response.json();
+        console.log('Discount response:', { status: response.status, data });
+        
+        if (response.ok && data.success) {
+          Toast.show({
+            type: "success",
+            text1: "Discount Applied",
+            text2: `${discountPercent}% discount applied to ${selectedAlert.productName}`,
+          });
+          await acknowledgeAlert(selectedAlert.alertId, "Discounted");
+          refresh();
+        } else {
+          throw new Error(data.message || 'Failed to apply discount');
+        }
+      }
+      
+      setSelectedAlert(null);
+      setSelectedAction(null);
+      setAdminPin("");
+    } catch (error: any) {
+      console.error('Action error:', error);
+      Toast.show({
+        type: "error",
+        text1: "Action Failed",
+        text2: error.message || "Please try again",
+      });
+    }
+  };
+
+  const confirmAction = async () => {
+    if (!selectedAlert) return;
+
+    const result = await acknowledgeAlert(
+      selectedAlert.alertId,
+      "Acknowledged",
+    );
+
+    if (result.success) {
+      Toast.show({
+        type: "success",
+        text1: "Action Recorded",
+        text2: `Applied to ${selectedAlert.productName}`,
+      });
+      setActionModalVisible(false);
+      setSelectedAlert(null);
+    } else {
+      Toast.show({ type: "error", text1: "Action Failed" });
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
-      
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ImageBackground
+        source={backgroundImage}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={refresh}
+            tintColor={theme.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>Expiry Alerts</Text>
-          <Text style={[styles.subtitle, { color: theme.subtext }]}>
-            Items requiring immediate attention
-          </Text>
+          <View>
+            <Text style={[styles.subtitle, { color: theme.primary }]}>
+              NOTIFICATION_CENTER
+            </Text>
+            <Text style={[styles.title, { color: theme.text }]}>
+              ALERTS
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/settings")}
+            style={[styles.settingsBtn, { backgroundColor: theme.surface }]}
+          >
+            <Ionicons name="settings-outline" size={20} color={theme.text} />
+          </Pressable>
         </View>
 
-        {alerts.map((item) => {
-          const isCritical = item.daysLeft <= 3;
-          const isHigh = item.daysLeft <= 7;
-          
-          const level = isCritical ? 'CRITICAL' : isHigh ? 'HIGH' : 'WARNING';
-          
-          // Using theme colors for status
-          const statusColor = isCritical 
-            ? '#ff3b3b' 
-            : isHigh 
-            ? '#ffb020' 
-            : theme.primary;
-
-          const iconName = isCritical 
-            ? "alert-circle" 
-            : isHigh 
-            ? "warning" 
-            : "information-circle";
-
-          return (
-            <View 
-              key={item.id} 
+        <View style={styles.summaryGrid}>
+          {[
+            { label: "Expired", key: "expired", color: "#8B0000" },
+            { label: "Critical", key: "critical", color: "#FF4444" },
+            { label: "High", key: "high", color: "#FF9500" },
+            { label: "Early", key: "early", color: "#FFD60A" },
+          ].map((item) => (
+            <View
+              key={item.key}
               style={[
-                styles.alertCard, 
-                { 
-                  backgroundColor: theme.surface, 
-                  borderColor: isCritical ? statusColor : theme.border,
-                  borderWidth: isCritical ? 1.5 : 1 
-                }
+                styles.summaryCard,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: item.color,
+                  borderWidth: 1.5,
+                },
               ]}
             >
-              <View style={[styles.iconBox, { backgroundColor: `${statusColor}20` }]}>
-                <Ionicons name={iconName} size={24} color={statusColor} />
-              </View>
+              <Text style={[styles.summaryValue, { color: item.color }]}>
+                {summary ? (summary as any)[item.key] || 0 : 0}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: theme.subtext }]}>
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </View>
 
-              <View style={styles.info}>
-                <Text style={[styles.name, { color: theme.text }]}>{item.name}</Text>
-                <Text style={[styles.meta, { color: theme.subtext }]}>
-                  {item.category} • {item.quantity} units remaining
-                </Text>
-              </View>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <Ionicons name="search" size={18} color={theme.subtext} />
+          <TextInput
+            placeholder="Search alerts..."
+            placeholderTextColor={theme.subtext}
+            style={[styles.searchInput, { color: theme.text }]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
 
-              <View style={styles.statusSide}>
-                <Text style={[styles.daysText, { color: statusColor }]}>
-                  {item.daysLeft}d
-                </Text>
-                <View style={[styles.pill, { backgroundColor: `${statusColor}20` }]}>
-                   <Text style={[styles.pillText, { color: statusColor }]}>{level}</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterContainer}
+        >
+          {["all", "expired", "critical", "high", "early"].map((level) => (
+            <Pressable
+              key={level}
+              onPress={() => setSelectedLevel(level)}
+              style={[
+                styles.filterBtn,
+                {
+                  backgroundColor:
+                    selectedLevel === level ? theme.primary : theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  { color: selectedLevel === level ? "#FFF" : theme.text },
+                ]}
+              >
+                {level.toUpperCase()}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {filteredAlerts.map((alert) => (
+          <View
+            key={alert.alertId}
+            style={[
+              styles.alertCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: alert.color,
+                borderLeftWidth: 6,
+              },
+            ]}
+          >
+            <Pressable
+              onPress={() => router.push(`/product/${alert.productId}`)}>
+              <View style={styles.alertHeader}>
+                <View style={styles.alertInfo}>
+                  <Text style={[styles.alertName, { color: theme.text }]}>
+                    {alert.productName}
+                  </Text>
+                  <Text style={[styles.alertMeta, { color: theme.subtext }]}>
+                    Qty: {alert.quantity} • {alert.category}
+                  </Text>
+                </View>
+                <View style={styles.alertStatus}>
+                  <Text style={[styles.daysText, { color: alert.color }]}>
+                    {alert.daysUntilExpiry !== null ?
+                      alert.daysUntilExpiry <= 0 ?
+                        "EXP"
+                      : `${alert.daysUntilExpiry}d`
+                    : "N/A"}
+                  </Text>
+                  <View
+                    style={[
+                      styles.levelBadge,
+                      { backgroundColor: alert.color + "20" },
+                    ]}
+                  >
+                    <Text style={[styles.levelText, { color: alert.color }]}>
+                      {(alert.alertLevel || "N/A").toUpperCase()}
+                    </Text>
+                  </View>
                 </View>
               </View>
+            </Pressable>
+
+            <View style={styles.actionsRow}>
+              {alert.actions?.slice(0, 2).map((action: any, idx: number) => (
+                <Pressable
+                  key={idx}
+                  onPress={() => handleAction(alert, action)}
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor:
+                        action.urgent ? alert.color + "15" : theme.background,
+                      borderColor: action.urgent ? alert.color : theme.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={action.icon as any}
+                    size={14}
+                    color={action.urgent ? alert.color : theme.text}
+                  />
+                  <Text
+                    style={[
+                      styles.actionText,
+                      { color: action.urgent ? alert.color : theme.text },
+                    ]}
+                  >
+                    {action.label}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-          );
-        })}
+          </View>
+        ))}
       </ScrollView>
+
+      <Modal visible={actionModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+          >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Resolve Alert
+            </Text>
+            <Text style={[styles.modalText, { color: theme.subtext }]}>
+              Mark {selectedAlert?.productName} as processed?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setActionModalVisible(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.background }]}
+              >
+                <Text style={{ color: theme.text }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmAction}
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  Confirm
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Admin Password Modal */}
+      <Modal visible={passwordModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+          >
+            <Ionicons name="lock-closed" size={40} color={theme.primary} style={{ marginBottom: 15 }} />
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Admin Authentication
+            </Text>
+            <Text style={[styles.modalText, { color: theme.subtext, marginBottom: 20 }]}>
+              {selectedAction?.type === 'remove' 
+                ? `Remove ${selectedAlert?.productName} from inventory?`
+                : `Apply ${selectedAction?.label.includes('30-50') ? '40%' : '20%'} discount to ${selectedAlert?.productName}?`
+              }
+            </Text>
+            
+            <View style={[styles.passwordInput, { backgroundColor: theme.background, borderColor: passwordError ? '#FF4444' : theme.border }]}>
+              <Ionicons name="key-outline" size={18} color={theme.subtext} />
+              <TextInput
+                placeholder="Enter 4-digit admin PIN"
+                placeholderTextColor={theme.subtext}
+                style={[styles.passwordField, { color: theme.text }]}
+                value={adminPin}
+                onChangeText={(text) => {
+                  setAdminPin(text);
+                  setPasswordError("");
+                }}
+                secureTextEntry
+                keyboardType="numeric"
+                maxLength={4}
+                autoFocus
+                onSubmitEditing={verifyPassword}
+              />
+            </View>
+            
+            {passwordError ? (
+              <Text style={[styles.errorText, { color: '#FF4444' }]}>
+                {passwordError}
+              </Text>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => {
+                  setPasswordModalVisible(false);
+                  setAdminPin("");
+                  setPasswordError("");
+                }}
+                style={[styles.modalBtn, { backgroundColor: theme.background }]}
+              >
+                <Text style={{ color: theme.text }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={verifyPassword}
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                  Confirm
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   scrollContent: {
     padding: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 120, // Space for the floating tab bar
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingBottom: 120,
   },
   header: {
-    marginBottom: 25,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: -0.5,
+  title: { fontSize: 28, fontWeight: "900", letterSpacing: -1 },
+  subtitle: { fontSize: 10, marginTop: 4, fontWeight: "900", letterSpacing: 2 },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  subtitle: {
-    fontSize: 15,
-    marginTop: 4,
-    opacity: 0.8,
-  },
-  alertCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 24,
-    marginBottom: 12,
-    // Soft shadow for depth
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  iconBox: {
-    width: 48,
-    height: 48,
+  summaryGrid: { flexDirection: "row", gap: 8, marginBottom: 20 },
+  summaryCard: { flex: 1, padding: 10, borderRadius: 16, alignItems: "center" },
+  summaryValue: { fontSize: 20, fontWeight: "900" },
+  summaryLabel: { fontSize: 9, fontWeight: "700", marginTop: 4 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    height: 45,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1,
+    marginBottom: 15,
   },
-  info: {
-    flex: 1,
-    marginLeft: 15,
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 14 },
+  filterContainer: { marginBottom: 20 },
+  filterBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
   },
-  name: {
-    fontSize: 17,
-    fontWeight: '700',
+  filterText: { fontSize: 11, fontWeight: "800" },
+  alertCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 16,
   },
-  meta: {
-    fontSize: 12,
-    marginTop: 2,
+  alertHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  statusSide: {
-    alignItems: 'flex-end',
-  },
-  daysText: {
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  pill: {
+  alertInfo: { flex: 1 },
+  alertName: { fontSize: 16, fontWeight: "800" },
+  alertMeta: { fontSize: 12, marginTop: 4 },
+  alertStatus: { alignItems: "flex-end" },
+  daysText: { fontSize: 18, fontWeight: "900" },
+  levelBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 8,
     marginTop: 4,
   },
-  pillText: {
-    fontSize: 9,
-    fontWeight: '800',
+  levelText: { fontSize: 9, fontWeight: "800" },
+  actionsRow: { flexDirection: "row", gap: 8 },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  actionText: { fontSize: 11, fontWeight: "700" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "80%",
+    padding: 25,
+    borderRadius: 25,
+    alignItems: "center",
+  },
+  modalTitle: { fontSize: 20, fontWeight: "800", marginBottom: 10 },
+  modalText: { fontSize: 14, textAlign: "center", marginBottom: 20 },
+  modalActions: { flexDirection: "row", gap: 10, width: "100%" },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  passwordInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 10,
+    width: '100%',
+  },
+  passwordField: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 15,
+  },
+  errorText: {
+    fontSize: 12,
+    marginBottom: 15,
+    fontWeight: '600',
   },
 });

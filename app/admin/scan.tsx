@@ -1,0 +1,830 @@
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { useAudioPlayer } from "expo-audio";
+import { useCameraPermissions } from "expo-camera";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { BarcodeScanner } from "../../components/BarcodeScanner";
+import { useTheme } from "../../context/ThemeContext";
+
+const { height, width } = Dimensions.get("window");
+
+interface CartItem {
+  _id: string;
+  name: string;
+  barcode: string;
+  imageUrl?: string;
+  totalQuantity: number;
+  quantity: number; // quantity in cart
+}
+
+export default function AdminScanScreen() {
+  const router = useRouter();
+  const { theme } = useTheme();
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // Scanner Mode: "lookup" or "sales"
+  const [mode, setMode] = useState<"lookup" | "sales">("sales");
+
+  // Scanner State
+  const [scanned, setScanned] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [torch, setTorch] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
+
+  // Cart State (for sales mode)
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [showCartModal, setShowCartModal] = useState(false);
+
+  // Cart Icon Animation
+  const cartBounceAnim = useRef(new Animated.Value(1)).current;
+  const cartShakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Audio
+  const scanBeep = useAudioPlayer(require("../../assets/sounds/beep.mp3"));
+
+  // Reset on focus
+  useFocusEffect(
+    React.useCallback(() => {
+      setScanned(false);
+      setLoading(false);
+      setTorch(false);
+      setCameraKey((prev) => prev + 1);
+
+      return () => {
+        setTorch(false);
+      };
+    }, [])
+  );
+
+  // Reset when mode changes
+  useEffect(() => {
+    setScanned(false);
+    setLoading(false);
+  }, [mode]);
+
+  // Trigger cart bounce animation
+  const animateCartIcon = () => {
+    // Bounce effect
+    Animated.sequence([
+      Animated.timing(cartBounceAnim, {
+        toValue: 1.3,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartBounceAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Shake effect
+    Animated.sequence([
+      Animated.timing(cartShakeAnim, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartShakeAnim, {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartShakeAnim, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cartShakeAnim, {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleBarCodeScanned = async ({ data }: { data: string }) => {
+    if (scanned || loading) return;
+    setScanned(true);
+    setLoading(true);
+
+    try {
+      const response = await axios.get(
+        `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`
+      );
+
+      if (mode === "lookup") {
+        // LOOKUP MODE: Navigate to product detail
+        if (response.data.found) {
+          // Product exists in registry - now find it in local inventory
+          try {
+            const localProductResponse = await axios.get(
+              `${process.env.EXPO_PUBLIC_API_URL}/products/barcode/${data}`
+            );
+            
+            if (localProductResponse.data.success && localProductResponse.data.product) {
+              // Product found in local inventory
+              scanBeep.play();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.push(`/admin/product/${localProductResponse.data.product._id}`);
+            } else {
+              // Product in registry but not in local stock
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Toast.show({
+                type: "info",
+                text1: "Not In Stock",
+                text2: `${response.data.productData.name} exists in registry but has no inventory`,
+                visibilityTime: 4000,
+              });
+              setScanned(false);
+            }
+          } catch (localError) {
+            console.error("Local product lookup error:", localError);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            Toast.show({
+              type: "info",
+              text1: "Not In Stock",
+              text2: "Product exists in registry but has no inventory",
+            });
+            setScanned(false);
+          }
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Toast.show({
+            type: "info",
+            text1: "Not Found",
+            text2: "Product does not exist in registry",
+          });
+          setScanned(false);
+        }
+      } else {
+        // SALES MODE: Add to cart
+        if (response.data.found) {
+          // First, get the product from local inventory to get accurate stock info
+          try {
+            const localProductResponse = await axios.get(
+              `${process.env.EXPO_PUBLIC_API_URL}/products/barcode/${data}`
+            );
+            
+            if (localProductResponse.data.success && localProductResponse.data.product) {
+              const product = localProductResponse.data.product;
+
+              // Check if product has stock
+              if (product.totalQuantity === 0) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Toast.show({
+                  type: "error",
+                  text1: "Out of Stock",
+                  text2: `${product.name} is not available`,
+                });
+                setScanned(false);
+                return;
+              }
+
+              // Check if already in cart
+              const existingIndex = cart.findIndex((item) => item._id === product._id);
+
+              if (existingIndex !== -1) {
+                // Already in cart - increment quantity
+                const updatedCart = [...cart];
+                const currentQty = updatedCart[existingIndex].quantity;
+
+                if (currentQty < product.totalQuantity) {
+                  updatedCart[existingIndex].quantity += 1;
+                  setCart(updatedCart);
+                  
+                  scanBeep.play();
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  animateCartIcon();
+                  
+                  Toast.show({
+                    type: "success",
+                    text1: "Quantity Updated",
+                    text2: `${product.name} x${updatedCart[existingIndex].quantity}`,
+                  });
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  Toast.show({
+                    type: "info",
+                    text1: "Maximum Quantity",
+                    text2: `Only ${product.totalQuantity} units available`,
+                  });
+                }
+              } else {
+                // Add new item to cart
+                const newItem: CartItem = {
+                  _id: product._id,
+                  name: product.name,
+                  barcode: product.barcode,
+                  imageUrl: product.imageUrl,
+                  totalQuantity: product.totalQuantity,
+                  quantity: 1,
+                };
+
+                setCart([...cart, newItem]);
+                
+                scanBeep.play();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                animateCartIcon();
+                
+                Toast.show({
+                  type: "success",
+                  text1: "Added to Cart",
+                  text2: product.name,
+                });
+              }
+
+              setScanned(false);
+            } else {
+              // Product in registry but not in local stock
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Toast.show({
+                type: "info",
+                text1: "Not In Stock",
+                text2: `${response.data.productData.name} exists in registry but has no inventory`,
+              });
+              setScanned(false);
+            }
+          } catch (localError) {
+            console.error("Local product lookup error for sales:", localError);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Toast.show({
+              type: "error",
+              text1: "Not In Stock",
+              text2: "Product exists in registry but has no inventory",
+            });
+            setScanned(false);
+          }
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Toast.show({
+            type: "error",
+            text1: "Not Found",
+            text2: "Product not in inventory",
+          });
+          setScanned(false);
+        }
+      }
+    } catch (err) {
+      console.error("Scan Error:", err);
+      Toast.show({ type: "error", text1: "Scan Failed", text2: "Check connection" });
+      setScanned(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateCartQuantity = (productId: string, delta: number) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => {
+        if (item._id === productId) {
+          const newQty = Math.max(1, item.quantity + delta);
+          const maxStock = item.totalQuantity || 999; // Fallback if totalQuantity is missing
+          return {
+            ...item,
+            quantity: Math.min(newQty, maxStock),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart((prevCart) => prevCart.filter((item) => item._id !== productId));
+    Toast.show({
+      type: "info",
+      text1: "Item Removed",
+      text2: "Product removed from cart",
+    });
+  };
+
+  const handleDone = () => {
+    if (cart.length === 0) {
+      Toast.show({
+        type: "info",
+        text1: "Empty Cart",
+        text2: "Please scan items to add to cart",
+      });
+      return;
+    }
+
+    // Navigate to sales page with cart data
+    setShowCartModal(false);
+    router.push({
+      pathname: "/admin/sales",
+      params: {
+        cartData: JSON.stringify(cart),
+      },
+    });
+  };
+
+  const getTotalItems = () => {
+    return cart.reduce((sum, item) => sum + item.quantity, 0);
+  };
+
+  // Handle camera permissions
+  if (!permission) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Text style={[styles.permissionText, { color: theme.text }]}>
+          Requesting camera permission...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={styles.permissionContainer}>
+          <Ionicons name="camera-outline" size={64} color={theme.subtext} />
+          <Text style={[styles.permissionText, { color: theme.text }]}>
+            Camera permission required
+          </Text>
+          <Pressable
+            style={[styles.permissionBtn, { backgroundColor: theme.primary }]}
+            onPress={requestPermission}
+          >
+            <Text style={styles.permissionBtnText}>Grant Permission</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  const modeColor = mode === "lookup" ? "#00D1FF" : "#00FF00";
+
+  return (
+    <View style={styles.container}>
+      <BarcodeScanner
+        onScan={handleBarCodeScanned}
+        onClose={() => router.back()}
+        loading={loading}
+        torch={torch}
+        setTorch={setTorch}
+        tabColor={modeColor}
+      >
+        {/* TOP BAR - Tabs and Close */}
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.back()} style={styles.iconCircle}>
+            <Ionicons name="close" size={28} color="#FFF" />
+          </Pressable>
+
+          <View style={styles.tabContainer}>
+            <Pressable
+              onPress={() => {
+                setMode("sales");
+                setScanned(false);
+              }}
+              style={[
+                styles.tab,
+                mode === "sales" && { backgroundColor: "#00FF00" },
+              ]}
+            >
+              <Text style={[styles.tabText, mode === "sales" && { color: "#000" }]}>
+                SALES
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setMode("lookup");
+                setScanned(false);
+              }}
+              style={[
+                styles.tab,
+                mode === "lookup" && { backgroundColor: "#00D1FF" },
+              ]}
+            >
+              <Text style={[styles.tabText, mode === "lookup" && { color: "#000" }]}>
+                LOOKUP
+              </Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={() => setTorch(!torch)}
+            style={[
+              styles.iconCircle,
+              torch && { backgroundColor: "rgba(255,255,255,0.4)" },
+            ]}
+          >
+            <Ionicons name={torch ? "flash" : "flash-off"} size={24} color="#FFF" />
+          </Pressable>
+        </View>
+
+        {/* BOTTOM BAR - Instructions and Cart Button */}
+        <View style={styles.bottomBar}>
+          <Text style={styles.hintText}>
+            {mode === "lookup" ? "Scan to view product details" : "Scan items to add to cart"}
+          </Text>
+
+          {mode === "sales" && (
+            <Animated.View
+              style={{
+                transform: [
+                  { scale: cartBounceAnim },
+                  { translateX: cartShakeAnim },
+                ],
+              }}
+            >
+              <Pressable
+                style={[styles.cartButton, { backgroundColor: theme.primary }]}
+                onPress={() => setShowCartModal(true)}
+              >
+                <Ionicons name="cart" size={24} color="#FFF" />
+                {cart.length > 0 && (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                  </View>
+                )}
+              </Pressable>
+            </Animated.View>
+          )}
+        </View>
+      </BarcodeScanner>
+
+      {/* CART MODAL */}
+      <Modal visible={showCartModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  Shopping Cart
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.subtext }]}>
+                  {cart.length} {cart.length === 1 ? "item" : "items"} • {getTotalItems()} total units
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setShowCartModal(false)}
+                style={[styles.closeBtn, { backgroundColor: theme.background }]}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+
+            {/* Cart Items List */}
+            {cart.length === 0 ? (
+              <View style={styles.emptyCart}>
+                <Ionicons name="cart-outline" size={80} color={theme.subtext + "40"} />
+                <Text style={[styles.emptyText, { color: theme.subtext }]}>
+                  Cart is empty
+                </Text>
+                <Text style={[styles.emptyHint, { color: theme.subtext }]}>
+                  Scan products to add them
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={cart}
+                keyExtractor={(item) => item._id}
+                style={styles.cartList}
+                contentContainerStyle={styles.cartListContent}
+                renderItem={({ item }) => (
+                  <View
+                    style={[
+                      styles.cartItem,
+                      { backgroundColor: theme.background, borderColor: theme.border },
+                    ]}
+                  >
+                    {/* Product Image */}
+                    <View style={[styles.cartItemImage, { backgroundColor: theme.surface }]}>
+                      {item.imageUrl && item.imageUrl !== "cube" ? (
+                        <Image
+                          source={{ uri: item.imageUrl }}
+                          style={styles.productImage}
+                        />
+                      ) : (
+                        <Ionicons name="cube-outline" size={32} color={theme.subtext} />
+                      )}
+                    </View>
+
+                    {/* Product Info */}
+                    <View style={styles.cartItemInfo}>
+                      <Text style={[styles.cartItemName, { color: theme.text }]} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.cartItemMeta, { color: theme.subtext }]}>
+                        Stock: {item.totalQuantity} units
+                      </Text>
+                    </View>
+
+                    {/* Quantity Controls */}
+                    <View style={styles.qtyControls}>
+                      <Pressable
+                        style={[
+                          styles.qtyBtn, 
+                          { 
+                            backgroundColor: theme.surface,
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                          }
+                        ]}
+                        onPress={() => updateCartQuantity(item._id, -1)}
+                      >
+                        <Ionicons name="remove" size={16} color={theme.text} />
+                      </Pressable>
+                      <Text style={[styles.qtyText, { color: theme.text }]}>
+                        {item.quantity}
+                      </Text>
+                      <Pressable
+                        style={[
+                          styles.qtyBtn, 
+                          { 
+                            backgroundColor: theme.surface,
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                          }
+                        ]}
+                        onPress={() => updateCartQuantity(item._id, 1)}
+                      >
+                        <Ionicons name="add" size={16} color={theme.text} />
+                      </Pressable>
+                    </View>
+
+                    {/* Remove Button */}
+                    <Pressable
+                      style={styles.removeBtn}
+                      onPress={() => removeFromCart(item._id)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                    </Pressable>
+                  </View>
+                )}
+              />
+            )}
+
+            {/* Done Button */}
+            {cart.length > 0 && (
+              <Pressable
+                style={[styles.doneButton, { backgroundColor: theme.primary }]}
+                onPress={handleDone}
+              >
+                <Ionicons name="checkmark-circle" size={24} color="#FFF" />
+                <Text style={styles.doneButtonText}>
+                  Proceed to Checkout ({getTotalItems()} items)
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#000" },
+  
+  // Top Bar
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "90%",
+    alignItems: "center",
+  },
+  tabContainer: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    padding: 4,
+    flex: 1,
+    marginHorizontal: 15,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 10,
+  },
+  tabText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  iconCircle: {
+    width: 45,
+    height: 45,
+    borderRadius: 23,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Bottom Bar
+  bottomBar: {
+    alignItems: "center",
+    width: "100%",
+    position: "relative",
+  },
+  hintText: {
+    color: "#FFF",
+    marginBottom: 20,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  cartButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    position: "relative",
+  },
+  cartBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    backgroundColor: "#FF3B30",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFF",
+  },
+  cartBadgeText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  // Permissions
+  permissionContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  permissionText: {
+    fontSize: 16,
+    marginVertical: 20,
+    textAlign: "center",
+  },
+  permissionBtn: {
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  permissionBtnText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  // Cart Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    height: height * 0.75,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Empty Cart
+  emptyCart: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 20,
+  },
+  emptyHint: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 8,
+  },
+
+  // Cart List
+  cartList: {
+    flex: 1,
+  },
+  cartListContent: {
+    paddingBottom: 20,
+  },
+  cartItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  cartItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
+  },
+  cartItemInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  cartItemName: {
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  cartItemMeta: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  qtyControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  qtyBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  qtyText: {
+    fontSize: 16,
+    fontWeight: "900",
+    minWidth: 30,
+    textAlign: "center",
+  },
+  removeBtn: {
+    padding: 8,
+    marginLeft: 8,
+  },
+
+  // Done Button
+  doneButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginTop: 12,
+  },
+  doneButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+});
