@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://inventory-application-xjc5.onrender.com/api",
+        "EXPO_PUBLIC_API_URL": "https://inventory-application-one.vercel.app/api",
         "EAS_SKIP_AUTO_FINGERPRINT": "1"
       },
       "channel": "preview"
@@ -27,7 +27,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://inventory-application-xjc5.onrender.com/api",
+        "EXPO_PUBLIC_API_URL": "https://inventory-application-one.vercel.app/api",
         "EAS_SKIP_AUTO_FINGERPRINT": "1"
       },
       "channel": "production"
