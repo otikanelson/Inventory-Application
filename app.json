@@ -22,6 +22,11 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.son_the_nel.Inventory"
     },
+      "permissions": [
+        "INTERNET"
+      ],
+  "usesCleartextTraffic": true
+},
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png"
@@ -59,4 +64,3 @@
       "url": "https://u.expo.dev/03857279-1247-4e95-87fc-45c78d70c699"
     }
   }
-}
