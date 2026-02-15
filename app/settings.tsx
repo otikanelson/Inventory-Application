@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
+import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useTour } from "../context/TourContext";
 
@@ -22,6 +23,7 @@ export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const router = useRouter();
   const { resetTour, startTour } = useTour();
+  const { logout: authLogout } = useAuth();
 
   const backgroundImage = isDark
     ? require("../assets/images/Background7.png")
@@ -205,13 +207,13 @@ export default function SettingsScreen() {
           description="Clear store data and return to setup page"
           onPress={async () => {
             try {
-              // Clear all auth and store data
+              // CRITICAL: Clear token FIRST to prevent API calls with invalid token
               await AsyncStorage.multiRemove([
                 'auth_session_token',
+                'auth_last_login',
                 'auth_user_role',
                 'auth_user_id',
                 'auth_user_name',
-                'auth_last_login',
                 'auth_store_id',
                 'auth_store_name',
                 'admin_pin',
@@ -220,7 +222,10 @@ export default function SettingsScreen() {
                 'auth_is_author',
               ]);
               
-              // Navigate immediately to prevent API calls
+              // Update auth context state
+              await authLogout();
+              
+              // Navigate after clearing data
               router.replace('/auth/setup' as any);
               
               // Show toast after navigation

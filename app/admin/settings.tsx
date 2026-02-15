@@ -23,6 +23,7 @@ import {
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { useAdminTour } from "../../context/AdminTourContext";
+import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useAlerts } from "../../hooks/useAlerts";
 
@@ -33,6 +34,7 @@ export default function AdminSettingsScreen() {
   const router = useRouter();
   const { settings: alertSettings, updateSettings } = useAlerts();
   const { resetTour, startTour } = useAdminTour();
+  const { logout: authLogout } = useAuth();
 
   // PIN Update State
   const [showPinModal, setShowPinModal] = useState(false);
@@ -450,20 +452,21 @@ export default function AdminSettingsScreen() {
 
   const handleLogout = async () => {
     try {
-      // Clear admin session
-      await AsyncStorage.removeItem('admin_session');
-      await AsyncStorage.removeItem('admin_session_time');
-      
-      // Clear auth session
+      // CRITICAL: Clear token FIRST to prevent API calls with invalid token
       await AsyncStorage.multiRemove([
         'auth_session_token',
         'auth_last_login',
         'auth_user_role',
         'auth_user_id',
         'auth_user_name',
+        'admin_session',
+        'admin_session_time',
       ]);
       
-      // Navigate immediately to prevent API calls
+      // Update auth context state
+      await authLogout();
+      
+      // Navigate after clearing data
       router.replace('/auth/login' as any);
       
       // Show toast after navigation

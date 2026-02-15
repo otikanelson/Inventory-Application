@@ -41,14 +41,18 @@ export default function AuthorDashboard() {
     totalStaff: 0,
     totalProducts: 0,
   });
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const backgroundImage = isDark
     ? require('../../assets/images/Background7.png')
     : require('../../assets/images/Background9.png');
 
   useEffect(() => {
-    loadStores();
-  }, []);
+    if (!hasLoaded) {
+      loadStores();
+      setHasLoaded(true);
+    }
+  }, [hasLoaded]);
 
   const loadStores = async () => {
     try {
@@ -107,6 +111,10 @@ export default function AuthorDashboard() {
 
   const handleLogout = async () => {
     try {
+      // Navigate immediately to prevent API calls
+      router.replace('/auth/login' as any);
+      
+      // Clear auth data after navigation
       await AsyncStorage.multiRemove([
         'auth_session_token',
         'auth_user_role',
@@ -116,13 +124,14 @@ export default function AuthorDashboard() {
         'auth_is_author',
       ]);
 
-      Toast.show({
-        type: 'success',
-        text1: 'Logged Out',
-        text2: 'Author session ended',
-      });
-
-      router.replace('/auth/login' as any);
+      // Show toast after navigation
+      setTimeout(() => {
+        Toast.show({
+          type: 'success',
+          text1: 'Logged Out',
+          text2: 'Author session ended',
+        });
+      }, 100);
     } catch (error) {
       console.error('Logout error:', error);
     }
