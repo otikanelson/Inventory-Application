@@ -38,6 +38,15 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Request logging middleware for debugging
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path}`);
+  if (req.method === 'POST' || req.method === 'PUT') {
+    console.log('Request body keys:', Object.keys(req.body));
+  }
+  next();
+});
+
 // Serve static files from uploads directory (for local development only)
 // In production, Cloudinary handles all images
 if (process.env.NODE_ENV !== 'production') {

@@ -76,12 +76,18 @@ export default function AdminSettingsScreen() {
     earlyWarning: 30
   });
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(true);
+
+  // Staff Management State
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [staffExpanded, setStaffExpanded] = useState(true);
 
   // Load settings on mount
   useEffect(() => {
     loadSettings();
     loadAlertSettings();
     loadCategories();
+    loadStaffMembers();
   }, []);
 
   const loadAlertSettings = async () => {
@@ -106,6 +112,17 @@ export default function AdminSettingsScreen() {
       }
     } catch (error) {
       console.error('Error loading categories:', error);
+    }
+  };
+
+  const loadStaffMembers = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/auth/staff`);
+      if (response.data.success) {
+        setStaffMembers(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading staff members:', error);
     }
   };
 
@@ -222,22 +239,61 @@ export default function AdminSettingsScreen() {
         return;
       }
 
-      // Store new PIN and mark setup as complete
-      await AsyncStorage.setItem('admin_pin', newPin);
-      await AsyncStorage.setItem('admin_first_setup', 'completed');
-      
-      setHasPin(true);
-      
-      Toast.show({
-        type: 'success',
-        text1: 'PIN Created',
-        text2: 'Admin PIN has been set successfully'
-      });
+      // Get admin name from AsyncStorage or use default
+      const adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
 
-      setShowPinModal(false);
-      setOldPin("");
-      setNewPin("");
-      setConfirmPin("");
+      // Create admin user in database
+      try {
+        const response = await axios.post(`${API_URL}/auth/setup`, {
+          name: adminName,
+          pin: newPin
+        });
+
+        if (response.data.success) {
+          const adminId = response.data.data.user.id;
+          
+          // Store admin data locally
+          await AsyncStorage.multiSet([
+            ['admin_pin', newPin],
+            ['admin_first_setup', 'completed'],
+            ['auth_user_id', adminId],
+            ['auth_user_name', adminName],
+            ['auth_user_role', 'admin']
+          ]);
+          
+          setHasPin(true);
+          
+          Toast.show({
+            type: 'success',
+            text1: 'PIN Created',
+            text2: 'Admin PIN has been set successfully'
+          });
+
+          setShowPinModal(false);
+          setOldPin("");
+          setNewPin("");
+          setConfirmPin("");
+        }
+      } catch (apiError: any) {
+        console.log('API setup failed, using local storage only:', apiError.message);
+        
+        // Fallback to local storage only if API fails
+        await AsyncStorage.setItem('admin_pin', newPin);
+        await AsyncStorage.setItem('admin_first_setup', 'completed');
+        
+        setHasPin(true);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'PIN Created',
+          text2: 'Admin PIN has been set successfully (local only)'
+        });
+
+        setShowPinModal(false);
+        setOldPin("");
+        setNewPin("");
+        setConfirmPin("");
+      }
     } catch (error) {
       Toast.show({
         type: 'error',
@@ -337,19 +393,45 @@ export default function AdminSettingsScreen() {
         return;
       }
 
-      // Store new PIN
-      await AsyncStorage.setItem('admin_pin', newPin);
-      
-      Toast.show({
-        type: 'success',
-        text1: 'PIN Updated',
-        text2: 'Admin PIN has been changed successfully'
-      });
+      // Try to update in database first
+      try {
+        const response = await axios.put(`${API_URL}/auth/admin/pin`, {
+          oldPin: oldPin,
+          newPin: newPin
+        });
 
-      setShowPinModal(false);
-      setOldPin("");
-      setNewPin("");
-      setConfirmPin("");
+        if (response.data.success) {
+          // Update local storage
+          await AsyncStorage.setItem('admin_pin', newPin);
+          
+          Toast.show({
+            type: 'success',
+            text1: 'PIN Updated',
+            text2: 'Admin PIN has been changed successfully'
+          });
+
+          setShowPinModal(false);
+          setOldPin("");
+          setNewPin("");
+          setConfirmPin("");
+        }
+      } catch (apiError: any) {
+        console.log('API update failed, using local storage only:', apiError.message);
+        
+        // Fallback to local storage only
+        await AsyncStorage.setItem('admin_pin', newPin);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'PIN Updated',
+          text2: 'Admin PIN has been changed successfully (local only)'
+        });
+
+        setShowPinModal(false);
+        setOldPin("");
+        setNewPin("");
+        setConfirmPin("");
+      }
     } catch (error) {
       Toast.show({
         type: 'error',
@@ -1061,7 +1143,10 @@ export default function AdminSettingsScreen() {
 
         {/* STAFF MANAGEMENT SECTION */}
         <View style={styles.section}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+          <Pressable 
+            onPress={() => setStaffExpanded(!staffExpanded)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 0 }]}>
                 STAFF MANAGEMENT
@@ -1079,6 +1164,11 @@ export default function AdminSettingsScreen() {
                 iconSize={14}
                 iconColor={theme.primary}
               />
+              <Ionicons 
+                name={staffExpanded ? "chevron-down" : "chevron-forward"} 
+                size={18} 
+                color={theme.primary} 
+              />
             </View>
             <Pressable
               style={[styles.addCategoryBtn, { backgroundColor: theme.primary }]}
@@ -1087,53 +1177,113 @@ export default function AdminSettingsScreen() {
               <Ionicons name="person-add" size={20} color="#FFF" />
               <Text style={styles.addCategoryText}>ADD STAFF</Text>
             </Pressable>
-          </View>
+          </Pressable>
 
-          <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.infoRow}>
-              <View style={[styles.featureIcon, { backgroundColor: theme.primary + '15' }]}>
-                <Ionicons name="people" size={24} color={theme.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.infoTitle, { color: theme.text }]}>
-                  Staff Access Control
-                </Text>
-                <Text style={[styles.infoDesc, { color: theme.subtext }]}>
-                  Staff members can manage daily operations without accessing sensitive admin features
-                </Text>
-              </View>
-            </View>
+          {staffExpanded && (
+            <>
+              <View style={[styles.infoCard, { marginBottom: 10, backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.infoRow}>
+                  <View style={[styles.featureIcon, { backgroundColor: theme.primary + '15' }]}>
+                    <Ionicons name="people" size={24} color={theme.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.infoTitle, { color: theme.text }]}>
+                      Staff Access Control
+                    </Text>
+                    <Text style={[styles.infoDesc, { color: theme.subtext }]}>
+                      Staff members can manage daily operations without accessing sensitive admin features
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.permissionsList}>
-              <Text style={[styles.permissionsLabel, { color: theme.text }]}>
-                Staff Permissions:
-              </Text>
-              <View style={styles.permissionItem}>
-                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-                <Text style={[styles.permissionText, { color: theme.text }]}>
-                  View & manage inventory
-                </Text>
+                <View style={styles.permissionsList}>
+                  <Text style={[styles.permissionsLabel, { color: theme.text }]}>
+                    Staff Permissions:
+                  </Text>
+                  <View style={styles.permissionItem}>
+                    <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                    <Text style={[styles.permissionText, { color: theme.text }]}>
+                      View & manage inventory
+                    </Text>
+                  </View>
+                  <View style={styles.permissionItem}>
+                    <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                    <Text style={[styles.permissionText, { color: theme.text }]}>
+                      Add & edit products
+                    </Text>
+                  </View>
+                  <View style={styles.permissionItem}>
+                    <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                    <Text style={[styles.permissionText, { color: theme.text }]}>
+                      Process sales
+                    </Text>
+                  </View>
+                  <View style={styles.permissionItem}>
+                    <Ionicons name="close-circle" size={16} color="#FF3B30" />
+                    <Text style={[styles.permissionText, { color: theme.subtext }]}>
+                      Access admin settings
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.permissionItem}>
-                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-                <Text style={[styles.permissionText, { color: theme.text }]}>
-                  Add & edit products
-                </Text>
-              </View>
-              <View style={styles.permissionItem}>
-                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-                <Text style={[styles.permissionText, { color: theme.text }]}>
-                  Process sales
-                </Text>
-              </View>
-              <View style={styles.permissionItem}>
-                <Ionicons name="close-circle" size={16} color="#FF3B30" />
-                <Text style={[styles.permissionText, { color: theme.subtext }]}>
-                  Access admin settings
-                </Text>
-              </View>
-            </View>
-          </View>
+
+              {/* Staff List */}
+              {staffMembers.length === 0 ? (
+                <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Ionicons name="people-outline" size={48} color={theme.subtext} />
+                  <Text style={[styles.emptyStateText, { color: theme.text }]}>
+                    No Staff Members Yet
+                  </Text>
+                  <Text style={[styles.emptyStateDesc, { color: theme.subtext }]}>
+                    Add staff members to help manage your inventory
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 12, marginTop: 12 }}>
+                  {staffMembers.map((staff) => (
+                    <View
+                      key={staff._id}
+                      style={[
+                        styles.staffCard,
+                        { 
+                          backgroundColor: theme.surface,
+                          borderColor: staff.isActive ? theme.border : '#FF3B30'
+                        }
+                      ]}
+                    >
+                      <View style={[styles.staffAvatar, { backgroundColor: theme.primary + '20' }]}>
+                        <Ionicons name="person" size={24} color={theme.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.staffName, { color: theme.text }]}>
+                          {staff.name}
+                        </Text>
+                        <Text style={[styles.staffRole, { color: theme.subtext }]}>
+                          Staff Member
+                        </Text>
+                        {staff.lastLogin && (
+                          <Text style={[styles.staffLastLogin, { color: theme.subtext }]}>
+                            Last login: {new Date(staff.lastLogin).toLocaleDateString()}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[
+                        styles.staffStatusBadge, 
+                        { backgroundColor: staff.isActive ? '#34C759' + '20' : '#FF3B30' + '20' }
+                      ]}>
+                        <Text style={[
+                          styles.staffStatusText, 
+                          { color: staff.isActive ? '#34C759' : '#FF3B30' }
+                        ]}>
+                          {staff.isActive ? 'Active' : 'Inactive'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         {/* AI SETTINGS SECTION */}
@@ -1384,7 +1534,10 @@ export default function AdminSettingsScreen() {
 
         {/* CATEGORY MANAGEMENT SECTION */}
         <View style={styles.section}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+          <Pressable 
+            onPress={() => setCategoriesExpanded(!categoriesExpanded)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 0 }]}>
                 CATEGORY MANAGEMENT
@@ -1402,6 +1555,11 @@ export default function AdminSettingsScreen() {
                 iconSize={14}
                 iconColor={theme.primary}
               />
+              <Ionicons 
+                name={categoriesExpanded ? "chevron-down" : "chevron-forward"} 
+                size={18} 
+                color={theme.primary} 
+              />
             </View>
             <Pressable
               style={[styles.addCategoryBtn, { backgroundColor: theme.primary }]}
@@ -1410,53 +1568,57 @@ export default function AdminSettingsScreen() {
               <Ionicons name="add" size={20} color="#FFF" />
               <Text style={styles.addCategoryText}>NEW</Text>
             </Pressable>
-          </View>
+          </Pressable>
 
-          {categories.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="pricetags-outline" size={48} color={theme.subtext} />
-              <Text style={[styles.emptyStateText, { color: theme.text }]}>
-                No Categories Yet
-              </Text>
-              <Text style={[styles.emptyStateDesc, { color: theme.subtext }]}>
-                Create categories to organize your products
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.categoryGrid}>
-              {categories.map((category) => (
-                <Pressable
-                  key={category._id}
-                  style={[
-                    styles.categoryCard,
-                    { 
-                      backgroundColor: theme.surface,
-                      borderColor: category.customAlertThresholds?.enabled ? theme.primary : theme.border
-                    }
-                  ]}
-                  onPress={() => openEditCategoryModal(category)}
-                >
-                  <View style={styles.categoryCardHeader}>
-                    <Text style={[styles.categoryCardName, { color: theme.text }]}>
-                      {category.name}
-                    </Text>
-                    {category.customAlertThresholds?.enabled && (
-                      <View style={[styles.customBadge, { backgroundColor: theme.primary + '20' }]}>
-                        <Ionicons name="settings" size={12} color={theme.primary} />
-                      </View>
-                    )}
-                  </View>
-                  {category.customAlertThresholds?.enabled && (
-                    <Text style={[styles.categoryCardThresholds, { color: theme.subtext }]}>
-                      {category.customAlertThresholds.critical}/{category.customAlertThresholds.highUrgency}/{category.customAlertThresholds.earlyWarning} days
-                    </Text>
-                  )}
-                  <Text style={[styles.categoryCardCount, { color: theme.subtext }]}>
-                    {category.productCount || 0} products
+          {categoriesExpanded && (
+            <>
+              {categories.length === 0 ? (
+                <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Ionicons name="pricetags-outline" size={48} color={theme.subtext} />
+                  <Text style={[styles.emptyStateText, { color: theme.text }]}>
+                    No Categories Yet
                   </Text>
-                </Pressable>
-              ))}
-            </View>
+                  <Text style={[styles.emptyStateDesc, { color: theme.subtext }]}>
+                    Create categories to organize your products
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.categoryGrid}>
+                  {categories.map((category) => (
+                    <Pressable
+                      key={category._id}
+                      style={[
+                        styles.categoryCard,
+                        { 
+                          backgroundColor: theme.surface,
+                          borderColor: category.customAlertThresholds?.enabled ? theme.primary : theme.border
+                        }
+                      ]}
+                      onPress={() => openEditCategoryModal(category)}
+                    >
+                      <View style={styles.categoryCardHeader}>
+                        <Text style={[styles.categoryCardName, { color: theme.text }]}>
+                          {category.name}
+                        </Text>
+                        {category.customAlertThresholds?.enabled && (
+                          <View style={[styles.customBadge, { backgroundColor: theme.primary + '20' }]}>
+                            <Ionicons name="settings" size={12} color={theme.primary} />
+                          </View>
+                        )}
+                      </View>
+                      {category.customAlertThresholds?.enabled && (
+                        <Text style={[styles.categoryCardThresholds, { color: theme.subtext }]}>
+                          {category.customAlertThresholds.critical}/{category.customAlertThresholds.highUrgency}/{category.customAlertThresholds.earlyWarning} days
+                        </Text>
+                      )}
+                      <Text style={[styles.categoryCardCount, { color: theme.subtext }]}>
+                        {category.productCount || 0} products
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -2273,5 +2435,43 @@ const styles = StyleSheet.create({
   permissionText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  staffCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    gap: 12,
+  },
+  staffAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  staffName: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  staffRole: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  staffLastLogin: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  staffStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  staffStatusText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

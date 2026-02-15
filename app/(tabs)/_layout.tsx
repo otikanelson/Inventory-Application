@@ -1,8 +1,7 @@
-import React from "react";
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { View, StyleSheet, Dimensions, Platform } from "react-native";
-import { Svg, Path } from "react-native-svg";
+import { Tabs } from "expo-router";
+import { Dimensions, StyleSheet, View } from "react-native";
+import { Path, Svg } from "react-native-svg";
 import { useTheme } from "../../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
@@ -14,14 +13,14 @@ const TabBg = ({ color }: { color: string }) => {
     C${width / 2 - 35} 0 ${width / 2 - 30} 40 ${width / 2} 40 
     S${width / 2 + 35} 0 ${width / 2 + 50} 0 
     H${width} 
-    V70 
+    V90 
     H0 
     Z
   `;
 
   return (
     <View style={styles.svgContainer}>
-      <Svg width={width} height={70} viewBox={`0 0 ${width} 70`}>
+      <Svg width={width} height={90} viewBox={`0 0 ${width} 90`}>
         <Path d={d} fill={color} />
       </Svg>
     </View>
@@ -44,8 +43,8 @@ export default function TabsLayout() {
             backgroundColor: "transparent",
             borderTopWidth: 0,
             elevation: 0,
-            height: Platform.OS === "ios" ? 80 : 70,
-            bottom: Platform.OS === "ios" ? 20 : 0,
+            height: 90,
+            bottom: 0,
           },
           tabBarBackground: () => <TabBg color={theme.tabSurface} />,
         }}
@@ -118,6 +117,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: 60,
     height: 60,
-    marginTop: Platform.OS === "ios" ? 10 : 5,
+    marginTop: -10,
   },
 });

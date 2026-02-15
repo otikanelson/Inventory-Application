@@ -49,18 +49,31 @@ export default function StaffRegisterScreen() {
         try {
           const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
           
+          console.log('=== STAFF REGISTRATION DEBUG ===');
+          console.log('1. API_URL:', API_URL);
+          console.log('2. Staff Name:', staffName);
+          console.log('3. PIN:', '****');
+          
           // Get admin ID for createdBy field
           const adminId = await AsyncStorage.getItem('auth_user_id');
+          console.log('4. Admin ID:', adminId);
           
-          // Create staff user in backend
-          const response = await axios.post(`${API_URL}/auth/staff`, {
+          const requestData = {
             name: staffName,
             pin: pin,
             createdBy: adminId
-          });
+          };
+          console.log('5. Request Data:', { ...requestData, pin: '****' });
+          
+          // Create staff user in backend
+          console.log('6. Sending POST request to:', `${API_URL}/auth/staff`);
+          const response = await axios.post(`${API_URL}/auth/staff`, requestData);
+          console.log('7. Response Status:', response.status);
+          console.log('8. Response Data:', response.data);
 
           if (response.data.success) {
             const staffId = response.data.data.user.id;
+            console.log('9. Staff ID from response:', staffId);
             
             // Also save to local storage as fallback
             await AsyncStorage.multiSet([
@@ -68,18 +81,43 @@ export default function StaffRegisterScreen() {
               ['auth_staff_id', staffId],
               ['auth_staff_name', staffName],
             ]);
+            console.log('10. Saved to AsyncStorage');
+
+            Toast.show({
+              type: 'success',
+              text1: 'Staff Added',
+              text2: `${staffName} has been registered successfully`,
+            });
 
             setStep('complete');
+            console.log('11. Registration complete!');
           } else {
+            console.error('12. Backend returned unsuccessful response:', response.data);
             throw new Error('Backend returned unsuccessful response');
           }
         } catch (error: any) {
-          console.error('Staff registration error:', error);
+          console.error('=== STAFF REGISTRATION ERROR ===');
+          console.error('Error Type:', error.constructor.name);
+          console.error('Error Message:', error.message);
+          console.error('Error Response:', error.response?.data);
+          console.error('Error Status:', error.response?.status);
+          console.error('Full Error:', error);
+          
+          let errorMessage = 'Could not create staff account';
+          
+          if (error.response?.data?.error) {
+            errorMessage = error.response.data.error;
+          } else if (error.message) {
+            errorMessage = error.message;
+          }
+          
           Toast.show({
             type: 'error',
             text1: 'Registration Failed',
-            text2: error.response?.data?.error || 'Could not create staff account',
+            text2: errorMessage,
+            visibilityTime: 4000,
           });
+          
           // Reset on error
           setPinError(true);
           setIsFirstPin(true);

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -16,6 +17,8 @@ import {
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
 import { useTheme } from '../../context/ThemeContext';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 type SetupStep = 'welcome' | 'admin-name' | 'admin-pin' | 'complete';
 
@@ -44,21 +47,72 @@ export default function SetupScreen() {
       setConfirmPin(pin);
       
       if (pin === adminPin) {
-        // Save admin credentials
+        // Save admin credentials to backend and local storage
         try {
+          console.log('=== ADMIN SETUP DEBUG ===');
+          console.log('1. API_URL:', API_URL);
+          console.log('2. Admin Name:', adminName);
+          console.log('3. PIN:', '****');
+
+          // Create admin user in backend
+          console.log('4. Sending POST request to:', `${API_URL}/auth/setup`);
+          const response = await axios.post(`${API_URL}/auth/setup`, {
+            name: adminName || 'Admin',
+            pin: pin
+          });
+
+          console.log('5. Response Status:', response.status);
+          console.log('6. Response Data:', response.data);
+
+          if (response.data.success) {
+            const adminId = response.data.data.user.id;
+            console.log('7. Admin ID from response:', adminId);
+
+            // Also save to local storage
+            await AsyncStorage.multiSet([
+              ['admin_pin', pin],
+              ['admin_first_setup', 'completed'],
+              ['auth_user_name', adminName || 'Admin'],
+              ['auth_user_id', adminId],
+              ['auth_user_role', 'admin']
+            ]);
+            console.log('8. Saved to AsyncStorage');
+
+            Toast.show({
+              type: 'success',
+              text1: 'Admin Created',
+              text2: 'Your account has been set up successfully',
+            });
+
+            setStep('complete');
+            console.log('9. Setup complete!');
+          } else {
+            console.error('10. Backend returned unsuccessful response:', response.data);
+            throw new Error('Backend returned unsuccessful response');
+          }
+        } catch (error: any) {
+          console.error('=== ADMIN SETUP ERROR ===');
+          console.error('Error Type:', error.constructor.name);
+          console.error('Error Message:', error.message);
+          console.error('Error Response:', error.response?.data);
+          console.error('Error Status:', error.response?.status);
+          console.error('Full Error:', error);
+
+          // Fallback to local storage only if API fails
+          console.log('Falling back to local storage only');
           await AsyncStorage.multiSet([
             ['admin_pin', pin],
             ['admin_first_setup', 'completed'],
             ['auth_user_name', adminName || 'Admin'],
           ]);
 
-          setStep('complete');
-        } catch (error) {
           Toast.show({
-            type: 'error',
-            text1: 'Setup Failed',
-            text2: 'Could not save credentials',
+            type: 'success',
+            text1: 'Admin Created',
+            text2: 'Account saved locally (offline mode)',
           });
+
+          setStep('complete');
         }
       } else {
         setPinError(true);

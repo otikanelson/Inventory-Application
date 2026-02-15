@@ -23,27 +23,19 @@ const userSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
+    required: false,
     default: null
   },
   lastLogin: {
     type: Date,
     default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
+}, {
+  timestamps: true // This automatically adds createdAt and updatedAt
 });
 
-// Update the updatedAt timestamp before saving
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
+// Create compound index for PIN and role to ensure uniqueness per role
+userSchema.index({ pin: 1, role: 1 }, { unique: true });
 
 // Don't return PIN in JSON responses
 userSchema.methods.toJSON = function() {

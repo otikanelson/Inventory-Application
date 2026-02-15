@@ -3,15 +3,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ImageBackground,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
@@ -164,6 +164,14 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
           ADMINISTRATION
         </Text>
+        <SettingRow
+          icon="person-circle-outline"
+          label="My Profile"
+          description="View your account details and permissions"
+          onPress={() => router.push('/profile' as any)}
+        >
+          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+        </SettingRow>
         <SettingRow
           icon="shield"
           label="Admin Dashboard"

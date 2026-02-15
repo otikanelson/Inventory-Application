@@ -2,16 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ImageBackground,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    ImageBackground,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../components/HelpTooltip";
@@ -33,6 +33,7 @@ export default function Alerts() {
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [showInfoCard, setShowInfoCard] = useState(false);
 
   const backgroundImage =
     isDark ?
@@ -202,6 +203,13 @@ export default function Alerts() {
               <Text style={[styles.title, { color: theme.text }]}>
                 ALERTS
               </Text>
+              <Pressable onPress={() => setShowInfoCard(!showInfoCard)}>
+                <Ionicons 
+                  name={showInfoCard ? "chevron-up-circle" : "information-circle-outline"} 
+                  size={18} 
+                  color={theme.primary} 
+                />
+              </Pressable>
               <HelpTooltip
                 title="Alert System"
                 content={[
@@ -253,6 +261,43 @@ export default function Alerts() {
             </View>
           ))}
         </View>
+
+        {/* Alert Labels Info Card - Toggleable */}
+        {showInfoCard && (
+          <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="information-circle-outline" size={18} color={theme.primary} />
+              <Text style={[styles.infoTitle, { color: theme.text }]}>Alert Labels</Text>
+            </View>
+            <View style={styles.infoContent}>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FF3B30' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Expired</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>Past expiry date</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FF3B30' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Critical</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>≤7 days left</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FF9500' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>High</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>8-14 days left</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FFD60A' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Early</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>15-30 days left</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#9B59B6' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Slow</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>Low sales velocity</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         <View
           style={[
@@ -612,5 +657,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 15,
     fontWeight: '600',
+  },
+  infoCard: {
+    marginTop: 12,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  infoContent: {
+    gap: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  infoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    width: 60,
+  },
+  infoDesc: {
+    fontSize: 12,
+    fontWeight: '500',
+    flex: 1,
   },
 });
