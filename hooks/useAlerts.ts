@@ -71,7 +71,8 @@ export const useAlerts = () => {
   const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get(API_URL);
+      // Use shorter timeout for alerts
+      const response = await axios.get(API_URL, { timeout: 8000 });
 
       // The backend returns { success: true, data: { alerts: [], summary: {}, thresholds: {} } }
       const backendData = response.data.data;
@@ -100,11 +101,13 @@ export const useAlerts = () => {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/settings`);
+      // Use shorter timeout and fail silently
+      const response = await axios.get(`${API_URL}/settings`, { timeout: 5000 });
       if (response.data.success) {
         setSettings(response.data.data);
       }
     } catch (err) {
+      // Silently fail - settings are not critical for initial load
       console.error("Settings Fetch Error:", err);
     }
   }, [API_URL]);
