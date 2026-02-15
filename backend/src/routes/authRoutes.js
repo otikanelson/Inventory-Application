@@ -17,6 +17,9 @@ router.post('/setup', authController.setupAdmin);
 // Check if setup is complete
 router.get('/setup/status', authController.checkSetup);
 
+// Verify admin PIN for a specific store (used by staff to access admin pages)
+router.post('/verify-admin-pin', authController.verifyAdminPin);
+
 // Protected routes (authentication required)
 // Staff management
 router.post('/staff', authenticate, tenantFilter, authController.createStaff);

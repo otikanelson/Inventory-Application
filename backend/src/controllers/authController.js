@@ -177,7 +177,21 @@ exports.setupAdmin = async (req, res) => {
       });
     }
 
-    console.log('✅ Store name available, creating admin and store...');
+    // Check if PIN is already in use by any admin
+    const existingAdmin = await User.findOne({ 
+      pin, 
+      role: 'admin'
+    });
+    
+    if (existingAdmin) {
+      console.log('❌ PIN already in use by another admin:', existingAdmin._id);
+      return res.status(400).json({
+        success: false,
+        error: 'This PIN is already in use. Please choose a different PIN.'
+      });
+    }
+
+    console.log('✅ Store name and PIN available, creating admin and store...');
 
     // Use a transaction-like approach: create admin first, then store, then update admin
     // This avoids the unique constraint issue with null storeId
@@ -404,12 +418,17 @@ exports.updateStaff = async (req, res) => {
         });
       }
 
-      // Check if new PIN is already in use by another user
-      const existingUser = await User.findOne({ pin, _id: { $ne: id } });
+      // Check if new PIN is already in use by another user in the same store
+      const existingUser = await User.findOne({ 
+        pin, 
+        storeId: staff.storeId,
+        _id: { $ne: id } 
+      });
+      
       if (existingUser) {
         return res.status(400).json({
           success: false,
-          error: 'PIN already in use'
+          error: 'This PIN is already in use in your store. Please choose a different PIN.'
         });
       }
 
@@ -503,12 +522,26 @@ exports.updateAdminPin = async (req, res) => {
     }
 
     // Find admin user
-    const admin = await User.findOne({ role: 'admin', pin: oldPin });
+    const admin = await User.findOne({ _id: req.user.id, role: 'admin', pin: oldPin });
 
     if (!admin) {
       return res.status(401).json({
         success: false,
         error: 'Invalid current PIN'
+      });
+    }
+
+    // Check if new PIN is already in use by another user in the same store
+    const existingUser = await User.findOne({ 
+      pin: newPin, 
+      storeId: admin.storeId,
+      _id: { $ne: admin._id } 
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'This PIN is already in use in your store. Please choose a different PIN.'
       });
     }
 
@@ -545,6 +578,53 @@ exports.checkSetup = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to check setup status'
+    });
+  }
+};
+
+// Verify admin PIN for a specific store (used by staff to access admin pages)
+exports.verifyAdminPin = async (req, res) => {
+  try {
+    const { pin, storeId } = req.body;
+
+    if (!pin || !storeId) {
+      return res.status(400).json({
+        success: false,
+        error: 'PIN and store ID are required'
+      });
+    }
+
+    // Find admin user for this store
+    const admin = await User.findOne({ 
+      role: 'admin', 
+      storeId: storeId,
+      isActive: true 
+    });
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: 'Admin not found for this store'
+      });
+    }
+
+    // Verify PIN
+    if (admin.pin === pin) {
+      res.json({
+        success: true,
+        message: 'Admin PIN verified'
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        error: 'Incorrect admin PIN'
+      });
+    }
+  } catch (error) {
+    console.error('Verify admin PIN error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify admin PIN'
     });
   }
 };

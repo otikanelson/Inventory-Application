@@ -6,18 +6,19 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    FlatList,
-    Image,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 
 const { height, width } = Dimensions.get("window");
@@ -507,29 +508,42 @@ export default function AdminScanScreen() {
             </Animated.View>
           )}
           
-          {mode === "register" && (
-            <Pressable
-              style={styles.manualBtn}
-              onPress={() => {
-                // Generate unique barcode for manual entry
-                const timestamp = Date.now();
-                const random = Math.floor(Math.random() * 10000);
-                const generatedBarcode = `MAN-${timestamp}-${random}`;
-                
-                router.push({
-                  pathname: "/(tabs)/add-products",
-                  params: {
-                    barcode: generatedBarcode,
-                    mode: "manual",
-                    hasBarcode: "false",
-                    fromAdmin: "true" // Flag to prevent back button bypass
-                  }
-                });
-              }}
-            >
-              <Text style={styles.manualBtnText}>Manual Entry</Text>
-            </Pressable>
-          )}
+          <View style={styles.bottomActions}>
+            {mode === "register" && (
+              <Pressable
+                style={styles.manualBtn}
+                onPress={() => {
+                  // Generate unique barcode for manual entry
+                  const timestamp = Date.now();
+                  const random = Math.floor(Math.random() * 10000);
+                  const generatedBarcode = `MAN-${timestamp}-${random}`;
+                  
+                  router.push({
+                    pathname: "/(tabs)/add-products",
+                    params: {
+                      barcode: generatedBarcode,
+                      mode: "manual",
+                      hasBarcode: "false",
+                      fromAdmin: "true" // Flag to prevent back button bypass
+                    }
+                  });
+                }}
+              >
+                <Text style={styles.manualBtnText}>Manual Entry</Text>
+              </Pressable>
+            )}
+            <HelpTooltip
+              title="Admin Scanner Modes"
+              content={[
+                "SALES MODE: Process sales transactions. Scan products to add them to the cart, then complete the sale.",
+                "LOOKUP MODE: Quickly find products in your inventory. Scan to view product details and stock levels.",
+                "REGISTER MODE: Add new products or restock existing ones. Scan to register new items or add batches."
+              ]}
+              icon="help-circle"
+              iconSize={24}
+              iconColor="#FFF"
+            />
+          </View>
         </View>
       </BarcodeScanner>
 
@@ -714,6 +728,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontWeight: "600",
     textAlign: "center",
+  },
+  bottomActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 15,
   },
   manualBtn: {
     backgroundColor: "#FFF",

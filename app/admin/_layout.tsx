@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { Tabs, useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -113,20 +114,76 @@ export default function AdminLayout() {
 
   const handlePinSubmit = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem("admin_pin");
+      const userRole = await AsyncStorage.getItem("auth_user_role");
+      const storeId = await AsyncStorage.getItem("auth_store_id");
 
-      if (pin === storedPin) {
-        await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
-        setIsAuthenticated(true);
-        setShowPinModal(false);
-        setPin("");
+      // For staff, we need to verify against their admin's PIN from the backend
+      if (userRole === 'staff' && storeId) {
+        try {
+          // Call backend to verify admin PIN for this store
+          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/verify-admin-pin`, {
+            pin,
+            storeId
+          });
+
+          if (response.data.success) {
+            await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
+            setIsAuthenticated(true);
+            setShowPinModal(false);
+            setPin("");
+            
+            Toast.show({
+              type: "success",
+              text1: "Admin Access Granted",
+              text2: "You now have temporary admin access",
+            });
+          } else {
+            Toast.show({
+              type: "error",
+              text1: "Access Denied",
+              text2: "Incorrect admin PIN",
+            });
+            setPin("");
+          }
+        } catch (error: any) {
+          // If API fails, fall back to local storage (offline mode)
+          const storedPin = await AsyncStorage.getItem("admin_pin");
+          if (pin === storedPin) {
+            await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
+            setIsAuthenticated(true);
+            setShowPinModal(false);
+            setPin("");
+            
+            Toast.show({
+              type: "success",
+              text1: "Admin Access Granted",
+              text2: "You now have temporary admin access (offline)",
+            });
+          } else {
+            Toast.show({
+              type: "error",
+              text1: "Access Denied",
+              text2: "Incorrect admin PIN",
+            });
+            setPin("");
+          }
+        }
       } else {
-        Toast.show({
-          type: "error",
-          text1: "Access Denied",
-          text2: "Incorrect PIN",
-        });
-        setPin("");
+        // For admin users, check local storage
+        const storedPin = await AsyncStorage.getItem("admin_pin");
+        if (pin === storedPin) {
+          await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
+          setIsAuthenticated(true);
+          setShowPinModal(false);
+          setPin("");
+        } else {
+          Toast.show({
+            type: "error",
+            text1: "Access Denied",
+            text2: "Incorrect PIN",
+          });
+          setPin("");
+        }
       }
     } catch (error) {
       Toast.show({
@@ -218,7 +275,7 @@ export default function AdminLayout() {
               Admin Access Required
             </Text>
             <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
-              Enter your admin PIN to continue
+              Enter the admin PIN to continue
             </Text>
             <TextInput
               style={[
@@ -230,7 +287,7 @@ export default function AdminLayout() {
               maxLength={4}
               value={pin}
               onChangeText={setPin}
-              placeholder="Enter PIN"
+              placeholder="Admin PIN"
               placeholderTextColor={theme.subtext}
               autoFocus
             />

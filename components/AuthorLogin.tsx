@@ -47,7 +47,7 @@ export function AuthorLogin({ visible, onClose }: AuthorLoginProps) {
       });
 
       if (response.data.success) {
-        const { user, sessionToken } = response.data.data;
+        const { sessionToken } = response.data.data;
 
         // Store author session
         await AsyncStorage.multiSet([
@@ -76,11 +76,40 @@ export function AuthorLogin({ visible, onClose }: AuthorLoginProps) {
         }, 50);
       }
     } catch (error: any) {
-      console.error('Author login error:', error);
+      let errorMessage = 'Invalid secret key';
+      
+      try {
+        if (error.response) {
+          // Server responded with error
+          const status = error.response.status;
+          const serverError = error.response.data?.error;
+          
+          if (status === 401) {
+            errorMessage = serverError || 'Invalid secret key';
+            // Don't log - this is expected for wrong password
+          } else if (status === 403) {
+            errorMessage = 'Access forbidden';
+          } else if (status >= 500) {
+            errorMessage = 'Server error - please try again later';
+            console.error('Author login server error:', status);
+          } else {
+            errorMessage = serverError || 'Login failed';
+          }
+        } else if (error.code === 'ECONNABORTED') {
+          errorMessage = 'Connection timeout - please check your internet';
+        } else if (error.code === 'ERR_NETWORK' || !error.response) {
+          errorMessage = 'Network error - please check your connection';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+      } catch (parseError) {
+        // Silently handle parsing errors
+      }
+      
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
-        text2: error.response?.data?.error || 'Invalid secret key',
+        text2: errorMessage,
       });
     } finally {
       setIsLoading(false);

@@ -48,8 +48,9 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === 'auth';
     const inAuthorGroup = segments[0] === 'author';
-    const inTabsGroup = segments[0] === '(tabs)';
     const isStaffRegister = segments[1] === 'staff-register';
+    const isInSetup = segments[1] === 'setup';
+    const isInLogin = segments[1] === 'login';
 
     // Check if user is author
     const checkAuthorStatus = async () => {
@@ -62,11 +63,9 @@ function RootLayoutNav() {
       if (isAuthor) {
         // Only redirect if not already in author group
         if (!inAuthorGroup) {
-          console.log('Author detected, redirecting to dashboard');
           hasNavigatedRef.current = true;
           router.replace('/author/dashboard' as any);
         }
-        // If already in author group, do nothing (prevent loop)
         return;
       }
 
@@ -75,29 +74,26 @@ function RootLayoutNav() {
       if (isAuthenticated) {
         if (inAuthGroup && !isStaffRegister) {
           // Authenticated but in auth screens - redirect to app
-          console.log('Authenticated in auth screen, redirecting to tabs');
           hasNavigatedRef.current = true;
           router.replace('/(tabs)');
         }
-        // If already in app (tabs, admin, etc.), do nothing
         return;
       }
 
       // Priority 2: Not authenticated - check if first time or returning user
+      // CRITICAL: Don't redirect if already in auth screens (let user navigate freely)
       if (!inAuthGroup && !inAuthorGroup) {
         if (isFirstTime) {
           // First time user - redirect to setup
-          console.log('First time user, redirecting to setup');
           hasNavigatedRef.current = true;
           router.replace('/auth/setup' as any);
         } else {
           // Returning user not authenticated - redirect to login
-          console.log('Not authenticated, redirecting to login');
           hasNavigatedRef.current = true;
           router.replace('/auth/login' as any);
         }
       }
-      // If already in auth screens, do nothing
+      // If already in auth screens (setup or login), don't interfere - let user navigate
     });
   }, [isAuthenticated, segments, loading, isFirstTime]);
 

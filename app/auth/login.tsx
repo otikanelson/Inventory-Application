@@ -1,16 +1,16 @@
+import { AuthorLogin } from '@/components/AuthorLogin';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    Image,
-    ImageBackground,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Image,
+  ImageBackground,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { PinInput } from '../../components/PinInput';
-import { AuthorLogin } from '@/components/AuthorLogin';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -18,14 +18,23 @@ export default function LoginScreen() {
   const { theme, isDark } = useTheme();
   const { login, isAuthenticated } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [selectedRole, setSelectedRole] = useState<'admin' | 'staff' | null>(null);
   const [pinError, setPinError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showAuthorLogin, setShowAuthorLogin] = useState(false);
+  const [pinKey, setPinKey] = useState(0); // Key to force PinInput reset
 
   const backgroundImage = isDark
     ? require('../../assets/images/Background7.png')
     : require('../../assets/images/Background9.png');
+
+  // Auto-select role if passed as parameter
+  useEffect(() => {
+    if (params.role === 'admin' || params.role === 'staff') {
+      setSelectedRole(params.role);
+    }
+  }, [params.role]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -46,17 +55,21 @@ export default function LoginScreen() {
     } else {
       setPinError(true);
       setIsLoading(false);
+      // Force PIN input to reset
+      setPinKey(prev => prev + 1);
     }
   };
 
   const handleRoleSelect = (role: 'admin' | 'staff') => {
     setSelectedRole(role);
     setPinError(false);
+    setPinKey(prev => prev + 1); // Reset PIN input when selecting role
   };
 
   const handleBack = () => {
     setSelectedRole(null);
     setPinError(false);
+    setPinKey(prev => prev + 1); // Reset PIN input when going back
   };
 
   return (
@@ -86,7 +99,7 @@ export default function LoginScreen() {
               Welcome Back
             </Text>
             <Text style={[styles.subtitle, { color: theme.subtext }]}>
-              Enter your admin PIN to continue
+              Select your role to continue
             </Text>
 
             <View style={styles.roleButtons}>
@@ -100,6 +113,34 @@ export default function LoginScreen() {
                 <Text style={[styles.roleTitle, { color: theme.text }]}>Admin Login</Text>
                 <Text style={[styles.roleDesc, { color: theme.subtext }]}>
                   Full access to all features
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.roleCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => handleRoleSelect('staff')}
+              >
+                <View style={[styles.roleIcon, { backgroundColor: '#FF9500' + '15' }]}>
+                  <Ionicons name="people" size={28} color="#FF9500" />
+                </View>
+                <Text style={[styles.roleTitle, { color: theme.text }]}>Staff Login</Text>
+                <Text style={[styles.roleDesc, { color: theme.subtext }]}>
+                  Manage inventory and sales
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* First time user link - moved here with proper spacing */}
+            <View style={styles.firstTimeContainer}>
+              <Pressable 
+                style={styles.firstTimeButton}
+                onPress={() => router.push('/auth/setup' as any)}
+              >
+                <Text style={[styles.firstTimeText, { color: theme.subtext }]}>
+                  First time here?{' '}
+                </Text>
+                <Text style={[styles.firstTimeLink, { color: theme.primary }]}>
+                  Set up your account
                 </Text>
               </Pressable>
             </View>
@@ -128,10 +169,14 @@ export default function LoginScreen() {
 
             <View style={styles.pinContainer}>
               <PinInput
+                key={pinKey}
                 onComplete={handlePinComplete}
                 error={pinError}
                 disabled={isLoading}
-                onClear={() => setPinError(false)}
+                onClear={() => {
+                  setPinError(false);
+                  setPinKey(prev => prev + 1);
+                }}
               />
               {pinError && (
                 <Text style={[styles.errorText, { color: theme.notification }]}>
@@ -143,21 +188,9 @@ export default function LoginScreen() {
         )}
       </View>
 
-      {/* Footer */}
+      {/* Footer - Only show author link when role is not selected */}
       {!selectedRole && (
         <View style={styles.footer}>
-          <Pressable 
-            style={styles.footerButton}
-            onPress={() => router.push('/auth/setup' as any)}
-          >
-            <Text style={[styles.footerText, { color: theme.subtext }]}>
-              First time here?{' '}
-            </Text>
-            <Text style={[styles.footerLink, { color: theme.primary }]}>
-              Set up your account
-            </Text>
-          </Pressable>
-
           {/* Author Login Link */}
           <Pressable 
             style={styles.authorLink}
@@ -201,7 +234,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 30,
-    paddingBottom: 80,
+    paddingBottom: 40,
   },
   logo: {
     width: 120,
@@ -221,6 +254,7 @@ const styles = StyleSheet.create({
   roleButtons: {
     width: '100%',
     gap: 16,
+    marginBottom: 24,
   },
   roleCard: {
     padding: 20,
@@ -244,6 +278,25 @@ const styles = StyleSheet.create({
   roleDesc: {
     fontSize: 13,
     textAlign: 'center',
+  },
+  firstTimeContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  firstTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  firstTimeText: {
+    fontSize: 14,
+  },
+  firstTimeLink: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   backButton: {
     position: 'absolute',
@@ -274,24 +327,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingBottom: 30,
     paddingHorizontal: 30,
   },
-  footerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-  },
-  footerLink: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
   authorLink: {
-    marginTop: 15,
     paddingVertical: 10,
   },
   authorLinkText: {

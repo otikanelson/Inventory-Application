@@ -98,28 +98,74 @@ export default function SetupScreen() {
             throw new Error('Backend returned unsuccessful response');
           }
         } catch (error: any) {
-          console.error('=== ADMIN SETUP ERROR ===');
-          console.error('Error Type:', error.constructor.name);
-          console.error('Error Message:', error.message);
-          console.error('Error Response:', error.response?.data);
-          console.error('Error Status:', error.response?.status);
-          console.error('Full Error:', error);
+          let errorMessage = 'Could not create admin account';
+          let shouldFallbackToLocal = false;
+          
+          try {
+            if (error.response) {
+              // Server responded with error
+              const status = error.response.status;
+              const serverError = error.response.data?.error;
+              
+              if (status === 400) {
+                // Validation errors like duplicate PIN/store name - don't log
+                errorMessage = serverError || 'Invalid setup information';
+              } else if (status >= 500) {
+                errorMessage = 'Server error - saving locally';
+                shouldFallbackToLocal = true;
+                console.error('Setup server error:', status);
+              } else {
+                errorMessage = serverError || errorMessage;
+                shouldFallbackToLocal = true;
+              }
+            } else if (error.code === 'ECONNABORTED') {
+              errorMessage = 'Connection timeout - saving locally';
+              shouldFallbackToLocal = true;
+            } else if (error.code === 'ERR_NETWORK' || !error.response) {
+              errorMessage = 'Network error - saving locally';
+              shouldFallbackToLocal = true;
+            } else {
+              errorMessage = error.message || errorMessage;
+              shouldFallbackToLocal = true;
+            }
+          } catch (parseError) {
+            // Silently handle parsing errors
+            shouldFallbackToLocal = true;
+          }
 
-          // Fallback to local storage only if API fails
-          console.log('Falling back to local storage only');
-          await AsyncStorage.multiSet([
-            ['admin_pin', pin],
-            ['admin_first_setup', 'completed'],
-            ['auth_user_name', adminName || 'Admin'],
-          ]);
+          // Fallback to local storage if appropriate
+          if (shouldFallbackToLocal) {
+            try {
+              await AsyncStorage.multiSet([
+                ['admin_pin', pin],
+                ['admin_first_setup', 'completed'],
+                ['auth_user_name', adminName || 'Admin'],
+              ]);
 
-          Toast.show({
-            type: 'success',
-            text1: 'Admin Created',
-            text2: 'Account saved locally (offline mode)',
-          });
+              Toast.show({
+                type: 'success',
+                text1: 'Admin Created',
+                text2: 'Account saved locally (offline mode)',
+              });
 
-          setStep('complete');
+              setStep('complete');
+            } catch (localError) {
+              console.error('Local storage fallback failed:', localError);
+              Toast.show({
+                type: 'error',
+                text1: 'Setup Failed',
+                text2: 'Could not save account',
+                visibilityTime: 4000,
+              });
+            }
+          } else {
+            Toast.show({
+              type: 'error',
+              text1: 'Setup Failed',
+              text2: errorMessage,
+              visibilityTime: 4000,
+            });
+          }
         }
       } else {
         setPinError(true);
@@ -169,17 +215,6 @@ export default function SetupScreen() {
       setAdminPin('');
       setPinError(false);
       setPinKey(prev => prev + 1);
-    }
-  };
-
-  const handleGoToLogin = async () => {
-    try {
-      // Mark first setup as completed so user can access login
-      await AsyncStorage.setItem('admin_first_setup', 'completed');
-      router.replace('/auth/login' as any);
-    } catch (error) {
-      console.error('Error navigating to login:', error);
-      router.replace('/auth/login' as any);
     }
   };
 
@@ -274,7 +309,7 @@ export default function SetupScreen() {
               <View style={styles.loginButtons}>
                 <Pressable 
                   style={[styles.loginButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={handleGoToLogin}
+                  onPress={() => router.push('/auth/login?role=admin' as any)}
                 >
                   <Ionicons name="shield-checkmark-outline" size={20} color={theme.primary} />
                   <Text style={[styles.loginButtonText, { color: theme.text }]}>
@@ -283,7 +318,7 @@ export default function SetupScreen() {
                 </Pressable>
                 <Pressable 
                   style={[styles.loginButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => router.push('/auth/staff-register' as any)}
+                  onPress={() => router.push('/auth/login?role=staff' as any)}
                 >
                   <Ionicons name="people-outline" size={20} color={theme.primary} />
                   <Text style={[styles.loginButtonText, { color: theme.text }]}>

@@ -4,15 +4,15 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  ImageBackground,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
@@ -96,19 +96,36 @@ export default function StaffRegisterScreen() {
             throw new Error('Backend returned unsuccessful response');
           }
         } catch (error: any) {
-          console.error('=== STAFF REGISTRATION ERROR ===');
-          console.error('Error Type:', error.constructor.name);
-          console.error('Error Message:', error.message);
-          console.error('Error Response:', error.response?.data);
-          console.error('Error Status:', error.response?.status);
-          console.error('Full Error:', error);
-          
           let errorMessage = 'Could not create staff account';
           
-          if (error.response?.data?.error) {
-            errorMessage = error.response.data.error;
-          } else if (error.message) {
-            errorMessage = error.message;
+          try {
+            if (error.response) {
+              // Server responded with error
+              const status = error.response.status;
+              const serverError = error.response.data?.error;
+              
+              if (status === 401) {
+                errorMessage = 'Authentication failed - please log in again';
+              } else if (status === 403) {
+                errorMessage = 'You do not have permission to add staff';
+              } else if (status === 400) {
+                // Validation errors like duplicate PIN - don't log, just show message
+                errorMessage = serverError || 'Invalid staff information';
+              } else if (status >= 500) {
+                errorMessage = 'Server error - please try again later';
+                console.error('Staff registration server error:', status);
+              } else {
+                errorMessage = serverError || errorMessage;
+              }
+            } else if (error.code === 'ECONNABORTED') {
+              errorMessage = 'Connection timeout - please check your internet';
+            } else if (error.code === 'ERR_NETWORK' || !error.response) {
+              errorMessage = 'Network error - please check your connection';
+            } else if (error.message) {
+              errorMessage = error.message;
+            }
+          } catch (parseError) {
+            // Silently handle parsing errors
           }
           
           Toast.show({
