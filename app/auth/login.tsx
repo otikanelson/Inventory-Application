@@ -2,14 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    Image,
+    ImageBackground,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { PinInput } from '../../components/PinInput';
+import { AuthorLogin } from '@/components/AuthorLogin';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -20,6 +21,7 @@ export default function LoginScreen() {
   const [selectedRole, setSelectedRole] = useState<'admin' | 'staff' | null>(null);
   const [pinError, setPinError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAuthorLogin, setShowAuthorLogin] = useState(false);
 
   const backgroundImage = isDark
     ? require('../../assets/images/Background7.png')
@@ -155,8 +157,21 @@ export default function LoginScreen() {
               Set up your account
             </Text>
           </Pressable>
+
+          {/* Author Login Link */}
+          <Pressable 
+            style={styles.authorLink}
+            onPress={() => setShowAuthorLogin(true)}
+          >
+            <Text style={[styles.authorLinkText, { color: theme.subtext + '80' }]}>
+              Author
+            </Text>
+          </Pressable>
         </View>
       )}
+
+      {/* Author Login Modal */}
+      <AuthorLogin visible={showAuthorLogin} onClose={() => setShowAuthorLogin(false)} />
     </View>
   );
 }
@@ -274,5 +289,14 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  authorLink: {
+    marginTop: 15,
+    paddingVertical: 10,
+  },
+  authorLinkText: {
+    fontSize: 12,
+    textAlign: 'center',
+    opacity: 0.5,
   },
 });

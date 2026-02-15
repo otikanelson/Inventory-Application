@@ -18,15 +18,27 @@ exports.addProduct = async (req, res) => {
       isPerishable,
     } = req.body;
 
-    //Check if product already exists (by barcode or internal code)
+    // Get storeId from authenticated user
+    const storeId = req.user.storeId;
+
+    if (!storeId && !req.user.isAuthor) {
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+
+    //Check if product already exists (by barcode or internal code) in this store
     let product = null;
     if (barcode || internalCode) {
-      product = await Product.findOne({
+      const query = {
+        ...req.tenantFilter, // Apply store filter
         $or: [
           ...(barcode ? [{ barcode }] : []),
           ...(internalCode ? [{ internalCode }] : []),
         ],
-      });
+      };
+      product = await Product.findOne(query);
     }
 
     //Prepare the new batch object
@@ -60,6 +72,7 @@ exports.addProduct = async (req, res) => {
       // SCENARIO B: New product entirely
       // Use "|| undefined" so MongoDB doesn't save a null key into unique indexes
       const newProduct = await Product.create({
+        storeId, // Add storeId to new product
         name,
         barcode: barcode || undefined,
         internalCode: internalCode || undefined,
@@ -87,18 +100,26 @@ exports.addProduct = async (req, res) => {
 // @access  Public
 exports.getProducts = async (req, res) => {
   try {
-    const rawProducts = await Product.find().sort({ updatedAt: -1 });
+    // Apply tenant filter (empty for author, storeId for admin/staff)
+    // Optimize query: select only needed fields, use lean() for faster reads
+    const rawProducts = await Product.find(req.tenantFilter)
+      .select('name barcode internalCode category imageUrl hasBarcode isPerishable batches createdAt updatedAt')
+      .sort({ updatedAt: -1 })
+      .lean(); // Convert to plain JS objects (faster)
 
     const products = rawProducts.map((p) => {
+      // Calculate total quantity
+      const totalQuantity = p.batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+      
       // FEFO: Find the batch that is expiring soonest
       const sortedBatches = [...p.batches]
         .filter((b) => b.expiryDate)
         .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
       return {
-        ...p._doc,
+        ...p,
         id: p._id,
-        quantity: p.totalQuantity,
+        quantity: totalQuantity,
         expiryDate:
           sortedBatches.length > 0 ? sortedBatches[0].expiryDate : "N/A",
         receivedDate: p.createdAt,
@@ -108,6 +129,7 @@ exports.getProducts = async (req, res) => {
 
     res.status(200).json({ success: true, data: products });
   } catch (error) {
+    console.error('GetProducts Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -123,12 +145,12 @@ exports.getProductById = async (req, res) => {
     const isMongoId = id.match(/^[0-9a-fA-F]{24}$/);
 
     if (isMongoId) {
-      product = await Product.findById(id);
+      product = await Product.findOne({ _id: id, ...req.tenantFilter });
     }
 
     //Fallback: Search by Barcode if not found by ID
     if (!product) {
-      product = await Product.findOne({ barcode: id });
+      product = await Product.findOne({ barcode: id, ...req.tenantFilter });
     }
 
     if (!product) {
@@ -158,8 +180,9 @@ exports.updateProduct = async (req, res) => {
     const { id } = req.params;
     const { name, category, imageUrl } = req.body;
 
-    const product = await Product.findByIdAndUpdate(
-      id,
+    // Find product with store filter
+    const product = await Product.findOneAndUpdate(
+      { _id: id, ...req.tenantFilter },
       {
         name,
         category,
@@ -197,7 +220,8 @@ exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const product = await Product.findByIdAndDelete(id);
+    // Find and delete with store filter
+    const product = await Product.findOneAndDelete({ _id: id, ...req.tenantFilter });
 
     if (!product) {
       return res.status(404).json({
@@ -227,7 +251,8 @@ exports.deleteBatch = async (req, res) => {
   try {
     const { id, batchNumber } = req.params;
 
-    const product = await Product.findById(id);
+    // Find product with store filter
+    const product = await Product.findOne({ _id: id, ...req.tenantFilter });
 
     if (!product) {
       return res.status(404).json({
@@ -272,9 +297,11 @@ exports.processSale = async (req, res) => {
     const { items } = req.body; // Array of { productId, quantity, price }
     const saleRecords = [];
     const updatedProducts = []; // Track products for prediction updates
+    const storeId = req.user.storeId; // Get storeId from authenticated user
 
     for (const item of items) {
-      const product = await Product.findById(item.productId);
+      // Find product with store filter
+      const product = await Product.findOne({ _id: item.productId, ...req.tenantFilter });
       if (!product) continue;
 
       let remainingToDeduct = item.quantity;
@@ -316,6 +343,7 @@ exports.processSale = async (req, res) => {
       // Record the sale for each batch used (for accurate tracking)
       for (const batchUsed of batchesUsed) {
         const saleRecord = new Sale({
+          storeId, // Add storeId to sale record
           productId: product._id,
           productName: product.name,
           batchNumber: batchUsed.batchNumber,
@@ -423,10 +451,12 @@ exports.updateGenericPrice = async (req, res) => {
       update.genericPrice = priceNum;
     }
 
-    const product = await Product.findByIdAndUpdate(id, update, {
-      new: true,
-      runValidators: true,
-    });
+    // Find and update with store filter
+    const product = await Product.findOneAndUpdate(
+      { _id: id, ...req.tenantFilter },
+      update,
+      { new: true, runValidators: true }
+    );
 
     if (!product) {
       return res
@@ -458,7 +488,8 @@ exports.applyDiscount = async (req, res) => {
       });
     }
 
-    const product = await Product.findById(id);
+    // Find product with store filter
+    const product = await Product.findOne({ _id: id, ...req.tenantFilter });
 
     if (!product) {
       return res.status(404).json({

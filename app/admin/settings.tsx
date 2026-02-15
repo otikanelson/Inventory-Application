@@ -7,18 +7,18 @@ import { useRouter } from "expo-router";
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -81,6 +81,8 @@ export default function AdminSettingsScreen() {
   // Staff Management State
   const [staffMembers, setStaffMembers] = useState<any[]>([]);
   const [staffExpanded, setStaffExpanded] = useState(true);
+  const [deleteStaffModal, setDeleteStaffModal] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<any>(null);
 
   // Load settings on mount
   useEffect(() => {
@@ -117,7 +119,12 @@ export default function AdminSettingsScreen() {
 
   const loadStaffMembers = async () => {
     try {
-      const response = await axios.get(`${API_URL}/auth/staff`);
+      const sessionToken = await AsyncStorage.getItem('auth_session_token');
+      const response = await axios.get(`${API_URL}/auth/staff`, {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`
+        }
+      });
       if (response.data.success) {
         setStaffMembers(response.data.data);
       }
@@ -456,13 +463,17 @@ export default function AdminSettingsScreen() {
         'auth_user_name',
       ]);
       
-      Toast.show({
-        type: 'success',
-        text1: 'Logged Out',
-        text2: 'Admin session ended'
-      });
-
+      // Navigate immediately to prevent API calls
       router.replace('/auth/login' as any);
+      
+      // Show toast after navigation
+      setTimeout(() => {
+        Toast.show({
+          type: 'success',
+          text1: 'Logged Out',
+          text2: 'Admin session ended'
+        });
+      }, 100);
     } catch (error) {
       Toast.show({
         type: 'error',
@@ -925,6 +936,36 @@ export default function AdminSettingsScreen() {
     }
   };
 
+  const handleDeleteStaff = async () => {
+    if (!staffToDelete) return;
+
+    try {
+      const sessionToken = await AsyncStorage.getItem('auth_session_token');
+      const response = await axios.delete(`${API_URL}/auth/staff/${staffToDelete._id}`, {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`
+        }
+      });
+      
+      if (response.data.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Staff Deleted',
+          text2: `${staffToDelete.name} has been removed`
+        });
+        await loadStaffMembers();
+        setDeleteStaffModal(false);
+        setStaffToDelete(null);
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: error.response?.data?.error || 'Could not delete staff member'
+      });
+    }
+  };
+
   const handleDeleteCategory = async () => {
     if (!selectedCategory) return;
 
@@ -1267,16 +1308,27 @@ export default function AdminSettingsScreen() {
                           </Text>
                         )}
                       </View>
-                      <View style={[
-                        styles.staffStatusBadge, 
-                        { backgroundColor: staff.isActive ? '#34C759' + '20' : '#FF3B30' + '20' }
-                      ]}>
-                        <Text style={[
-                          styles.staffStatusText, 
-                          { color: staff.isActive ? '#34C759' : '#FF3B30' }
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[
+                          styles.staffStatusBadge, 
+                          { backgroundColor: staff.isActive ? '#34C759' + '20' : '#FF3B30' + '20' }
                         ]}>
-                          {staff.isActive ? 'Active' : 'Inactive'}
-                        </Text>
+                          <Text style={[
+                            styles.staffStatusText, 
+                            { color: staff.isActive ? '#34C759' : '#FF3B30' }
+                          ]}>
+                            {staff.isActive ? 'Active' : 'Inactive'}
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={[styles.deleteStaffBtn, { backgroundColor: '#FF3B30' + '15' }]}
+                          onPress={() => {
+                            setStaffToDelete(staff);
+                            setDeleteStaffModal(true);
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                        </Pressable>
                       </View>
                     </View>
                   ))}
@@ -1859,6 +1911,42 @@ export default function AdminSettingsScreen() {
                 onPress={handleRemovePin}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>Remove PIN</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* DELETE STAFF MODAL */}
+      <Modal visible={deleteStaffModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalIconBox, { backgroundColor: '#FF3B30' + "15" }]}>
+              <Ionicons name="warning" size={32} color="#FF3B30" />
+            </View>
+
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Delete Staff Member
+            </Text>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              Are you sure you want to remove {staffToDelete?.name}? This action cannot be undone.
+            </Text>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
+                onPress={() => {
+                  setDeleteStaffModal(false);
+                  setStaffToDelete(null);
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: '#FF3B30' }]}
+                onPress={handleDeleteStaff}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Delete</Text>
               </Pressable>
             </View>
           </View>
@@ -2473,5 +2561,12 @@ const styles = StyleSheet.create({
   staffStatusText: {
     fontSize: 11,
     fontWeight: '800',
+  },
+  deleteStaffBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

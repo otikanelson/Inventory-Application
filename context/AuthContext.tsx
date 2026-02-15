@@ -11,6 +11,9 @@ interface User {
   id: string;
   name: string;
   role: UserRole;
+  storeId?: string;
+  storeName?: string;
+  isAuthor?: boolean;
 }
 
 interface AuthContextType {
@@ -40,12 +43,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check authentication status on app load
   const checkAuth = async () => {
     try {
-      const [userRole, userId, userName, sessionToken, lastLogin] = await AsyncStorage.multiGet([
+      const [userRole, userId, userName, sessionToken, lastLogin, storeId, storeName] = await AsyncStorage.multiGet([
         'auth_user_role',
         'auth_user_id',
         'auth_user_name',
         'auth_session_token',
         'auth_last_login',
+        'auth_store_id',
+        'auth_store_name',
       ]);
 
       const roleValue = userRole[1] as UserRole;
@@ -53,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nameValue = userName[1];
       const tokenValue = sessionToken[1];
       const lastLoginValue = lastLogin[1];
+      const storeIdValue = storeId[1];
+      const storeNameValue = storeName[1];
 
       if (roleValue && idValue && tokenValue) {
         // Check if session is still valid (30 minutes)
@@ -65,6 +72,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: idValue,
             name: nameValue || 'User',
             role: roleValue,
+            storeId: storeIdValue || undefined,
+            storeName: storeNameValue || undefined,
+            isAuthor: roleValue === 'admin' && idValue === 'author',
           });
           setRole(roleValue);
           setIsAuthenticated(true);
@@ -104,16 +114,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (response.data.success) {
           const { user: userData, sessionToken } = response.data.data;
 
-          // Store auth data
+          // Store auth data including store information
           await AsyncStorage.multiSet([
             ['auth_session_token', sessionToken],
             ['auth_user_role', userData.role],
             ['auth_user_id', userData.id],
             ['auth_user_name', userData.name],
             ['auth_last_login', Date.now().toString()],
+            ['auth_store_id', userData.storeId || ''],
+            ['auth_store_name', userData.storeName || ''],
           ]);
 
-          setUser(userData);
+          setUser({
+            ...userData,
+            isAuthor: userData.role === 'admin' && userData.id === 'author',
+          });
           setRole(userData.role);
           setIsAuthenticated(true);
 
@@ -128,6 +143,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (apiError: any) {
         // If API fails (network error, timeout, or 401), fall back to local storage
         console.log('API login failed, using local storage authentication');
+        console.log('API Error:', apiError.message);
+        console.log('API URL:', `${API_URL}/auth/login`);
+        console.log('Is backend running at this URL?');
         
         let isValid = false;
         let userId = '';
@@ -159,6 +177,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Generate session token
           const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           
+          // Get store info if available
+          const storeId = await AsyncStorage.getItem('auth_store_id');
+          const storeName = await AsyncStorage.getItem('auth_store_name');
+          
           // Store auth data
           await AsyncStorage.multiSet([
             ['auth_session_token', sessionToken],
@@ -168,7 +190,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ['auth_last_login', Date.now().toString()],
           ]);
 
-          setUser({ id: userId, name: userName, role: userRole });
+          setUser({ 
+            id: userId, 
+            name: userName, 
+            role: userRole,
+            storeId: storeId || undefined,
+            storeName: storeName || undefined,
+            isAuthor: false,
+          });
           setRole(userRole);
           setIsAuthenticated(true);
 

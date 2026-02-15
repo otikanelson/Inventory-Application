@@ -31,6 +31,7 @@ export default function SettingsScreen() {
   const [pinModal, setPinModal] = useState(false);
   const [pin, setPin] = useState("");
   const [hasAdminPin, setHasAdminPin] = useState(false);
+  const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
     checkAdminPinStatus();
@@ -199,6 +200,50 @@ export default function SettingsScreen() {
         <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
         
         <SettingRow
+          icon="log-out-outline"
+          label="Logout from Store"
+          description="Clear store data and return to setup page"
+          onPress={async () => {
+            try {
+              // Clear all auth and store data
+              await AsyncStorage.multiRemove([
+                'auth_session_token',
+                'auth_user_role',
+                'auth_user_id',
+                'auth_user_name',
+                'auth_last_login',
+                'auth_store_id',
+                'auth_store_name',
+                'admin_pin',
+                'admin_first_setup',
+                'admin_last_auth',
+                'auth_is_author',
+              ]);
+              
+              // Navigate immediately to prevent API calls
+              router.replace('/auth/setup' as any);
+              
+              // Show toast after navigation
+              setTimeout(() => {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Logged Out',
+                  text2: 'Returning to setup...'
+                });
+              }, 100);
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Could not logout'
+              });
+            }
+          }}
+        >
+          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+        </SettingRow>
+        
+        <SettingRow
           icon="help-circle-outline"
           label="Restart App Tour"
           description="See the onboarding tour again to learn about all features"
@@ -256,20 +301,32 @@ export default function SettingsScreen() {
             </Text>
 
             {hasAdminPin && (
-              <TextInput
-                style={[
-                  styles.pinInput,
-                  { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
-                ]}
-                placeholder="Enter PIN"
-                placeholderTextColor={theme.subtext}
-                secureTextEntry
-                keyboardType="numeric"
-                maxLength={4}
-                value={pin}
-                onChangeText={setPin}
-                autoFocus
-              />
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[
+                    styles.pinInput,
+                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                  ]}
+                  placeholder="Enter PIN"
+                  placeholderTextColor={theme.subtext}
+                  secureTextEntry={!showPin}
+                  keyboardType="numeric"
+                  maxLength={4}
+                  value={pin}
+                  onChangeText={setPin}
+                  autoFocus
+                />
+                <Pressable
+                  style={styles.eyeIcon}
+                  onPress={() => setShowPin(!showPin)}
+                >
+                  <Ionicons
+                    name={showPin ? 'eye-off-outline' : 'eye-outline'}
+                    size={22}
+                    color={theme.subtext}
+                  />
+                </Pressable>
+              </View>
             )}
 
             <View style={styles.modalActions}>
@@ -383,16 +440,27 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     lineHeight: 20,
   },
+  inputContainer: {
+    width: "100%",
+    position: "relative",
+    marginBottom: 15,
+  },
   pinInput: {
     width: "100%",
     height: 55,
     borderWidth: 1,
     borderRadius: 15,
     paddingHorizontal: 20,
-    marginBottom: 15,
+    paddingRight: 50,
     textAlign: "center",
     fontSize: 18,
     fontWeight: "600",
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 15,
+    top: 16,
+    padding: 5,
   },
   modalActions: {
     flexDirection: "row",

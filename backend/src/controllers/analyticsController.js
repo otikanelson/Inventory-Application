@@ -14,6 +14,17 @@ exports.getProductAnalytics = async (req, res) => {
   try {
     const { productId } = req.params;
     
+    // Verify product belongs to user's store (unless author)
+    if (!req.user.isAuthor) {
+      const product = await Product.findOne({ _id: productId, ...req.tenantFilter });
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: 'Product not found'
+        });
+      }
+    }
+    
     const analytics = await getPredictiveAnalytics(productId);
     
     res.status(200).json({
@@ -65,10 +76,14 @@ exports.getAllSales = async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
     
+    // Build query with tenant filter
+    const query = {
+      saleDate: { $gte: startDate },
+      ...req.tenantFilter
+    };
+    
     // Get all sales with product details
-    const sales = await Sale.find({
-      saleDate: { $gte: startDate }
-    })
+    const sales = await Sale.find(query)
       .sort({ saleDate: -1 })
       .limit(parseInt(limit))
       .lean();
@@ -102,12 +117,16 @@ exports.getSalesTrends = async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
     
+    // Build match query with tenant filter
+    const matchQuery = {
+      saleDate: { $gte: startDate },
+      ...req.tenantFilter
+    };
+    
     // Aggregate sales by date
     const salesByDate = await Sale.aggregate([
       {
-        $match: {
-          saleDate: { $gte: startDate }
-        }
+        $match: matchQuery
       },
       {
         $group: {
@@ -167,12 +186,16 @@ exports.getCategoryAnalytics = async (req, res) => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
+    // Build match query with tenant filter
+    const matchQuery = {
+      saleDate: { $gte: thirtyDaysAgo },
+      ...req.tenantFilter
+    };
+    
     // Get sales grouped by category
     const categoryData = await Sale.aggregate([
       {
-        $match: {
-          saleDate: { $gte: thirtyDaysAgo }
-        }
+        $match: matchQuery
       },
       {
         $group: {
@@ -215,8 +238,9 @@ exports.recordSale = async (req, res) => {
   try {
     const { productId, quantitySold, priceAtSale, paymentMethod } = req.body;
     
-    // Validate product exists
-    const product = await Product.findById(productId);
+    // Validate product exists and belongs to user's store
+    const query = { _id: productId, ...req.tenantFilter };
+    const product = await Product.findOne(query);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -224,7 +248,7 @@ exports.recordSale = async (req, res) => {
       });
     }
     
-    // Create sale record
+    // Create sale record with storeId
     const sale = await Sale.create({
       productId: product._id,
       productName: product.name,
@@ -233,7 +257,8 @@ exports.recordSale = async (req, res) => {
       priceAtSale: priceAtSale,
       totalAmount: quantitySold * priceAtSale,
       paymentMethod: paymentMethod || 'cash',
-      saleDate: new Date()
+      saleDate: new Date(),
+      storeId: req.user.storeId
     });
     
     res.status(201).json({
@@ -260,8 +285,16 @@ exports.getRecentlySold = async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     
-    // Get recent sales with product details
-    const recentSales = await Sale.aggregate([
+    // Build initial match stage with tenant filter
+    const matchStage = req.tenantFilter ? { $match: req.tenantFilter } : null;
+    
+    // Build aggregation pipeline
+    const pipeline = [];
+    if (matchStage) {
+      pipeline.push(matchStage);
+    }
+    
+    pipeline.push(
       {
         $sort: { saleDate: -1 }
       },
@@ -295,7 +328,10 @@ exports.getRecentlySold = async (req, res) => {
           preserveNullAndEmptyArrays: true
         }
       }
-    ]);
+    );
+    
+    // Get recent sales with product details
+    const recentSales = await Sale.aggregate(pipeline);
     
     res.status(200).json({
       success: true,
@@ -333,8 +369,13 @@ exports.getRecentlySoldBatches = async (req, res) => {
   try {
     const { limit = 20 } = req.query;
     
-    // Get recent sales with batch details
-    const recentSales = await Sale.aggregate([
+    // Build aggregation pipeline with tenant filter
+    const pipeline = [];
+    if (req.tenantFilter) {
+      pipeline.push({ $match: req.tenantFilter });
+    }
+    
+    pipeline.push(
       {
         $sort: { saleDate: -1 }
       },
@@ -355,7 +396,10 @@ exports.getRecentlySoldBatches = async (req, res) => {
           preserveNullAndEmptyArrays: true
         }
       }
-    ]);
+    );
+    
+    // Get recent sales with batch details
+    const recentSales = await Sale.aggregate(pipeline);
     
     // Filter out deleted products and map to batch-level data
     const batchSales = recentSales
@@ -397,8 +441,11 @@ exports.getProductSales = async (req, res) => {
     const { productId } = req.params;
     const { limit = 50 } = req.query;
     
+    // Build query with tenant filter
+    const query = { productId, ...req.tenantFilter };
+    
     // Get sales history for this specific product
-    const salesHistory = await Sale.find({ productId })
+    const salesHistory = await Sale.find(query)
       .sort({ saleDate: -1 })
       .limit(parseInt(limit));
     
@@ -768,18 +815,20 @@ exports.recalculatePrediction = async (req, res) => {
  */
 exports.getAIStatus = async (req, res) => {
   try {
-    // Get product count
-    const productCount = await Product.countDocuments();
+    // Get product count with tenant filter
+    const productCount = await Product.countDocuments(req.tenantFilter || {});
     
-    // Get sales count (last 30 days)
+    // Get sales count (last 30 days) with tenant filter
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const salesCount = await Sale.countDocuments({
-      saleDate: { $gte: thirtyDaysAgo }
-    });
+    const salesQuery = {
+      saleDate: { $gte: thirtyDaysAgo },
+      ...req.tenantFilter
+    };
+    const salesCount = await Sale.countDocuments(salesQuery);
     
     // Get first sale date to calculate days active
-    const firstSale = await Sale.findOne().sort({ saleDate: 1 });
+    const firstSale = await Sale.findOne(req.tenantFilter || {}).sort({ saleDate: 1 });
     const daysActive = firstSale 
       ? Math.ceil((Date.now() - new Date(firstSale.saleDate).getTime()) / (1000 * 60 * 60 * 24))
       : 0;

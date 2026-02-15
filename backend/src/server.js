@@ -1,6 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
 const connectDB = require('./config/db');
@@ -16,16 +17,14 @@ connectDB().catch(err => {
 
 const app = express();
 
-// Middleware
+// Middleware - Allow all origins for mobile app
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://inventory-application-xjc5.onrender.com',
-        'https://frontend-domain.com'
-      ]
-    : true, // Allow all origins in development
+  origin: true, // Allow all origins (required for mobile apps)
   credentials: true
 }));
+
+// Enable gzip compression for faster responses
+app.use(compression());
 
 // Use appropriate logging for production
 if (process.env.NODE_ENV === 'production') {
@@ -66,6 +65,11 @@ app.get('/', (req, res) => {
   });
 });
 
+// Lightweight health check for uptime monitoring
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // API status endpoint
 app.get('/api', (req, res) => {
   res.json({
@@ -85,6 +89,8 @@ app.get('/api', (req, res) => {
 
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/author', require('./routes/authorRoutes'));
+app.use('/api/stores', require('./routes/storeRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));

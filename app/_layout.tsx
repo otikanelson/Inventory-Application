@@ -7,6 +7,8 @@ import { TourOverlay } from '../components/TourOverlay';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { TourProvider } from '../context/TourContext';
+// Import axios configuration to set up interceptors
+import '../utils/axiosConfig';
 
 function RootLayoutNav() {
   const { isAuthenticated, loading } = useAuth();
@@ -32,18 +34,33 @@ function RootLayoutNav() {
     if (loading || isFirstTime === null) return;
 
     const inAuthGroup = segments[0] === 'auth';
+    const inAuthorGroup = segments[0] === 'author';
     const isStaffRegister = segments[1] === 'staff-register';
 
-    if (isFirstTime && !inAuthGroup) {
-      // First time user - redirect to setup
-      router.replace('/auth/setup' as any);
-    } else if (!isFirstTime && !isAuthenticated && !inAuthGroup) {
-      // Not first time but not authenticated - redirect to login
-      router.replace('/auth/login' as any);
-    } else if (isAuthenticated && inAuthGroup && !isStaffRegister) {
-      // Authenticated but in auth screens (except staff-register) - redirect to app
-      router.replace('/(tabs)');
-    }
+    // Check if user is author
+    const checkAuthorStatus = async () => {
+      const isAuthor = await AsyncStorage.getItem('auth_is_author');
+      return isAuthor === 'true';
+    };
+
+    checkAuthorStatus().then((isAuthor) => {
+      // Skip first-time setup check for authors
+      if (isAuthor && !inAuthorGroup) {
+        router.replace('/author/dashboard' as any);
+        return;
+      }
+
+      if (isFirstTime && !inAuthGroup) {
+        // First time user - redirect to setup
+        router.replace('/auth/setup' as any);
+      } else if (!isFirstTime && !isAuthenticated && !inAuthGroup && !inAuthorGroup) {
+        // Not first time but not authenticated - redirect to login
+        router.replace('/auth/login' as any);
+      } else if (isAuthenticated && inAuthGroup && !isStaffRegister) {
+        // Authenticated but in auth screens (except staff-register) - redirect to app
+        router.replace('/(tabs)');
+      }
+    });
   }, [isAuthenticated, segments, loading, isFirstTime]);
 
   return (
@@ -57,6 +74,7 @@ function RootLayoutNav() {
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/setup" />
         <Stack.Screen name="auth/staff-register" />
+        <Stack.Screen name="author" options={{ headerShown: false }} />
       </Stack>
       <TourOverlay />
       <Toast />

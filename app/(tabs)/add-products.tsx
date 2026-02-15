@@ -164,6 +164,12 @@ export default function AddProducts() {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        // If coming from admin scanner, prevent back and redirect to admin inventory
+        if (params.fromAdmin === "true") {
+          router.replace("/admin/inventory");
+          return true;
+        }
+        
         if (formModified) {
           setShowExitModal(true);
           return true;
@@ -172,7 +178,7 @@ export default function AddProducts() {
       };
       const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
       return () => subscription.remove();
-    }, [formModified]),
+    }, [formModified, params.fromAdmin]),
   );
 
   useEffect(() => {
@@ -708,7 +714,9 @@ export default function AddProducts() {
         
         Toast.show({ type: "success", text1: "Product Registered" });
         resetForm();
-        setTimeout(() => router.replace("/(tabs)"), 800);
+        // If coming from admin, redirect to admin inventory, otherwise go to staff tabs
+        const redirectPath = params.fromAdmin === "true" ? "/admin/inventory" : "/(tabs)";
+        setTimeout(() => router.replace(redirectPath as any), 800);
       } else {
         // ... (Your registry lookup logic remains the same)
         let productInRegistry = false;
@@ -749,7 +757,9 @@ export default function AddProducts() {
 
         Toast.show({ type: "success", text1: "Batch Added" });
         resetForm();
-        setTimeout(() => router.replace("/(tabs)"), 800);
+        // If coming from admin, redirect to admin inventory, otherwise go to staff tabs
+        const redirectPath = params.fromAdmin === "true" ? "/admin/inventory" : "/(tabs)";
+        setTimeout(() => router.replace(redirectPath as any), 800);
       }
     } catch (err: any) {
       console.error("Save Error:", err);

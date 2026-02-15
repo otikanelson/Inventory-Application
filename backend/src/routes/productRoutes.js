@@ -1,20 +1,27 @@
 const express = require("express");
 const router = express.Router();
-const Product = require("../models/Product"); // Add missing Product model import
+const Product = require("../models/Product");
+const authenticate = require("../middleware/authenticate");
+const tenantFilter = require("../middleware/tenantFilter");
+const validateStoreAccess = require("../middleware/validateStoreAccess");
 
 const {
   addProduct,
   getProducts,
   getProductById,
-  updateProduct, // ← Make sure this is imported
+  updateProduct,
   updateGenericPrice,
-  applyDiscount, // ← Add this
-  deleteProduct, // ← Make sure this is imported
+  applyDiscount,
+  deleteProduct,
   deleteBatch,
   processSale,
 } = require("../controllers/productController");
 
 const registryController = require("../controllers/registryController");
+
+// Apply authentication and tenant filter to all routes
+router.use(authenticate);
+router.use(tenantFilter);
 
 // Route for /api/products
 router.route("/").post(addProduct).get(getProducts);
@@ -34,7 +41,9 @@ router.get("/barcode/:barcode", async (req, res) => {
   try {
     const { barcode } = req.params;
 
-    const product = await Product.findOne({ barcode });
+    // Apply tenant filter
+    const query = { barcode, ...req.tenantFilter };
+    const product = await Product.findOne(query);
 
     if (!product) {
       return res.status(200).json({
@@ -59,18 +68,18 @@ router.get("/barcode/:barcode", async (req, res) => {
 
 // Route for /api/products/:id (CRUD operations)
 // Update generic price
-router.put("/:id/generic-price", updateGenericPrice);
+router.put("/:id/generic-price", validateStoreAccess, updateGenericPrice);
 
 // Apply discount
-router.post("/:id/discount", applyDiscount);
+router.post("/:id/discount", validateStoreAccess, applyDiscount);
 
 router
   .route("/:id")
   .get(getProductById)
-  .patch(updateProduct) // ← ADD THIS LINE
-  .delete(deleteProduct); // ← ADD THIS LINE
+  .patch(validateStoreAccess, updateProduct)
+  .delete(validateStoreAccess, deleteProduct);
 
 // Delete specific batch
-router.delete("/:id/batches/:batchNumber", deleteBatch);
+router.delete("/:id/batches/:batchNumber", validateStoreAccess, deleteBatch);
 
 module.exports = router;

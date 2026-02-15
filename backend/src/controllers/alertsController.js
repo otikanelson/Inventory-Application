@@ -149,11 +149,13 @@ exports.getAlerts = async (req, res) => {
     const thresholds = settings.thresholds;
     const now = new Date();
     
-    // Get all perishable products with batches
-    const products = await Product.find({
+    // Get all perishable products with batches, filtered by store
+    const query = {
       isPerishable: true,
-      'batches.0': { $exists: true }
-    });
+      'batches.0': { $exists: true },
+      ...req.tenantFilter
+    };
+    const products = await Product.find(query);
     
     const alerts = [];
     
@@ -199,22 +201,26 @@ exports.getAlerts = async (req, res) => {
     // ============================================================================
     const Sale = require('../models/Sale');
     
-    // Get all non-perishable products
-    const nonPerishableProducts = await Product.find({
+    // Get all non-perishable products with tenant filter
+    const nonPerishableQuery = {
       isPerishable: false,
-      totalQuantity: { $gt: 0 } // Only products with stock
-    });
+      totalQuantity: { $gt: 0 },
+      ...req.tenantFilter
+    };
+    const nonPerishableProducts = await Product.find(nonPerishableQuery);
     
     // Calculate sales velocity for each non-perishable product
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
     for (const product of nonPerishableProducts) {
-      // Get sales in last 30 days
-      const sales = await Sale.find({
+      // Get sales in last 30 days with tenant filter
+      const salesQuery = {
         productId: product._id,
-        saleDate: { $gte: thirtyDaysAgo }
-      });
+        saleDate: { $gte: thirtyDaysAgo },
+        ...req.tenantFilter
+      };
+      const sales = await Sale.find(salesQuery);
       
       const totalSold = sales.reduce((sum, sale) => sum + sale.quantitySold, 0);
       const velocity = totalSold / 30; // units per day
