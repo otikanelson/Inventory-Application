@@ -45,3 +45,16 @@ app-example
 # generated native folders
 /ios
 /android
+
+# uploads
+uploads/
+backend/uploads/*.jpg
+backend/uploads/*.png
+backend/uploads/*.jpeg
+!backend/uploads/.gitkeep
+
+# backend expo
+backend/.expo/
+
+# models
+backend/models/saved/

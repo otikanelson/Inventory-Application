@@ -6,12 +6,11 @@ import {
     ActivityIndicator,
     Dimensions,
     Modal,
-    Platform,
     Pressable,
     StyleSheet,
     Text,
     TextInput,
-    View,
+    View
 } from "react-native";
 import { Path, Svg } from "react-native-svg";
 import Toast from "react-native-toast-message";
@@ -31,13 +30,13 @@ const AdminTabBg = ({ color }: { color: string }) => {
     C${width * 0.4} 0 ${width * 0.4} 40 ${width * 0.5} 40 
     S${width * 0.6} 0 ${width * 0.65} 0 
     H${width} 
-    V70 
+    V90 
     H0 
     Z`;
 
   return (
     <View style={styles.svgContainer}>
-      <Svg width={width} height={70} viewBox={`0 0 ${width} 70`}>
+      <Svg width={width} height={90} viewBox={`0 0 ${width} 90`}>
         <Path d={d} fill={color} />
       </Svg>
     </View>
@@ -267,15 +266,15 @@ export default function AdminLayout() {
             tabBarLabelStyle: {
               fontSize: 10,
               fontWeight: "800",
-              marginBottom: Platform.OS === "ios" ? 0 : 10,
+              marginBottom: 0,
             },
             tabBarStyle: {
               position: "absolute",
               backgroundColor: "transparent",
               borderTopWidth: 0,
               elevation: 0,
-              height: Platform.OS === "ios" ? 80 : 70,
-              bottom: Platform.OS === "ios" ? 20 : 0,
+              height: 90,
+              bottom: 0,
             },
             tabBarBackground: () => <AdminTabBg color={theme.tabSurface} />,
           }}
@@ -447,7 +446,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: 60,
     height: 60,
-    marginTop: Platform.OS === "ios" ? 10 : 5,
+    marginTop: -10,
   },
   modalOverlay: {
     flex: 1,

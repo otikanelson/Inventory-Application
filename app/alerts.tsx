@@ -2,18 +2,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ImageBackground,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    ImageBackground,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../components/HelpTooltip";
 import { useTheme } from "../context/ThemeContext";
 import { useAdminAuth } from "../hooks/useAdminAuth";
 import { Alert, AlertAction, useAlerts } from "../hooks/useAlerts";
@@ -32,6 +33,7 @@ export default function Alerts() {
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [showInfoCard, setShowInfoCard] = useState(false);
 
   const backgroundImage =
     isDark ?
@@ -79,9 +81,9 @@ export default function Alerts() {
 
     try {
       if (selectedAction.type === 'remove') {
-        // Delete the product
+        // Remove only the specific batch, not the entire product
         const response = await fetch(
-          `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}`,
+          `${process.env.EXPO_PUBLIC_API_URL}/products/${selectedAlert.productId}/batches/${selectedAlert.batchNumber}`,
           { method: 'DELETE' }
         );
         
@@ -90,13 +92,13 @@ export default function Alerts() {
         if (response.ok && data.success) {
           Toast.show({
             type: "success",
-            text1: "Product Removed",
-            text2: `${selectedAlert.productName} has been deleted`,
+            text1: "Batch Removed",
+            text2: `Batch ${selectedAlert.batchNumber} of ${selectedAlert.productName} has been deleted`,
           });
           await acknowledgeAlert(selectedAlert.alertId, "Removed");
           refresh();
         } else {
-          throw new Error(data.message || 'Failed to delete product');
+          throw new Error(data.message || 'Failed to delete batch');
         }
       } else if (selectedAction.type === 'markdown') {
         // Apply discount based on the label
@@ -197,9 +199,31 @@ export default function Alerts() {
             <Text style={[styles.subtitle, { color: theme.primary }]}>
               NOTIFICATION_CENTER
             </Text>
-            <Text style={[styles.title, { color: theme.text }]}>
-              ALERTS
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.title, { color: theme.text }]}>
+                ALERTS
+              </Text>
+              <Pressable onPress={() => setShowInfoCard(!showInfoCard)}>
+                <Ionicons 
+                  name={showInfoCard ? "chevron-up-circle" : "information-circle-outline"} 
+                  size={18} 
+                  color={theme.primary} 
+                />
+              </Pressable>
+              <HelpTooltip
+                title="Alert System"
+                content={[
+                  "Alerts notify you about products that need attention based on expiry dates, stock levels, and sales velocity.",
+                  "Alert Levels: Expired (past expiry), Critical (<7 days), High (7-14 days), Early (14-30 days), Slow-Moving (low sales velocity).",
+                  "Slow-Moving: Non-perishable products with velocity < 0.5 units/day for 30+ days. AI analyzes sales patterns to identify these.",
+                  "Actions: Each alert suggests actions like discounting, removing, or restocking. Some actions require admin PIN.",
+                  "Thresholds: Alert thresholds are configured by admin in Admin Settings. They can set global defaults and category-specific thresholds."
+                ]}
+                icon="help-circle-outline"
+                iconSize={15}
+                iconColor={theme.primary}
+              />
+            </View>
           </View>
           <Pressable
             onPress={() => router.push("/settings")}
@@ -215,6 +239,7 @@ export default function Alerts() {
             { label: "Critical", key: "critical", color: "#FF4444" },
             { label: "High", key: "high", color: "#FF9500" },
             { label: "Early", key: "early", color: "#FFD60A" },
+            { label: "Slow", key: "slowMoving", color: "#9B59B6" },
           ].map((item) => (
             <View
               key={item.key}
@@ -237,6 +262,43 @@ export default function Alerts() {
           ))}
         </View>
 
+        {/* Alert Labels Info Card - Toggleable */}
+        {showInfoCard && (
+          <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="information-circle-outline" size={18} color={theme.primary} />
+              <Text style={[styles.infoTitle, { color: theme.text }]}>Alert Labels</Text>
+            </View>
+            <View style={styles.infoContent}>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FF3B30' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Expired</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>Past expiry date</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FF3B30' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Critical</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>≤7 days left</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FF9500' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>High</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>8-14 days left</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#FFD60A' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Early</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>15-30 days left</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoDot, { backgroundColor: '#9B59B6' }]} />
+                <Text style={[styles.infoLabel, { color: theme.text }]}>Slow</Text>
+                <Text style={[styles.infoDesc, { color: theme.subtext }]}>Low sales velocity</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View
           style={[
             styles.searchBar,
@@ -258,7 +320,7 @@ export default function Alerts() {
           showsHorizontalScrollIndicator={false}
           style={styles.filterContainer}
         >
-          {["all", "expired", "critical", "high", "early"].map((level) => (
+          {["all", "expired", "critical", "high", "early", "slow-moving"].map((level) => (
             <Pressable
               key={level}
               onPress={() => setSelectedLevel(level)}
@@ -277,7 +339,7 @@ export default function Alerts() {
                   { color: selectedLevel === level ? "#FFF" : theme.text },
                 ]}
               >
-                {level.toUpperCase()}
+                {level === "slow-moving" ? "SLOW" : level.toUpperCase()}
               </Text>
             </Pressable>
           ))}
@@ -304,15 +366,22 @@ export default function Alerts() {
                   </Text>
                   <Text style={[styles.alertMeta, { color: theme.subtext }]}>
                     Qty: {alert.quantity} • {alert.category}
+                    {(alert.level || alert.alertLevel) === 'slow-moving' && (alert as any).velocity && (
+                      <Text style={{ color: '#9B59B6', fontWeight: '600' }}>
+                        {' '}• {(alert as any).velocity} units/day
+                      </Text>
+                    )}
                   </Text>
                 </View>
                 <View style={styles.alertStatus}>
                   <Text style={[styles.daysText, { color: alert.color }]}>
-                    {alert.daysUntilExpiry !== null ?
-                      alert.daysUntilExpiry <= 0 ?
-                        "EXP"
-                      : `${alert.daysUntilExpiry}d`
-                    : "N/A"}
+                    {(alert.level || alert.alertLevel) === 'slow-moving' 
+                      ? 'SLOW'
+                      : alert.daysUntilExpiry !== null && alert.daysUntilExpiry !== undefined
+                        ? alert.daysUntilExpiry <= 0
+                          ? "EXP"
+                          : `${alert.daysUntilExpiry}d`
+                        : "N/A"}
                   </Text>
                   <View
                     style={[
@@ -321,7 +390,7 @@ export default function Alerts() {
                     ]}
                   >
                     <Text style={[styles.levelText, { color: alert.color }]}>
-                      {(alert.alertLevel || "N/A").toUpperCase()}
+                      {(alert.alertLevel || alert.level || "N/A").toUpperCase()}
                     </Text>
                   </View>
                 </View>
@@ -405,7 +474,7 @@ export default function Alerts() {
             </Text>
             <Text style={[styles.modalText, { color: theme.subtext, marginBottom: 20 }]}>
               {selectedAction?.type === 'remove' 
-                ? `Remove ${selectedAlert?.productName} from inventory?`
+                ? `Remove batch ${selectedAlert?.batchNumber} of ${selectedAlert?.productName}?`
                 : `Apply ${selectedAction?.label.includes('30-50') ? '40%' : '20%'} discount to ${selectedAlert?.productName}?`
               }
             </Text>
@@ -485,7 +554,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   summaryGrid: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  summaryCard: { flex: 1, padding: 10, borderRadius: 16, alignItems: "center" },
+  summaryCard: { 
+    flex: 1, 
+    minWidth: 0, 
+    padding: 5, 
+    borderRadius: 16, 
+    alignItems: "center" 
+  },
   summaryValue: { fontSize: 20, fontWeight: "900" },
   summaryLabel: { fontSize: 9, fontWeight: "700", marginTop: 4 },
   searchBar: {
@@ -582,5 +657,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 15,
     fontWeight: '600',
+  },
+  infoCard: {
+    marginTop: 12,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  infoContent: {
+    gap: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  infoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    width: 60,
+  },
+  infoDesc: {
+    fontSize: 12,
+    fontWeight: '500',
+    flex: 1,
   },
 });

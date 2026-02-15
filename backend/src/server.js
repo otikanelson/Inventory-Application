@@ -38,6 +38,15 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Request logging middleware for debugging
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path}`);
+  if (req.method === 'POST' || req.method === 'PUT') {
+    console.log('Request body keys:', Object.keys(req.body));
+  }
+  next();
+});
+
 // Serve static files from uploads directory (for local development only)
 // In production, Cloudinary handles all images
 if (process.env.NODE_ENV !== 'production') {
@@ -63,20 +72,24 @@ app.get('/api', (req, res) => {
     message: 'InventiEase API',
     status: 'healthy',
     endpoints: {
+      auth: '/api/auth',
       products: '/api/products',
       analytics: '/api/analytics',
       upload: '/api/upload',
-      alerts: '/api/alerts'
+      alerts: '/api/alerts',
+      categories: '/api/categories'
     },
     timestamp: new Date().toISOString()
   });
 });
 
 // API Routes
+app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/alerts', require('./routes/alertsRoutes'));
+app.use('/api/categories', require('./routes/categoryRoutes'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -1,3 +1,4 @@
+import { ProductCard } from "@/components/ProductCard";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useRouter } from "expo-router";
@@ -14,6 +15,7 @@ import {
   View,
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
 
@@ -24,6 +26,7 @@ export default function AdminInventory() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<"name" | "totalQuantity" | "risk" | "velocity">("name");
+  const [displayMode, setDisplayMode] = useState<"card" | "list" | "rect">("card");
   const [activeTab, setActiveTab] = useState<"registry" | "inventory">("inventory");
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
@@ -196,9 +199,24 @@ export default function AdminInventory() {
           <Text style={[styles.subtitle, { color: theme.primary }]}>
             ADMIN_PANEL
           </Text>
-          <Text style={[styles.title, { color: theme.text }]}>
-            INVENTORY
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.title, { color: theme.text }]}>
+              INVENTORY
+            </Text>
+            <HelpTooltip
+              style={{marginBottom: 20}}
+              title="Admin Inventory"
+              content={[
+                "Inventory Stock: View and manage products currently in your local inventory with stock levels and AI insights.",
+                "Global Registry: Browse all products ever registered in the system, including items not currently in stock.",
+                "AI Metrics: Risk scores predict waste likelihood, velocity shows sales speed (units/day).",
+                "Status Badges: 'In Stock' means product exists locally, 'No Stock' means it's only in the registry."
+              ]}
+              icon="help-circle"
+              iconSize={18}
+              iconColor={theme.primary}
+            />
+          </View>
 
           <View style={styles.searchRow}>
             <View
@@ -215,6 +233,21 @@ export default function AdminInventory() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/admin/scan",
+                    params: { initialTab: "lookup" },
+                  })
+                }
+                style={styles.barcodeIcon}
+              >
+                <Ionicons
+                  name="barcode-outline"
+                  size={24}
+                  color={theme.primary}
+                />
+              </Pressable>
             </View>
 
             <Pressable
@@ -232,6 +265,25 @@ export default function AdminInventory() {
                 } 
                 size={20} 
                 color={theme.primary} 
+              />
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.sortBtn,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+              onPress={() => {
+                const modes: Array<"card" | "list" | "rect"> = ["card", "list", "rect"];
+                const currentIndex = modes.indexOf(displayMode);
+                const nextIndex = (currentIndex + 1) % modes.length;
+                setDisplayMode(modes[nextIndex]);
+              }}
+            >
+              <Ionicons
+                name={displayMode === "card" ? "list" : displayMode === "list" ? "grid-outline" : "grid"}
+                size={20}
+                color={theme.primary}
               />
             </Pressable>
           </View>
@@ -299,6 +351,9 @@ export default function AdminInventory() {
           data={sortedProducts}
           keyExtractor={(item) => item._id || item.barcode}
           contentContainerStyle={styles.listPadding}
+          numColumns={displayMode === "rect" ? 2 : 1}
+          key={displayMode === "rect" ? "grid" : "list"}
+          columnWrapperStyle={displayMode === "rect" ? styles.columnWrapper : undefined}
           refreshControl={
             <RefreshControl
               refreshing={currentLoading}
@@ -319,6 +374,152 @@ export default function AdminInventory() {
             const riskColor = getRiskColor(riskScore);
             const velocityIndicator = getVelocityIndicator(velocity);
 
+            if (displayMode === "list") {
+              return (
+                <Pressable
+                  onPress={() => handleProductPress(item)}
+                  style={[styles.listItem, { borderBottomColor: theme.border }]}
+                >
+                  {/* Risk Dot */}
+                  {riskColor && riskScore > 30 && activeTab === "inventory" && (
+                    <View style={[styles.listRiskDot, { backgroundColor: riskColor }]} />
+                  )}
+                  
+                  <View style={{ flex: 2, marginLeft: riskColor && riskScore > 30 && activeTab === "inventory" ? 8 : 0 }}>
+                    <View style={styles.listNameRow}>
+                      <Text
+                        style={[styles.listName, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {/* Velocity Indicator */}
+                      {velocityIndicator && activeTab === "inventory" && (
+                        <Ionicons 
+                          name={velocityIndicator.icon} 
+                          size={12} 
+                          color={velocityIndicator.color}
+                          style={{ marginLeft: 6 }}
+                        />
+                      )}
+                    </View>
+                    <Text
+                      style={[styles.listSubtitle, { color: theme.subtext }]}
+                    >
+                      {item.barcode || "No SKU"}
+                    </Text>
+                  </View>
+                  <View style={styles.listPill}>
+                    <Text
+                      style={[styles.listCategory, { color: theme.subtext }]}
+                    >
+                      {item.category || "General"}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    {sortField === "risk" && activeTab === "inventory" ? (
+                      productAnalytics && riskScore > 0 ? (
+                        <Text
+                          style={[
+                            styles.listQty,
+                            {
+                              color: riskColor || theme.text,
+                            },
+                          ]}
+                        >
+                          Risk: {Math.round(riskScore)}
+                        </Text>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.listQty,
+                            {
+                              color: theme.subtext,
+                            },
+                          ]}
+                        >
+                          —
+                        </Text>
+                      )
+                    ) : sortField === "velocity" && activeTab === "inventory" ? (
+                      productAnalytics && velocity > 0 ? (
+                        <Text
+                          style={[
+                            styles.listQty,
+                            {
+                              color: velocityIndicator?.color || theme.text,
+                            },
+                          ]}
+                        >
+                          {velocity.toFixed(1)}/day
+                        </Text>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.listQty,
+                            {
+                              color: theme.subtext,
+                            },
+                          ]}
+                        >
+                          —
+                        </Text>
+                      )
+                    ) : (
+                      <Text
+                        style={[
+                          styles.listQty,
+                          {
+                            color:
+                              activeTab === "inventory" &&
+                              (item.totalQuantity || 0) < 10
+                                ? theme.notification
+                                : theme.text,
+                          },
+                        ]}
+                      >
+                        {activeTab === "inventory"
+                          ? `${item.totalQuantity || 0} units`
+                          : inLocalInventory 
+                          ? `${products.find((p) => p.barcode === item.barcode)?.totalQuantity || 0} units`
+                          : "—"}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            }
+            
+            if (displayMode === "rect") {
+              // Rectangular card view (like dashboard)
+              // Only show ProductCard for inventory tab with analytics
+              if (activeTab === "inventory") {
+                const prediction = productAnalytics ? {
+                  metrics: {
+                    riskScore,
+                    velocity
+                  }
+                } : null;
+                
+                return (
+                  <ProductCard 
+                    item={item}
+                    prediction={prediction as any}
+                    sortField={sortField as any}
+                  />
+                );
+              }
+              
+              // For registry tab, show a simple card without analytics
+              return (
+                <ProductCard 
+                  item={item}
+                  prediction={null}
+                  sortField="name"
+                />
+              );
+            }
+
             return (
               <Pressable
                 onPress={() => handleProductPress(item)}
@@ -334,7 +535,7 @@ export default function AdminInventory() {
 
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
-                    {item.imageUrl && item.imageUrl !== "cube" ? (
+                    {item.imageUrl && item.imageUrl !== "cube" && item.imageUrl !== "" ? (
                       <Image
                         source={{ uri: item.imageUrl }}
                         style={styles.image}
@@ -522,6 +723,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   searchInput: { flex: 1, marginLeft: 10, fontSize: 13 },
+  barcodeIcon: {
+    paddingLeft: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(150,150,150,0.2)",
+  },
   sortBtn: {
     width: 45,
     height: 50,
@@ -612,5 +818,36 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     fontWeight: "600",
+  },
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    position: 'relative',
+  },
+  listRiskDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  listNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  listName: { fontSize: 14, fontWeight: "700" },
+  listSubtitle: { fontSize: 11 },
+  listPill: {
+    backgroundColor: "#f0f0f010",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  listCategory: { fontSize: 10, fontWeight: "700" },
+  listQty: { fontSize: 14, fontWeight: "800" },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
   },
 });

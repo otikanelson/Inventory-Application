@@ -27,13 +27,15 @@ export const useAdminTour = () => {
 
 // Admin tour steps with screen navigation and precise coordinates
 export const adminTourSteps = [
-  { id: 0, screen: '/admin/sales', title: 'Welcome Admin!', description: 'Let me show you the admin features.', highlight: { x: 0, y: 100, width: 350, height: 80 } },
+  { id: 0, screen: '/admin/sales', title: 'Welcome Admin!', description: 'Let me show you the admin features and security settings.', highlight: { x: 0, y: 100, width: 350, height: 80 } },
   { id: 1, screen: '/admin/sales', title: 'Sales Dashboard', description: 'Process sales with FEFO logic and track revenue.', highlight: { x: 0, y: 90, width: 350, height: 400 } },
   { id: 2, screen: '/admin/inventory', title: 'Inventory Management', description: 'View all products, edit details, and manage stock.', highlight: { x: -20, y: 700, width: 390, height: 400 } },
   { id: 3, screen: '/admin/scan', title: 'Admin Scanner', description: 'Quick access to scan and add products to inventory.', highlight: { x: 40, y: 300, width: 300, height: 400 } },
   { id: 4, screen: '/admin/stats', title: 'Analytics & Insights', description: 'View sales trends, predictions, and performance metrics.', highlight: { x: 20, y: 180, width: 390, height: 450 } },
-  { id: 5, screen: '/admin/settings', title: 'Admin Settings', description: 'Configure PIN, alerts, and system preferences.', highlight: { x: 20, y: 200, width: 390, height: 400 } },
-  { id: 6, screen: '/admin/sales', title: 'You\'re All Set!', description: 'Manage your inventory like a pro with admin tools!', highlight: { x: 20, y: 140, width: 350, height: 80 } },
+  { id: 5, screen: '/admin/settings', title: 'Security & PIN', description: 'Set up your admin PIN to protect sensitive features. Enable auto-logout for extra security.', highlight: { x: 20, y: 200, width: 390, height: 300 } },
+  { id: 6, screen: '/admin/settings', title: 'Staff Management', description: 'Add staff members with limited access. Each staff gets their own PIN and can manage inventory without accessing admin settings.', highlight: { x: 20, y: 520, width: 390, height: 250 } },
+  { id: 7, screen: '/admin/settings', title: 'Alert Thresholds & Categories', description: 'Configure global alert thresholds and manage product categories with custom settings.', highlight: { x: 20, y: 790, width: 390, height: 350 } },
+  { id: 8, screen: '/admin/sales', title: 'You\'re All Set!', description: 'Your inventory is secure with PIN protection. Manage your team and inventory like a pro!', highlight: { x: 20, y: 140, width: 350, height: 80 } },
 ];
 
 export const AdminTourProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

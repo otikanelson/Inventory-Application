@@ -5,17 +5,17 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  ImageBackground,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
@@ -55,6 +55,8 @@ export default function AdminProductDetails() {
   const [editedCategory, setEditedCategory] = useState("");
   const [editedImage, setEditedImage] = useState("");
   const [editedGenericPrice, setEditedGenericPrice] = useState("");
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [adminCategories, setAdminCategories] = useState<string[]>([]);
   // Initialize Cloudinary upload hook
   const { 
     uploadImage, 
@@ -77,6 +79,20 @@ export default function AdminProductDetails() {
   useEffect(() => {
     loadProduct();
   }, [id]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/categories`);
+        if (response.data.success) {
+          setAdminCategories(response.data.data.map((cat: any) => cat.name).sort());
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const loadProduct = async () => {
     if (!id) return;
@@ -497,12 +513,15 @@ export default function AdminProductDetails() {
                 <Pressable
                   onPress={handleSave}
                   disabled={isSaving || isUploadingImage}
-                  style={[styles.headerBtn, { backgroundColor: theme.primary }]}
+                  style={[styles.saveBtn, { backgroundColor: theme.primary }]}
                 >
                   {isSaving || isUploadingImage ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.buttonText}>Save Changes</Text>
+                    <>
+                      <Ionicons name="checkmark" size={18} color="#FFF" />
+                      <Text style={styles.saveBtnText}>Save</Text>
+                    </>
                   )}
                 </Pressable>
               </>
@@ -548,16 +567,18 @@ export default function AdminProductDetails() {
                   placeholder="Product Name"
                   placeholderTextColor={theme.subtext}
                 />
-                <TextInput
+                <Pressable
+                  onPress={() => setShowCategoryPicker(true)}
                   style={[
                     styles.editInputSmall,
-                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+                    { borderColor: theme.border, backgroundColor: theme.background, justifyContent: 'center' },
                   ]}
-                  value={editedCategory}
-                  onChangeText={setEditedCategory}
-                  placeholder="Category"
-                  placeholderTextColor={theme.subtext}
-                />
+                >
+                  <Text style={{ color: editedCategory ? theme.text : theme.subtext }}>
+                    {editedCategory || "Select Category"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={theme.subtext} style={{ position: 'absolute', right: 12 }} />
+                </Pressable>
               </>
             ) : (
               <>
@@ -929,6 +950,14 @@ export default function AdminProductDetails() {
                           </Text>
                         </View>
                       )}
+                      {(batch as any).manufacturerDate && (batch as any).manufacturerDate !== "N/A" && (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="construct-outline" size={12} color={theme.subtext} />
+                          <Text style={[styles.detailText, { color: theme.subtext }]}>
+                            Mfg: {new Date((batch as any).manufacturerDate).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      )}
                       {batch.price && batch.price > 0 && (
                         <View style={styles.detailRow}>
                           <Ionicons name="pricetag-outline" size={12} color={theme.subtext} />
@@ -1108,6 +1137,57 @@ export default function AdminProductDetails() {
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>Confirm</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Category Picker Modal */}
+      <Modal visible={showCategoryPicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, maxHeight: '70%' }]}>
+            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="pricetags" size={32} color={theme.primary} />
+            </View>
+
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Select Category
+            </Text>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              Choose from admin-created categories
+            </Text>
+
+            <ScrollView style={{ width: '100%', maxHeight: 300 }}>
+              {adminCategories.map((category) => (
+                <Pressable
+                  key={category}
+                  onPress={() => {
+                    setEditedCategory(category);
+                    setShowCategoryPicker(false);
+                  }}
+                  style={[
+                    styles.categoryOption,
+                    {
+                      backgroundColor: editedCategory === category ? theme.primary + '15' : theme.background,
+                      borderColor: editedCategory === category ? theme.primary : theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.categoryOptionText, { color: editedCategory === category ? theme.primary : theme.text }]}>
+                    {category}
+                  </Text>
+                  {editedCategory === category && (
+                    <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Pressable
+              style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, marginTop: 15 }]}
+              onPress={() => setShowCategoryPicker(false)}
+            >
+              <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -1618,5 +1698,40 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
+  },
+  
+  // Save Button Styles
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 22,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveBtnText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  
+  // Category Picker Styles
+  categoryOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  categoryOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

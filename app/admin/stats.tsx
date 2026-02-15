@@ -17,6 +17,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useAIPredictions } from "../../hooks/useAIPredictions";
 import { useAnalytics } from "../../hooks/useAnalytics";
@@ -819,13 +820,29 @@ export default function AdminStats() {
       >
         {/* Header with Export Buttons */}
         <View style={styles.header}>
-          <View>
-            <Text style={[styles.headerSub, { color: theme.primary }]}>
-              AI_ANALYTICS
-            </Text>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>
-              INSIGHTS
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View>
+              <Text style={[styles.headerSub, { color: theme.primary }]}>
+                AI_ANALYTICS
+              </Text>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>
+                INSIGHTS
+              </Text>
+            </View>
+            <HelpTooltip
+              style={{marginTop: 20}}
+              title="AI Stats & Insights"
+              content={[
+                "Risk Scores: Numbers from 0-100 showing how likely a product will expire before selling. High (70+) means urgent - product may waste soon. Medium (50-69) needs monitoring. Low (<50) is healthy stock moving well.",
+                "Velocity: How fast products sell, measured in units per day. Example: 5.2 units/day means you sell about 5 units daily. Higher velocity = faster sales.",
+                "Accuracy Metrics: Shows how often AI predictions are correct. 87% overall means AI is right 87 times out of 100. High confidence predictions (when AI is very sure) are 92% accurate.",
+                "Confidence: How sure the AI is about its prediction (0-100%). Predictions above 80% confidence are more reliable. Low confidence means AI needs more sales data to be accurate.",
+                "Export: Download all insights as CSV (spreadsheet) or text report to analyze in Excel or share with management."
+              ]}
+              icon="help-circle"
+              iconSize={18}
+              iconColor={theme.primary}
+            />
           </View>
           
           {/* Export Buttons */}

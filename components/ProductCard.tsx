@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { Product } from "../hooks/useProducts";
@@ -209,7 +209,7 @@ export const ProductCard = React.memo(({ item, prediction, sortField = 'name' }:
             color={isDark ? "#ffffff10" : "#00000010"}
           />
         )}
-        {item.imageUrl && item.imageUrl !== "cube" && (
+        {item.imageUrl && item.imageUrl !== "cube" && item.imageUrl !== "" && (
           <Image
             source={{ uri: item.imageUrl }}
             style={[styles.image, { opacity: isLoaded ? 1 : 0 }]}
@@ -324,8 +324,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
+    padding: 5,
   },
-  image: { width: "85%", height: "85%" },
+  image: { width: "95%", height: "95%", borderRadius: 22 },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",

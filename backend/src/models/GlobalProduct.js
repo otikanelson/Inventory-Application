@@ -18,7 +18,7 @@ const GlobalProductSchema = new mongoose.Schema(
     },
     imageUrl: {
       type: String,
-      default: "",
+      default: "cube",
     },
     genericPrice: { type: Number, default: null },
     isPerishable: {

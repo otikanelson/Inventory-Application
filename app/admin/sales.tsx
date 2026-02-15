@@ -9,6 +9,7 @@ import {
   FlatList,
   ImageBackground,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,6 +18,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
 
@@ -298,13 +300,28 @@ export default function AdminSales() {
 
       {/* Technical Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={[styles.systemLabel, { color: theme.primary }]}>
-            ADMIN//SALES_TERMINAL
-          </Text>
-          <Text style={[styles.title, { color: theme.text }]}>
-            {activeTab === "checkout" ? "TRANSACTION_LOG" : "SALES_HISTORY"}
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View>
+            <Text style={[styles.systemLabel, { color: theme.primary }]}>
+              ADMIN//SALES_TERMINAL
+            </Text>
+            <Text style={[styles.title, { color: theme.text }]}>
+              {activeTab === "checkout" ? "TRANSACTIONS" : "SALES_HISTORY"}
+            </Text>
+          </View>
+          <HelpTooltip
+            style={{marginTop: 20}}
+            title="Admin Sales"
+            content={[
+              "Checkout Tab: Scan products to add them to the cart, adjust quantities, and complete transactions.",
+              "FEFO Logic: All sales automatically use First-Expired-First-Out logic to deduct from batches closest to expiry, ensuring stock freshness.",
+              "History Tab: View past sales with revenue stats (today, week, month), batch numbers, and transaction details.",
+              "Revenue Stats: Track daily, weekly, and monthly sales performance to monitor business trends."
+            ]}
+            icon="help-circle"
+            iconSize={18}
+            iconColor={theme.primary}
+          />
         </View>
 
         <Pressable
@@ -541,26 +558,154 @@ export default function AdminSales() {
         </ScrollView>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Revenue Stats */}
-          <View style={styles.statsContainer}>
-            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.statLabel, { color: theme.subtext }]}>TODAY</Text>
-              <Text style={[styles.statValue, { color: theme.primary }]}>
-                {formatCurrency(revenueStats.today)}
-              </Text>
+          {/* Revenue Stats with Export Button */}
+          <View style={styles.historyHeader}>
+            <View style={styles.statsContainer}>
+              <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.statLabel, { color: theme.subtext }]}>TODAY</Text>
+                <Text style={[styles.statValue, { color: theme.primary }]}>
+                  {formatCurrency(revenueStats.today)}
+                </Text>
+              </View>
+              <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.statLabel, { color: theme.subtext }]}>THIS WEEK</Text>
+                <Text style={[styles.statValue, { color: theme.primary }]}>
+                  {formatCurrency(revenueStats.week)}
+                </Text>
+              </View>
+              <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.statLabel, { color: theme.subtext }]}>THIS MONTH</Text>
+                <Text style={[styles.statValue, { color: theme.primary }]}>
+                  {formatCurrency(revenueStats.month)}
+                </Text>
+              </View>
             </View>
-            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.statLabel, { color: theme.subtext }]}>THIS WEEK</Text>
-              <Text style={[styles.statValue, { color: theme.primary }]}>
-                {formatCurrency(revenueStats.week)}
+            
+            {/* Export PDF Button */}
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              onPress={async () => {
+                try {
+                  // Generate PDF content as HTML
+                  const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <title>Sales Report - ${new Date().toLocaleDateString()}</title>
+                      <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #4C6FFF; }
+                        .stats { display: flex; gap: 20px; margin: 20px 0; }
+                        .stat-card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; flex: 1; }
+                        .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+                        .stat-value { font-size: 24px; font-weight: bold; color: #4C6FFF; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+                        th { background-color: #f5f5f5; font-weight: bold; }
+                        .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; }
+                      </style>
+                    </head>
+                    <body>
+                      <h1>Sales Report</h1>
+                      <p>Generated on: ${new Date().toLocaleString()}</p>
+                      
+                      <div class="stats">
+                        <div class="stat-card">
+                          <div class="stat-label">Today</div>
+                          <div class="stat-value">${formatCurrency(revenueStats.today)}</div>
+                        </div>
+                        <div class="stat-card">
+                          <div class="stat-label">This Week</div>
+                          <div class="stat-value">${formatCurrency(revenueStats.week)}</div>
+                        </div>
+                        <div class="stat-card">
+                          <div class="stat-label">This Month</div>
+                          <div class="stat-value">${formatCurrency(revenueStats.month)}</div>
+                        </div>
+                      </div>
+                      
+                      <h2>Sales Transactions (${salesHistory.length} total)</h2>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Product</th>
+                            <th>Batch</th>
+                            <th>Quantity</th>
+                            <th>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${salesHistory.map(sale => `
+                            <tr>
+                              <td>${new Date(sale.saleDate).toLocaleDateString()}</td>
+                              <td>${sale.productName}</td>
+                              <td>${sale.batchNumber || 'N/A'}</td>
+                              <td>${sale.quantitySold} units</td>
+                              <td>${formatCurrency(sale.totalAmount)}</td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+                      
+                      <div class="footer">
+                        <p>StockQ Inventory Management System</p>
+                        <p>This is an automatically generated report</p>
+                      </div>
+                    </body>
+                    </html>
+                  `;
+
+                  // For web/desktop: Create a blob and download
+                  if (Platform.OS === 'web') {
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `sales-report-${new Date().toISOString().split('T')[0]}.html`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    
+                    Toast.show({
+                      type: 'success',
+                      text1: 'Report Downloaded',
+                      text2: 'HTML report saved successfully'
+                    });
+                  } else {
+                    // For mobile: Share the HTML content
+                    Toast.show({
+                      type: 'info',
+                      text1: 'PDF Export',
+                      text2: 'Generating report...'
+                    });
+                    
+                    // Note: For full PDF support on mobile, you would need to install:
+                    // expo-print and expo-sharing packages
+                    // For now, we'll show a message
+                    setTimeout(() => {
+                      Toast.show({
+                        type: 'info',
+                        text1: 'Feature Coming Soon',
+                        text2: 'PDF export for mobile is in development'
+                      });
+                    }, 1000);
+                  }
+                } catch (error) {
+                  console.error('PDF export error:', error);
+                  Toast.show({
+                    type: 'error',
+                    text1: 'Export Failed',
+                    text2: 'Could not generate report'
+                  });
+                }
+              }}
+            >
+              <Ionicons name="download-outline" size={18} color={theme.primary} />
+              <Text style={[styles.exportButtonText, { color: theme.primary }]}>
+                Export PDF
               </Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.statLabel, { color: theme.subtext }]}>THIS MONTH</Text>
-              <Text style={[styles.statValue, { color: theme.primary }]}>
-                {formatCurrency(revenueStats.month)}
-              </Text>
-            </View>
+            </Pressable>
           </View>
 
           {/* Sales List */}
@@ -933,15 +1078,17 @@ const styles = StyleSheet.create({
   },
 
   // Sales History Styles
+  historyHeader: {
+    paddingHorizontal: 20,
+  },
   statsContainer: {
     flexDirection: "row",
-    paddingHorizontal: 20,
     gap: 10,
-    marginBottom: 20,
+    marginBottom: 15,
   },
   statCard: {
     flex: 1,
-    padding: 16,
+    padding: 8,
     borderRadius: 16,
     borderWidth: 1,
     alignItems: "center",
@@ -953,8 +1100,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "900",
+  },
+  exportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  exportButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
 
   loadingContainer: {

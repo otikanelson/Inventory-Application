@@ -22,6 +22,7 @@ import {
     View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
 
@@ -60,6 +61,7 @@ export default function AddProducts() {
     name: "",
     quantity: "",
     expiryDate: "",
+    manufacturerDate: "",
     category: "",
     price: "",
     barcode: "",
@@ -72,37 +74,24 @@ export default function AddProducts() {
   const isScannedProduct = Boolean(params.barcode && params.barcode !== formData.barcode);
   const showGenerateButton = !isLocked && !isScannedProduct;
 
-  // Predefined categories - strict list to avoid random entries
-  const PREDEFINED_CATEGORIES = [
-    "Beverages",
-    "Dairy",
-    "Bakery",
-    "Produce",
-    "Meat & Poultry",
-    "Seafood",
-    "Frozen Foods",
-    "Canned Goods",
-    "Dry Goods",
-    "Snacks",
-    "Condiments & Sauces",
-    "Spices & Seasonings",
-    "Breakfast & Cereal",
-    "Pasta & Grains",
-    "Baking Supplies",
-    "Stationary",
-    "Household Items",
-    "Personal Care",
-    "Health & Wellness",
-    "Baby Products",
-    "Pet Supplies",
-    "Electronics",
-    "Office Supplies",
-    "Other"
-  ].sort();
+  // Admin-created categories - fetched from API
+  const [adminCategories, setAdminCategories] = useState<string[]>([]);
 
-  const existingCategories = Array.from(
-    new Set(products.map((p) => p.category).filter(Boolean)),
-  ).sort();
+  // Fetch admin-created categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`);
+        const data = await response.json();
+        if (data.success) {
+          setAdminCategories(data.data.map((cat: any) => cat.name).sort());
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     const loadProductData = async () => {
@@ -306,6 +295,20 @@ export default function AddProducts() {
           }
         }
         break;
+      case "manufacturerDate":
+        if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          result = { isValid: false, error: "Date must be in YYYY-MM-DD format" };
+        } else if (value) {
+          const mfgDate = new Date(value);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (isNaN(mfgDate.getTime())) {
+            result = { isValid: false, error: "Invalid date" };
+          } else if (mfgDate > today) {
+            result = { isValid: false, error: "Manufacturer date cannot be in the future" };
+          }
+        }
+        break;
     }
     
     setFieldErrors(prev => ({
@@ -346,6 +349,7 @@ export default function AddProducts() {
       name: "",
       quantity: "",
       expiryDate: "",
+      manufacturerDate: "",
       category: "",
       price: "",
       barcode: "",
@@ -415,13 +419,8 @@ export default function AddProducts() {
       highlightFields.push("category");
     }
 
-    // Image validation
-    const hasExistingBatchesWithImage = existingProduct && existingProduct.imageUrl && existingProduct.batches && existingProduct.batches.length > 0;
-    const imageRequired = !hasExistingBatchesWithImage;
-    if (imageRequired && !image) {
-      newErrors.push("image");
-      highlightFields.push("image");
-    }
+    // Image validation - Image is now optional
+    // No validation needed for image field
 
     // Inventory/Manual mode validations
     if (mode === "inventory" || mode === "manual") {
@@ -704,7 +703,7 @@ export default function AddProducts() {
           name: cleanName,
           category: cleanCategory,
           isPerishable: isPerishable,
-          imageUrl: finalImageUrl || "", // Use the uploaded URL
+          imageUrl: finalImageUrl || "cube", // Use "cube" as default placeholder
         });
         
         Toast.show({ type: "success", text1: "Product Registered" });
@@ -725,7 +724,7 @@ export default function AddProducts() {
               name: cleanName,
               category: cleanCategory,
               isPerishable: isPerishable,
-              imageUrl: finalImageUrl || "", // Use the uploaded URL
+              imageUrl: finalImageUrl || "cube", // Use "cube" as default placeholder
             });
           } catch (registryError: any) {
             if (!registryError.response?.data?.message?.includes("already in registry")) throw registryError;
@@ -733,7 +732,7 @@ export default function AddProducts() {
         }
 
         // Add Batch with permanent image URL
-        const imageToSave = finalImageUrl || existingProduct?.imageUrl || "";
+        const imageToSave = finalImageUrl || existingProduct?.imageUrl || "cube";
         
         await axios.post(API_URL, {
           barcode: cleanBarcode,
@@ -741,6 +740,7 @@ export default function AddProducts() {
           category: cleanCategory,
           quantity: Number(formData.quantity),
           expiryDate: formData.expiryDate || undefined,
+          manufacturerDate: formData.manufacturerDate || undefined,
           price: Number(formData.price) || 0,
           imageUrl: imageToSave,
           hasBarcode: params.hasBarcode !== "false",
@@ -936,7 +936,7 @@ export default function AddProducts() {
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
               <Text style={[styles.label, { color: theme.subtext }]}>BARCODE / ID</Text>
-              <Pressable onPress={() => setShowFieldHelp(showFieldHelp === 'barcode' ? null : 'barcode')}>
+              <Pressable style={{marginTop: 10}} onPress={() => setShowFieldHelp(showFieldHelp === 'barcode' ? null : 'barcode')}>
                 <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
               </Pressable>
             </View>
@@ -1069,7 +1069,7 @@ export default function AddProducts() {
             <View style={{ flex: 1 }}>
               <View style={styles.labelRow}>
                 <Text style={[styles.label, { marginTop: 0, color: theme.subtext }]}>PRODUCT IMAGE</Text>
-                <Pressable onPress={() => setShowFieldHelp(showFieldHelp === 'image' ? null : 'image')}>
+                <Pressable style={{marginBottom: 10}} onPress={() => setShowFieldHelp(showFieldHelp === 'image' ? null : 'image')}>
                   <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
                 </Pressable>
               </View>
@@ -1077,14 +1077,14 @@ export default function AddProducts() {
               {showFieldHelp === 'image' && (
                 <View style={[styles.helpBox, { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}>
                   <Text style={[styles.helpText, { color: theme.text }]}>
-                    Add a clear photo of your product. This helps with identification and inventory management.
+                    Add a clear photo of your product. This helps with identification and inventory management. If no image is provided, a default cube icon will be used.
                   </Text>
                 </View>
               )}
               
               <View style={styles.imageRequirement}>
                 <Ionicons 
-                  name={image ? "checkmark-circle" : "information-circle"} 
+                  name={image ? "checkmark-circle" : "cube-outline"} 
                   size={16} 
                   color={image ? "#4CAF50" : theme.subtext} 
                 />
@@ -1093,11 +1093,9 @@ export default function AddProducts() {
                   fontSize: 12, 
                   marginLeft: 6 
                 }}>
-                  {(existingProduct?.imageUrl && existingProduct?.batches?.length > 0) 
-                    ? "Optional - existing image available" 
-                    : image 
-                      ? "Image added successfully"
-                      : "Required - no existing image"
+                  {image 
+                    ? "Image added successfully"
+                    : "default cube image will be used"
                   }
                 </Text>
               </View>
@@ -1160,6 +1158,19 @@ export default function AddProducts() {
             <View style={styles.labelRow}>
               <Text style={[styles.label, { color: theme.subtext }]}>CATEGORY</Text>
               <Text style={[styles.required, { color: theme.notification }]}>*</Text>
+              <HelpTooltip
+                title="Product Categories"
+                content={[
+                  "Categories are created and managed by admin in Admin Settings.",
+                  "You can only select from categories that admin has created.",
+                  "If you need a new category, ask your admin to create it.",
+                  "Categories help organize inventory and can have custom alert thresholds."
+                ]}
+                icon="help-circle-outline"
+                iconSize={14}
+                iconColor={theme.subtext}
+                style={{ marginLeft: 6 }}
+              />
               {mode === "inventory" && existingProduct && existingProduct.category && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
                   <Ionicons name="lock-closed" size={14} color={theme.subtext} />
@@ -1369,6 +1380,59 @@ export default function AddProducts() {
                   </View>
                 )}
               </View>
+
+              {/* Manufacturer Date Input */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={[styles.label, { color: theme.subtext }]}>MANUFACTURER DATE</Text>
+                  <Pressable style={{marginTop: 10}} onPress={() => setShowFieldHelp(showFieldHelp === 'manufacturerDate' ? null : 'manufacturerDate')}>
+                    <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
+                  </Pressable>
+                </View>
+                
+                {showFieldHelp === 'manufacturerDate' && (
+                  <View style={[styles.helpBox, { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}>
+                    <Text style={[styles.helpText, { color: theme.text }]}>
+                      The date when the product was manufactured. This helps track product age and shelf life. Cannot be in the future.
+                    </Text>
+                  </View>
+                )}
+                
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: highlightErrors.includes('manufacturerDate')
+                        ? theme.notification
+                        : fieldErrors.manufacturerDate 
+                          ? theme.notification 
+                          : validFields.includes('manufacturerDate') 
+                            ? '#4CAF50' 
+                            : theme.border,
+                      borderWidth: 2,
+                      color: theme.text,
+                    },
+                    highlightErrors.includes('manufacturerDate') && styles.errorHighlight,
+                  ]}
+                  value={formData.manufacturerDate}
+                  placeholder="YYYY-MM-DD (Optional)"
+                  placeholderTextColor={theme.subtext}
+                  onChangeText={(t) => handleFieldChange("manufacturerDate", t)}
+                />
+                
+                {fieldErrors.manufacturerDate && (
+                  <Text style={[styles.errorText, { color: theme.notification }]}>
+                    {fieldErrors.manufacturerDate}
+                  </Text>
+                )}
+                {validFields.includes('manufacturerDate') && (
+                  <View style={styles.successRow}>
+                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                    <Text style={[styles.successText, { color: '#4CAF50' }]}>Valid date</Text>
+                  </View>
+                )}
+              </View>
             </View>
           )}
 
@@ -1528,7 +1592,7 @@ export default function AddProducts() {
             </View>
             
             <FlatList
-              data={PREDEFINED_CATEGORIES.filter(cat => 
+              data={adminCategories.filter(cat => 
                 cat.toLowerCase().includes(formData.category.toLowerCase())
               )}
               keyExtractor={(item) => item}
@@ -1540,7 +1604,7 @@ export default function AddProducts() {
                     No matching categories found
                   </Text>
                   <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-                    Try a different search term
+                    Ask admin to create "{formData.category}" category
                   </Text>
                 </View>
               }

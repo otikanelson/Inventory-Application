@@ -17,6 +17,7 @@ import {
     View,
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 
 const { height } = Dimensions.get("window");
@@ -396,19 +397,31 @@ export default function ScanScreen() {
             </Pressable>
           </View>
 
-          <Pressable
-            onPress={() => setTorch(!torch)}
-            style={[
-              styles.iconCircle,
-              torch && { backgroundColor: "rgba(255,255,255,0.4)" },
-            ]}
-          >
-            <Ionicons
-              name={torch ? "flash" : "flash-off"}
-              size={24}
-              color="#FFF"
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <HelpTooltip
+              title="Scanner Modes"
+              content={[
+                "LOOKUP MODE: Quickly find products already in your inventory. Scan to view product details and stock levels.",
+                "REGISTRY MODE: Add new products or restock existing ones. Scan to register new items or add batches to existing products."
+              ]}
+              icon="help-circle"
+              iconSize={24}
+              iconColor="#FFF"
             />
-          </Pressable>
+            <Pressable
+              onPress={() => setTorch(!torch)}
+              style={[
+                styles.iconCircle,
+                torch && { backgroundColor: "rgba(255,255,255,0.4)" },
+              ]}
+            >
+              <Ionicons
+                name={torch ? "flash" : "flash-off"}
+                size={24}
+                color="#FFF"
+              />
+            </Pressable>
+          </View>
         </View>
 
         {/* VIEWFINDER */}

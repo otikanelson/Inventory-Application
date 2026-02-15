@@ -2,14 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    ImageBackground,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Image,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { PredictionCard } from "../../components/PredictionCard";
 import { useTheme } from "../../context/ThemeContext";
@@ -193,7 +193,7 @@ export default function ProductDetails() {
                 : require("../../assets/images/icon.png")
             }
             style={styles.productImage}
-            resizeMode="contain"
+            resizeMode="stretch"
           />
         </View>
 
@@ -201,7 +201,7 @@ export default function ProductDetails() {
         <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.infoHeader}>
             <View style={styles.infoMain}>
-              <Text style={[styles.productCategory, { color: theme.subtext }]}>
+              <Text style={[styles.productCategory, { color: theme.primary }]}>
                 {product.category}
               </Text>
               <View style={[styles.statusBadge, { backgroundColor: stockColor + '20', borderColor: stockColor }]}>
@@ -410,6 +410,15 @@ export default function ProductDetails() {
                       </Text>
                     </View>
 
+                    {(batch as any).manufacturerDate && (
+                      <View style={styles.batchDetail}>
+                        <Ionicons name="construct-outline" size={16} color={theme.subtext} />
+                        <Text style={[styles.batchDetailText, { color: theme.subtext }]}>
+                          Mfg: {new Date((batch as any).manufacturerDate).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+
                     <View style={styles.batchDetail}>
                       <Ionicons name="alert-circle-outline" size={16} color={expiryColor} />
                       <Text style={[styles.batchDetailText, { color: expiryColor }]}>
@@ -491,7 +500,7 @@ const styles = StyleSheet.create({
   // Wide Image Container
   imageContainer: {
     width: "100%",
-    height: 220,
+    height: 250,
     borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
@@ -503,6 +512,7 @@ const styles = StyleSheet.create({
   productImage: {
     width: "100%",
     height: "100%",
+    borderRadius: 10,
   },
   
   // Info Card
@@ -521,10 +531,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   productCategory: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
   statusBadge: {
     flexDirection: "row",
@@ -568,7 +578,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   cardTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 1.5,
     marginBottom: 15,
