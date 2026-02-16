@@ -202,6 +202,15 @@ export default function SettingsScreen() {
         <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
         
         <SettingRow
+          icon="pulse-outline"
+          label="API Diagnostics"
+          description="Test backend connectivity and view network status"
+          onPress={() => router.push("/test-api" as any)}
+        >
+          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+        </SettingRow>
+        
+        <SettingRow
           icon="log-out-outline"
           label="Logout from Store"
           description="Clear store data and return to setup page"

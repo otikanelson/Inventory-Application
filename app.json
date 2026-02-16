@@ -20,13 +20,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.son_the_nel.Inventory"
-    },
+      "package": "com.son_the_nel.Inventory",
       "permissions": [
         "INTERNET"
       ],
-  "usesCleartextTraffic": true
-},
+      "usesCleartextTraffic": true
+    },
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png"
@@ -67,3 +66,4 @@
       "appVersionSource": "remote"
     }
   }
+}
