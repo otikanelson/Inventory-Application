@@ -124,9 +124,25 @@ export default function AdminScanScreen() {
     setLoading(true);
 
     try {
-      const response = await axios.get(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`
-      );
+      let response;
+      try {
+        response = await axios.get(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`,
+          { timeout: 3000 }
+        );
+      } catch (apiError: any) {
+        // Network error - show offline message
+        console.log('Registry lookup failed, app is offline');
+        Toast.show({
+          type: 'error',
+          text1: 'Offline Mode',
+          text2: 'Scanning requires internet connection',
+          visibilityTime: 4000,
+        });
+        setScanned(false);
+        setLoading(false);
+        return;
+      }
 
       if (mode === "lookup") {
         // LOOKUP MODE: Navigate to product detail

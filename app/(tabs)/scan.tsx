@@ -1,3 +1,4 @@
+import { HelpTooltip } from "@/components/HelpTooltip";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -16,7 +17,6 @@ import {
     TextInput,
     View,
 } from "react-native";
-import { HelpTooltip } from "@/components/HelpTooltip";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -122,9 +122,27 @@ export default function ScanScreen() {
     setLoading(true);
 
     try {
-      const response = await axios.get(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`
-      );
+      let response;
+      try {
+        response = await axios.get(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`,
+          { timeout: 3000 }
+        );
+      } catch (apiError: any) {
+        // Network error - show offline message
+        console.log('Registry lookup failed, app is offline');
+        RegPlayer.play();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Toast.show({
+          type: 'error',
+          text1: 'Offline Mode',
+          text2: 'Scanning requires internet connection',
+          visibilityTime: 4000,
+        });
+        setScanned(false);
+        setLoading(false);
+        return;
+      }
 
       // LOOKUP MODE: Navigate to existing product
       if (tab === "lookup") {
