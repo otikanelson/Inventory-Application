@@ -1,0 +1,3 @@
+# Ignore local environment file during EAS builds
+# This prevents .env.local from overriding production environment variables
+.env.local

@@ -65,11 +65,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Lightweight health check for uptime monitoring
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 // API status endpoint
 app.get('/api', (req, res) => {
   res.json({
@@ -96,6 +91,11 @@ app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/alerts', require('./routes/alertsRoutes'));
 app.use('/api/categories', require('./routes/categoryRoutes'));
+
+// Lightweight health check for uptime monitoring (must be after other routes)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
