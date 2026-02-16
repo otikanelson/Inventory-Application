@@ -27,7 +27,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://inventory-application-one.vercel.app/api",
+        "EXPO_PUBLIC_API_URL": "https://inventory-application-one.vercel.app/",
         "EAS_SKIP_AUTO_FINGERPRINT": "1"
       },
       "channel": "production"
