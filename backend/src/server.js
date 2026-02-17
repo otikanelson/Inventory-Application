@@ -67,9 +67,17 @@ app.get('/', (req, res) => {
 
 // API status endpoint
 app.get('/api', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const stateMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  
   res.json({
     message: 'InventiEase API',
     status: 'healthy',
+    mongodb: {
+      state: stateMap[dbState],
+      connected: dbState === 1,
+      uri_set: !!process.env.MONGO_URI
+    },
     endpoints: {
       auth: '/api/auth',
       products: '/api/products',
