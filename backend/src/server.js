@@ -97,6 +97,47 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// MongoDB connection test endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const dbState = mongoose.connection.readyState;
+    const stateMap = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+
+    if (dbState !== 1) {
+      return res.json({
+        success: false,
+        mongoState: stateMap[dbState],
+        message: 'MongoDB not connected',
+        mongoUri: process.env.MONGO_URI ? 'Set (hidden)' : 'NOT SET'
+      });
+    }
+
+    // Try to query the database
+    const User = require('./models/User');
+    const userCount = await User.countDocuments();
+
+    res.json({
+      success: true,
+      mongoState: stateMap[dbState],
+      message: 'MongoDB connected successfully',
+      userCount,
+      dbName: mongoose.connection.name,
+      host: mongoose.connection.host
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      mongoUri: process.env.MONGO_URI ? 'Set (hidden)' : 'NOT SET'
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
