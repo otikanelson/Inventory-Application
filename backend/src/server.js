@@ -4,6 +4,7 @@ const cors = require('cors');
 const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 
 // Load environment variables
