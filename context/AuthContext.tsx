@@ -104,13 +104,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('=== LOGIN ATTEMPT ===');
       console.log('API_URL:', API_URL);
-      console.log('Full endpoint:', `${API_URL}/api/auth/login`);
+      console.log('Full endpoint:', `${API_URL}/auth/login`);
       console.log('PIN:', pin);
       console.log('Role:', userRole);
       
       // Try backend API first
       try {
-        const response = await axios.post(`${API_URL}/api/auth/login`, {
+        const response = await axios.post(`${API_URL}/auth/login`, {
           pin,
           role: userRole
         }, {

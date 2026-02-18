@@ -33,7 +33,7 @@ export default function AddProducts() {
   const params = useLocalSearchParams();
   const { products } = useProducts();
 
-  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/products`;
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
 
   const [image, setImage] = useState<string | null>(null);
   const [isPerishable, setIsPerishable] = useState(false);

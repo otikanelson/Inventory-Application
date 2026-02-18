@@ -27,7 +27,7 @@ export const useInventoryActions = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/products`;
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
 
   // Helper: Generate a unique ID for items without barcodes
   const generateInternalCode = (): string => {

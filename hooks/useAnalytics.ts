@@ -24,7 +24,7 @@ export const useAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/analytics`;
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
 
   /** Fetch Dashboard Analytics */
   const fetchDashboard = useCallback(async () => {

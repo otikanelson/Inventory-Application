@@ -191,16 +191,6 @@ export default function LoginScreen() {
       {/* Footer - Only show author link when role is not selected */}
       {!selectedRole && (
         <View style={styles.footer}>
-          {/* Diagnostics Button */}
-          <Pressable 
-            style={[styles.diagnosticsButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            onPress={() => router.push('/auth/test-api' as any)}
-          >
-            <Ionicons name="pulse" size={16} color={theme.primary} />
-            <Text style={[styles.diagnosticsText, { color: theme.primary }]}>
-              Run Diagnostics
-            </Text>
-          </Pressable>
 
           {/* Author Login Link */}
           <Pressable 
