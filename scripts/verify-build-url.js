@@ -36,7 +36,7 @@ envFiles.forEach(file => {
 
 // Validation
 console.log('\n✅ Validation:');
-const expectedUrl = 'https://inventory-application-one.vercel.app';
+const expectedUrl = 'https://inventory-application-git-backend-otikanelsons-projects.vercel.app/api';
 
 if (prodEnv === expectedUrl) {
   console.log('   ✅ Production profile is correct');

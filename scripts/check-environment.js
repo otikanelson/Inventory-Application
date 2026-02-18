@@ -26,7 +26,7 @@ if (fs.existsSync(files['.env'])) {
   const content = fs.readFileSync(files['.env'], 'utf8');
   if (content.includes('192.168')) {
     console.log('   ✅ Contains local development URL (correct for default)');
-  } else if (content.includes('inventory-application-xjc5.onrender.com')) {
+  } else if (content.includes('inventory-application-git-backend-otikanelsons-projects.vercel.app')) {
     console.log('   ⚠️  WARNING: Contains production URL (should be local for development)');
   }
 } else {
@@ -51,7 +51,7 @@ if (fs.existsSync(files['.env.local'])) {
 console.log('\n📄 Checking .env.production (production builds)...');
 if (fs.existsSync(files['.env.production'])) {
   const content = fs.readFileSync(files['.env.production'], 'utf8');
-  if (content.includes('inventory-application-xjc5.onrender.com')) {
+  if (content.includes('inventory-application-git-backend-otikanelsons-projects.vercel.app')) {
     console.log('   ✅ Contains production URL');
   } else {
     console.log('   ⚠️  WARNING: Should contain production URL');
@@ -69,7 +69,7 @@ if (fs.existsSync(files['eas.json'])) {
   // Check production profile
   if (config.build?.production?.env?.EXPO_PUBLIC_API_URL) {
     const prodUrl = config.build.production.env.EXPO_PUBLIC_API_URL;
-    if (prodUrl.includes('inventory-application-xjc5.onrender.com')) {
+    if (prodUrl.includes('inventory-application-git-backend-otikanelsons-projects.vercel.app')) {
       console.log('   ✅ Production profile has correct URL');
     } else if (prodUrl.includes('192.168') || prodUrl.includes('localhost')) {
       console.log('   ❌ ERROR: Production profile has LOCAL URL!');
@@ -82,7 +82,7 @@ if (fs.existsSync(files['eas.json'])) {
   // Check preview profile
   if (config.build?.preview?.env?.EXPO_PUBLIC_API_URL) {
     const previewUrl = config.build.preview.env.EXPO_PUBLIC_API_URL;
-    if (previewUrl.includes('inventory-application-xjc5.onrender.com')) {
+    if (previewUrl.includes('inventory-application-git-backend-otikanelsons-projects.vercel.app')) {
       console.log('   ✅ Preview profile has correct URL');
     } else if (previewUrl.includes('192.168') || previewUrl.includes('localhost')) {
       console.log('   ❌ ERROR: Preview profile has LOCAL URL!');

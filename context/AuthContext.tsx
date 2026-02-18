@@ -3,7 +3,7 @@ import axios from 'axios';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Toast from 'react-native-toast-message';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.92.95:8000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 type UserRole = 'admin' | 'staff' | 'viewer' | null;
 

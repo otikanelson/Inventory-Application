@@ -5,16 +5,16 @@ import { useRouter } from "expo-router";
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  ImageBackground,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    Dimensions,
+    ImageBackground,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";

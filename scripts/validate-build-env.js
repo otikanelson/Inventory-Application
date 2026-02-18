@@ -37,8 +37,8 @@ const log = {
 
 // Expected URLs for different environments
 const EXPECTED_URLS = {
-  production: 'https://inventory-application-xjc5.onrender.com/api',
-  preview: 'https://inventory-application-xjc5.onrender.com/api',
+  production: 'https://inventory-application-git-backend-otikanelsons-projects.vercel.app/api',
+  preview: 'https://inventory-application-git-backend-otikanelsons-projects.vercel.app/api',
   development: 'http://', // Should start with http:// for local
 };
 
