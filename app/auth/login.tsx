@@ -194,7 +194,7 @@ export default function LoginScreen() {
           {/* Diagnostics Button */}
           <Pressable 
             style={[styles.diagnosticsButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            onPress={() => router.push('/test-api' as any)}
+            onPress={() => router.push('/auth/test-api' as any)}
           >
             <Ionicons name="pulse" size={16} color={theme.primary} />
             <Text style={[styles.diagnosticsText, { color: theme.primary }]}>
