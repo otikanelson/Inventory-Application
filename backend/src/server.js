@@ -11,10 +11,19 @@ const connectDB = require('./config/db');
 dotenv.config();
 
 // Try to connect to MongoDB, but don't block server startup
-connectDB().catch(err => {
-  console.error('⚠️  Server starting without MongoDB connection');
-  console.error('⚠️  Database operations will fail until connection is established');
-});
+connectDB()
+  .then(() => {
+    console.log('✅ Initial MongoDB connection successful');
+  })
+  .catch(err => {
+    console.error('⚠️  Server starting without MongoDB connection');
+    console.error('⚠️  Database operations will fail until connection is established');
+    // Retry connection after 5 seconds
+    setTimeout(() => {
+      console.log('🔄 Retrying MongoDB connection...');
+      connectDB().catch(e => console.error('❌ Retry failed:', e.message));
+    }, 5000);
+  });
 
 const app = express();
 
