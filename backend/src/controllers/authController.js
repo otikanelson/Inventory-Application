@@ -62,6 +62,7 @@ exports.login = async (req, res) => {
     const { pin, role, storeName } = req.body;
 
     console.log('Login attempt:', { pin: pin ? '****' : 'missing', role, storeName });
+    console.log('PIN details:', { value: pin, type: typeof pin, length: pin ? pin.length : 0 });
 
     if (!pin || !role) {
       return res.status(400).json({
@@ -78,10 +79,18 @@ exports.login = async (req, res) => {
       query.storeName = storeName;
     }
 
+    console.log('Query:', JSON.stringify(query));
+
     // Find user by PIN and role
     const user = await User.findOne(query);
 
+    console.log('User found:', user ? `Yes - ${user.name}` : 'No');
+    
     if (!user) {
+      // Debug: Check if user exists with different criteria
+      const allUsers = await User.find({ role, isActive: true }).select('name pin');
+      console.log('Available users for role:', allUsers.map(u => ({ name: u.name, pin: u.pin })));
+      
       console.log('User not found with provided credentials');
       return res.status(401).json({
         success: false,

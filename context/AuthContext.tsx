@@ -3,7 +3,7 @@ import axios from 'axios';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Toast from 'react-native-toast-message';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.92.95:8000';
 
 type UserRole = 'admin' | 'staff' | 'viewer' | null;
 
@@ -102,14 +102,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Login function - now uses backend API with comprehensive error handling
   const login = async (pin: string, userRole: 'admin' | 'staff'): Promise<boolean> => {
     try {
+      console.log('=== LOGIN ATTEMPT ===');
+      console.log('API_URL:', API_URL);
+      console.log('Full endpoint:', `${API_URL}/api/auth/login`);
+      console.log('PIN:', pin);
+      console.log('Role:', userRole);
+      
       // Try backend API first
       try {
-        const response = await axios.post(`${API_URL}/auth/login`, {
+        const response = await axios.post(`${API_URL}/api/auth/login`, {
           pin,
           role: userRole
         }, {
           timeout: 5000 // 5 second timeout
         });
+
+        console.log('Login response status:', response.status);
+        console.log('Login response success:', response.data.success);
 
         if (response.data.success) {
           const { user: userData, sessionToken } = response.data.data;

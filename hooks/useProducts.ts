@@ -39,8 +39,8 @@ export const useProducts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
-  const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/products`;
+  const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/analytics`;
   
   // Cache products for 30 seconds to avoid redundant API calls
   const CACHE_DURATION = 30000; // 30 seconds

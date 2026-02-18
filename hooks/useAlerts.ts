@@ -66,7 +66,7 @@ export const useAlerts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/alerts`;
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/alerts`;
 
   const fetchAlerts = useCallback(async () => {
     try {

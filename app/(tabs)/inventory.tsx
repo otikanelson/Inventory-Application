@@ -7,14 +7,14 @@ import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
-  ImageBackground,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    FlatList,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 
 export default function InventoryScreen() {

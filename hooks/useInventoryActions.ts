@@ -6,9 +6,9 @@
 // - Stock Adjustment: Functions to increment or decrement stock levels during restock or sales.
 // - Error Handling: Standardized error catching and feedback for all database mutations.
 
-import { useState } from 'react';
 import axios from 'axios';
-import { Product, Batch } from './useProducts';
+import { useState } from 'react';
+import { Batch, Product } from './useProducts';
 
 // Properly typed product data for creation
 interface ProductCreateData {
@@ -27,7 +27,7 @@ export const useInventoryActions = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
+  const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/api/products`;
 
   // Helper: Generate a unique ID for items without barcodes
   const generateInternalCode = (): string => {

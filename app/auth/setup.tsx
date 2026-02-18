@@ -5,21 +5,21 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Image,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Image,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
 import { useTheme } from '../../context/ThemeContext';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 type SetupStep = 'welcome' | 'store-name' | 'admin-name' | 'admin-pin' | 'complete';
 
@@ -695,5 +695,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     opacity: 0.5,
+  },
+  diagnosticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: 20,
+  },
+  diagnosticsText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
