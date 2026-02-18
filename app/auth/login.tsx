@@ -3,12 +3,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    Image,
+    ImageBackground,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { PinInput } from '../../components/PinInput';
 import { useAuth } from '../../context/AuthContext';
@@ -191,6 +191,17 @@ export default function LoginScreen() {
       {/* Footer - Only show author link when role is not selected */}
       {!selectedRole && (
         <View style={styles.footer}>
+          {/* Diagnostics Button */}
+          <Pressable 
+            style={[styles.diagnosticsButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={() => router.push('/test-api' as any)}
+          >
+            <Ionicons name="pulse" size={16} color={theme.primary} />
+            <Text style={[styles.diagnosticsText, { color: theme.primary }]}>
+              Run Diagnostics
+            </Text>
+          </Pressable>
+
           {/* Author Login Link */}
           <Pressable 
             style={styles.authorLink}
@@ -329,6 +340,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 30,
     paddingHorizontal: 30,
+    gap: 12,
+  },
+  diagnosticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  diagnosticsText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   authorLink: {
     paddingVertical: 10,
