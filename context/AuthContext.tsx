@@ -3,7 +3,7 @@ import axios from 'axios';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Toast from 'react-native-toast-message';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.92.95:8000';
 
 type UserRole = 'admin' | 'staff' | 'viewer' | null;
 
@@ -11,6 +11,9 @@ interface User {
   id: string;
   name: string;
   role: UserRole;
+  storeId?: string;
+  storeName?: string;
+  isAuthor?: boolean;
 }
 
 interface AuthContextType {
@@ -40,12 +43,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check authentication status on app load
   const checkAuth = async () => {
     try {
-      const [userRole, userId, userName, sessionToken, lastLogin] = await AsyncStorage.multiGet([
+      const [userRole, userId, userName, sessionToken, lastLogin, storeId, storeName] = await AsyncStorage.multiGet([
         'auth_user_role',
         'auth_user_id',
         'auth_user_name',
         'auth_session_token',
         'auth_last_login',
+        'auth_store_id',
+        'auth_store_name',
       ]);
 
       const roleValue = userRole[1] as UserRole;
@@ -53,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nameValue = userName[1];
       const tokenValue = sessionToken[1];
       const lastLoginValue = lastLogin[1];
+      const storeIdValue = storeId[1];
+      const storeNameValue = storeName[1];
 
       if (roleValue && idValue && tokenValue) {
         // Check if session is still valid (30 minutes)
@@ -65,6 +72,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: idValue,
             name: nameValue || 'User',
             role: roleValue,
+            storeId: storeIdValue || undefined,
+            storeName: storeNameValue || undefined,
+            isAuthor: roleValue === 'admin' && idValue === 'author',
           });
           setRole(roleValue);
           setIsAuthenticated(true);
@@ -89,9 +99,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login function - now uses backend API
+  // Login function - now uses backend API with comprehensive error handling
   const login = async (pin: string, userRole: 'admin' | 'staff'): Promise<boolean> => {
     try {
+      console.log('=== LOGIN ATTEMPT ===');
+      console.log('API_URL:', API_URL);
+      console.log('Full endpoint:', `${API_URL}/auth/login`);
+      console.log('PIN:', pin);
+      console.log('Role:', userRole);
+      
       // Try backend API first
       try {
         const response = await axios.post(`${API_URL}/auth/login`, {
@@ -101,19 +117,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           timeout: 5000 // 5 second timeout
         });
 
+        console.log('Login response status:', response.status);
+        console.log('Login response success:', response.data.success);
+
         if (response.data.success) {
           const { user: userData, sessionToken } = response.data.data;
 
-          // Store auth data
+          // Store auth data including store information
           await AsyncStorage.multiSet([
             ['auth_session_token', sessionToken],
             ['auth_user_role', userData.role],
             ['auth_user_id', userData.id],
             ['auth_user_name', userData.name],
             ['auth_last_login', Date.now().toString()],
+            ['auth_store_id', userData.storeId || ''],
+            ['auth_store_name', userData.storeName || ''],
           ]);
 
-          setUser(userData);
+          setUser({
+            ...userData,
+            isAuthor: userData.role === 'admin' && userData.id === 'author',
+          });
           setRole(userData.role);
           setIsAuthenticated(true);
 
@@ -124,76 +148,142 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           return true;
+        } else {
+          // Backend returned unsuccessful response
+          throw new Error(response.data.error || 'Login failed');
         }
       } catch (apiError: any) {
-        // If API fails (network error, timeout, or 401), fall back to local storage
-        console.log('API login failed, using local storage authentication');
-        
-        let isValid = false;
-        let userId = '';
-        let userName = '';
+        // Comprehensive error handling for different failure types
+        let errorMessage = 'Could not connect to server';
+        let shouldFallbackToLocal = false;
 
-        if (userRole === 'admin') {
-          // Validate admin PIN
-          const storedPin = await AsyncStorage.getItem('admin_pin');
-          if (pin === storedPin) {
-            isValid = true;
-            userId = 'admin_001';
-            const storedName = await AsyncStorage.getItem('auth_user_name');
-            userName = storedName || 'Admin';
+        if (apiError.response) {
+          // Server responded with error status
+          const status = apiError.response.status;
+          const serverError = apiError.response.data?.error;
+
+          if (status === 401) {
+            // Invalid credentials - don't fallback to local
+            errorMessage = serverError || 'Invalid PIN';
+            // Don't log repeatedly for invalid credentials
+          } else if (status === 404) {
+            // User not found - try local storage
+            errorMessage = 'User not found';
+            shouldFallbackToLocal = true;
+            console.log('User not found on server, trying local storage');
+          } else if (status >= 500) {
+            // Server error - try local storage
+            errorMessage = 'Server error, using offline mode';
+            shouldFallbackToLocal = true;
+            console.log('Server error, falling back to local storage');
+          } else {
+            errorMessage = serverError || 'Login failed';
+            shouldFallbackToLocal = true;
           }
-        } else if (userRole === 'staff') {
-          // Validate staff PIN
-          const staffPin = await AsyncStorage.getItem('auth_staff_pin');
-          const staffId = await AsyncStorage.getItem('auth_staff_id');
-          const staffName = await AsyncStorage.getItem('auth_staff_name');
+        } else if (apiError.code === 'ECONNABORTED') {
+          // Timeout - try local storage
+          errorMessage = 'Connection timeout, using offline mode';
+          shouldFallbackToLocal = true;
+          console.log('Request timeout, falling back to local storage');
+        } else if (apiError.code === 'ERR_NETWORK' || !apiError.response) {
+          // Network error - try local storage
+          errorMessage = 'Network error, using offline mode';
+          shouldFallbackToLocal = true;
+          console.log('Network error, falling back to local storage');
+        } else {
+          // Unknown error - try local storage
+          errorMessage = apiError.message || 'Unknown error occurred';
+          shouldFallbackToLocal = true;
+          console.log('Unknown error:', apiError.message);
+        }
+
+        // Fallback to local storage if appropriate
+        if (shouldFallbackToLocal) {
+          console.log('Attempting local storage authentication');
           
-          if (pin === staffPin && staffId) {
-            isValid = true;
-            userId = staffId;
-            userName = staffName || 'Staff';
+          let isValid = false;
+          let userId = '';
+          let userName = '';
+
+          try {
+            if (userRole === 'admin') {
+              // Validate admin PIN
+              const storedPin = await AsyncStorage.getItem('admin_pin');
+              if (pin === storedPin) {
+                isValid = true;
+                userId = 'admin_001';
+                const storedName = await AsyncStorage.getItem('auth_user_name');
+                userName = storedName || 'Admin';
+              }
+            } else if (userRole === 'staff') {
+              // Validate staff PIN
+              const staffPin = await AsyncStorage.getItem('auth_staff_pin');
+              const staffId = await AsyncStorage.getItem('auth_staff_id');
+              const staffName = await AsyncStorage.getItem('auth_staff_name');
+              
+              if (pin === staffPin && staffId) {
+                isValid = true;
+                userId = staffId;
+                userName = staffName || 'Staff';
+              }
+            }
+
+            if (isValid) {
+              // Generate session token
+              const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              
+              // Get store info if available
+              const storeId = await AsyncStorage.getItem('auth_store_id');
+              const storeName = await AsyncStorage.getItem('auth_store_name');
+              
+              // Store auth data
+              await AsyncStorage.multiSet([
+                ['auth_session_token', sessionToken],
+                ['auth_user_role', userRole],
+                ['auth_user_id', userId],
+                ['auth_user_name', userName],
+                ['auth_last_login', Date.now().toString()],
+              ]);
+
+              setUser({ 
+                id: userId, 
+                name: userName, 
+                role: userRole,
+                storeId: storeId || undefined,
+                storeName: storeName || undefined,
+                isAuthor: false,
+              });
+              setRole(userRole);
+              setIsAuthenticated(true);
+
+              Toast.show({
+                type: 'success',
+                text1: 'Welcome Back!',
+                text2: `Logged in as ${userName} (Offline)`,
+              });
+
+              return true;
+            }
+          } catch (localError) {
+            console.error('Local storage authentication failed:', localError);
           }
         }
 
-        if (isValid) {
-          // Generate session token
-          const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          
-          // Store auth data
-          await AsyncStorage.multiSet([
-            ['auth_session_token', sessionToken],
-            ['auth_user_role', userRole],
-            ['auth_user_id', userId],
-            ['auth_user_name', userName],
-            ['auth_last_login', Date.now().toString()],
-          ]);
-
-          setUser({ id: userId, name: userName, role: userRole });
-          setRole(userRole);
-          setIsAuthenticated(true);
-
-          Toast.show({
-            type: 'success',
-            text1: 'Welcome Back!',
-            text2: `Logged in as ${userName}`,
-          });
-
-          return true;
-        }
+        // If we get here, authentication failed
+        Toast.show({
+          type: 'error',
+          text1: 'Access Denied',
+          text2: errorMessage,
+        });
+        return false;
       }
-
-      Toast.show({
-        type: 'error',
-        text1: 'Access Denied',
-        text2: 'Incorrect PIN',
-      });
-      return false;
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (error: any) {
+      // Catch-all for any unexpected errors
+      console.error('Unexpected login error:', error);
       Toast.show({
         type: 'error',
         text1: 'Login Failed',
-        text2: 'An error occurred',
+        text2: 'An unexpected error occurred',
       });
       return false;
     }

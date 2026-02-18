@@ -13,8 +13,19 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'staff', 'viewer'],
+    enum: ['author', 'admin', 'staff', 'viewer'],
     default: 'staff'
+  },
+  storeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Store',
+    required: false,
+    default: null
+  },
+  storeName: {
+    type: String,
+    required: false,
+    default: null
   },
   isActive: {
     type: Boolean,
@@ -34,8 +45,14 @@ const userSchema = new mongoose.Schema({
   timestamps: true // This automatically adds createdAt and updatedAt
 });
 
-// Create compound index for PIN and role to ensure uniqueness per role
-userSchema.index({ pin: 1, role: 1 }, { unique: true });
+// Create compound index for PIN, role, and storeId to ensure uniqueness per role per store
+userSchema.index({ pin: 1, role: 1, storeId: 1 }, { unique: true });
+
+// Index for querying users by store and role
+userSchema.index({ storeId: 1, role: 1 });
+
+// Index for querying users by role (for author queries)
+userSchema.index({ role: 1 });
 
 // Don't return PIN in JSON responses
 userSchema.methods.toJSON = function() {

@@ -41,12 +41,24 @@ export const useProducts = () => {
 
   const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
   const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
+  
+  // Cache products for 30 seconds to avoid redundant API calls
+  const CACHE_DURATION = 30000; // 30 seconds
+  const lastFetchTime = useState(0)[0];
 
   /** Fetch & Transform Data **/
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (force = false) => {
+    // Skip if cache is still valid and not forced
+    const now = Date.now();
+    if (!force && now - lastFetchTime < CACHE_DURATION && products.length > 0) {
+      return;
+    }
+    
     try {
       setLoading(true);
-      const response = await axios.get(API_URL);
+      
+      // Use shorter timeout for product list (10 seconds)
+      const response = await axios.get(API_URL, { timeout: 10000 });
       
       // Handle different response structures
       let rawData = [];
@@ -95,13 +107,15 @@ export const useProducts = () => {
   /** Fetch Recently Sold Products **/
   const fetchRecentlySold = useCallback(async () => {
     try {
-      const response = await axios.get(`${ANALYTICS_URL}/recently-sold?limit=10`);
+      // Use shorter timeout and don't block on failure
+      const response = await axios.get(`${ANALYTICS_URL}/recently-sold?limit=10`, { 
+        timeout: 5000 
+      });
       if (response.data.success) {
         setRecentlySold(response.data.data || []);
       }
     } catch (err) {
       // Silently fail - recently sold is not critical
-      // This prevents error spam when MongoDB is down
       setRecentlySold([]);
     }
   }, [ANALYTICS_URL]);
@@ -133,7 +147,10 @@ export const useProducts = () => {
     identifier: string,
   ): Promise<Product | null> => {
     try {
-      const response = await axios.get(`${API_URL}/${identifier}`);
+      // Use shorter timeout for single product fetch
+      const response = await axios.get(`${API_URL}/${identifier}`, { 
+        timeout: 8000 
+      });
       
       // Handle different response structures
       let item = null;

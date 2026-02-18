@@ -6,9 +6,9 @@
 // - Stock Adjustment: Functions to increment or decrement stock levels during restock or sales.
 // - Error Handling: Standardized error catching and feedback for all database mutations.
 
-import { useState } from 'react';
 import axios from 'axios';
-import { Product, Batch } from './useProducts';
+import { useState } from 'react';
+import { Batch, Product } from './useProducts';
 
 // Properly typed product data for creation
 interface ProductCreateData {

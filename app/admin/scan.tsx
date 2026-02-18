@@ -6,18 +6,19 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    Animated,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
+import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 
 const { height, width } = Dimensions.get("window");
@@ -36,8 +37,8 @@ export default function AdminScanScreen() {
   const { theme } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
 
-  // Scanner Mode: "lookup" or "sales"
-  const [mode, setMode] = useState<"lookup" | "sales">("sales");
+  // Scanner Mode: "lookup", "sales", or "register"
+  const [mode, setMode] = useState<"lookup" | "sales" | "register">("sales");
 
   // Scanner State
   const [scanned, setScanned] = useState(false);
@@ -123,9 +124,25 @@ export default function AdminScanScreen() {
     setLoading(true);
 
     try {
-      const response = await axios.get(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`
-      );
+      let response;
+      try {
+        response = await axios.get(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`,
+          { timeout: 3000 }
+        );
+      } catch (apiError: any) {
+        // Network error - show offline message
+        console.log('Registry lookup failed, app is offline');
+        Toast.show({
+          type: 'error',
+          text1: 'Offline Mode',
+          text2: 'Scanning requires internet connection',
+          visibilityTime: 4000,
+        });
+        setScanned(false);
+        setLoading(false);
+        return;
+      }
 
       if (mode === "lookup") {
         // LOOKUP MODE: Navigate to product detail
@@ -170,6 +187,39 @@ export default function AdminScanScreen() {
             text2: "Product does not exist in registry",
           });
           setScanned(false);
+        }
+      } else if (mode === "register") {
+        // REGISTER MODE: Add to inventory or register new product
+        if (response.data.found) {
+          // Product exists in registry - navigate to add-products with data
+          const productData = response.data.productData;
+          scanBeep.play();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          
+          router.push({
+            pathname: "/(tabs)/add-products",
+            params: {
+              barcode: data,
+              name: productData.name || "",
+              category: productData.category || "",
+              imageUrl: productData.imageUrl || "",
+              isPerishable: String(productData.isPerishable || false),
+              mode: "inventory",
+              locked: "true",
+              fromAdmin: "true" // Flag to prevent back button bypass
+            }
+          });
+        } else {
+          // Product NOT in registry - navigate to register new product
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          router.push({
+            pathname: "/(tabs)/add-products",
+            params: {
+              barcode: data,
+              mode: "registry",
+              fromAdmin: "true" // Flag to prevent back button bypass
+            }
+          });
         }
       } else {
         // SALES MODE: Add to cart
@@ -367,7 +417,7 @@ export default function AdminScanScreen() {
     );
   }
 
-  const modeColor = mode === "lookup" ? "#00D1FF" : "#00FF00";
+  const modeColor = mode === "sales" ? "#00D1FF" : mode === "lookup" ? theme.primary : "#00FF00";
 
   return (
     <View style={styles.container}>
@@ -393,11 +443,25 @@ export default function AdminScanScreen() {
               }}
               style={[
                 styles.tab,
-                mode === "sales" && { backgroundColor: "#00FF00" },
+                mode === "sales" && { backgroundColor: "#00D1FF" },
               ]}
             >
               <Text style={[styles.tabText, mode === "sales" && { color: "#000" }]}>
                 SALES
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setMode("register");
+                setScanned(false);
+              }}
+              style={[
+                styles.tab,
+                mode === "register" && { backgroundColor: "#00FF00" },
+              ]}
+            >
+              <Text style={[styles.tabText, mode === "register" && { color: "#000" }]}>
+                REGISTER
               </Text>
             </Pressable>
             <Pressable
@@ -407,7 +471,7 @@ export default function AdminScanScreen() {
               }}
               style={[
                 styles.tab,
-                mode === "lookup" && { backgroundColor: "#00D1FF" },
+                mode === "lookup" && { backgroundColor: theme.primary },
               ]}
             >
               <Text style={[styles.tabText, mode === "lookup" && { color: "#000" }]}>
@@ -430,7 +494,11 @@ export default function AdminScanScreen() {
         {/* BOTTOM BAR - Instructions and Cart Button */}
         <View style={styles.bottomBar}>
           <Text style={styles.hintText}>
-            {mode === "lookup" ? "Scan to view product details" : "Scan items to add to cart"}
+            {mode === "lookup" 
+              ? "Scan to view product details" 
+              : mode === "register"
+              ? "Scan to register or add inventory"
+              : "Scan items to add to cart"}
           </Text>
 
           {mode === "sales" && (
@@ -455,6 +523,42 @@ export default function AdminScanScreen() {
               </Pressable>
             </Animated.View>
           )}
+          
+          {mode === "register" && (
+            <Pressable
+              style={styles.manualBtn}
+              onPress={() => {
+                // Generate unique barcode for manual entry
+                const timestamp = Date.now();
+                const random = Math.floor(Math.random() * 10000);
+                const generatedBarcode = `MAN-${timestamp}-${random}`;
+                
+                router.push({
+                  pathname: "/(tabs)/add-products",
+                  params: {
+                    barcode: generatedBarcode,
+                    mode: "manual",
+                    hasBarcode: "false",
+                    fromAdmin: "true" // Flag to prevent back button bypass
+                  }
+                });
+              }}
+            >
+              <Text style={styles.manualBtnText}>Manual Entry</Text>
+            </Pressable>
+          )}
+          
+          <HelpTooltip
+            title="Admin Scanner Modes"
+            content={[
+              "SALES MODE: Process sales transactions. Scan products to add them to the cart, then complete the sale.",
+              "LOOKUP MODE: Quickly find products in your inventory. Scan to view product details and stock levels.",
+              "REGISTER MODE: Add new products or restock existing ones. Scan to register new items or add batches."
+            ]}
+            icon="help-circle"
+            iconSize={24}
+            iconColor="#FFF"
+          />
         </View>
       </BarcodeScanner>
 
@@ -639,6 +743,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontWeight: "600",
     textAlign: "center",
+  },
+  manualBtn: {
+    backgroundColor: "#FFF",
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 30,
+    marginBottom: 10,
+  },
+  manualBtnText: { 
+    color: "#000", 
+    fontWeight: "800", 
+    fontSize: 14 
   },
   cartButton: {
     width: 70,

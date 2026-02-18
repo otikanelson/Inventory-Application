@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const SaleSchema = new mongoose.Schema({
+  storeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Store',
+    required: [true, 'Store ID is required']
+  },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   productName: { type: String, required: true }, // Denormalized for faster queries
   batchNumber: { type: String, required: true },
@@ -12,9 +17,9 @@ const SaleSchema = new mongoose.Schema({
   paymentMethod: { type: String, enum: ['cash', 'card', 'transfer'], default: 'cash' },
 }, { timestamps: true });
 
-// Index for faster analytics queries
-SaleSchema.index({ saleDate: -1 });
-SaleSchema.index({ productId: 1, saleDate: -1 });
-SaleSchema.index({ category: 1, saleDate: -1 });
+// Indexes for multi-tenant analytics queries
+SaleSchema.index({ storeId: 1, saleDate: -1 });
+SaleSchema.index({ storeId: 1, productId: 1, saleDate: -1 });
+SaleSchema.index({ storeId: 1, category: 1, saleDate: -1 });
 
 module.exports = mongoose.model('Sale', SaleSchema);

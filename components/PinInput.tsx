@@ -33,12 +33,18 @@ export const PinInput: React.FC<PinInputProps> = ({
   useEffect(() => {
     // Check if PIN is complete
     if (pin.every((digit) => digit !== '') && !disabled) {
-      onComplete(pin.join(''));
+      const completedPin = pin.join('');
+      console.log('PinInput - PIN complete:', completedPin);
+      onComplete(completedPin);
     }
   }, [pin, disabled]);
 
   const handleKeyPress = (key: string) => {
     if (disabled) return;
+
+    console.log('PinInput - Key pressed:', key);
+    console.log('PinInput - Current pin:', pin);
+    console.log('PinInput - Focused index:', focusedIndex);
 
     if (key === 'backspace') {
       const newPin = [...pin];
@@ -51,6 +57,7 @@ export const PinInput: React.FC<PinInputProps> = ({
     } else if (/^\d$/.test(key) && focusedIndex < length) {
       const newPin = [...pin];
       newPin[focusedIndex] = key;
+      console.log('PinInput - New pin after digit:', newPin);
       setPin(newPin);
       setFocusedIndex(Math.min(length - 1, focusedIndex + 1));
     }

@@ -3,6 +3,8 @@
 
 const express = require('express');
 const router = express.Router();
+const authenticate = require('../middleware/authenticate');
+const tenantFilter = require('../middleware/tenantFilter');
 
 const {
   getCategories,
@@ -11,6 +13,10 @@ const {
   deleteCategory,
   syncProductCounts
 } = require('../controllers/categoryController');
+
+// Apply authentication and tenant filter to all routes
+router.use(authenticate);
+router.use(tenantFilter);
 
 // @route   GET /api/categories
 // @desc    Get all categories

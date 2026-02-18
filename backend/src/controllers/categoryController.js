@@ -11,6 +11,8 @@ const GlobalProduct = require('../models/GlobalProduct');
  */
 exports.getCategories = async (req, res) => {
   try {
+    // Categories are global, but we could filter by store if needed
+    // For now, return all categories
     const categories = await Category.find().sort({ name: 1 });
     
     res.status(200).json({
@@ -119,13 +121,17 @@ exports.updateCategory = async (req, res) => {
         });
       }
       
-      // Update all products with old category name
+      // Update all products with old category name (filtered by store)
+      const productUpdateQuery = {
+        category: category.name,
+        ...req.tenantFilter
+      };
       await Product.updateMany(
-        { category: category.name },
+        productUpdateQuery,
         { category: name.trim() }
       );
       
-      // Update all global products with old category name
+      // Update all global products with old category name (no store filter)
       await GlobalProduct.updateMany(
         { category: category.name },
         { category: name.trim() }
@@ -186,8 +192,12 @@ exports.deleteCategory = async (req, res) => {
       });
     }
     
-    // Check if any products use this category
-    const productCount = await Product.countDocuments({ category: category.name });
+    // Check if any products use this category (filtered by store)
+    const productQuery = {
+      category: category.name,
+      ...req.tenantFilter
+    };
+    const productCount = await Product.countDocuments(productQuery);
     const globalProductCount = await GlobalProduct.countDocuments({ category: category.name });
     const totalCount = productCount + globalProductCount;
     
@@ -221,7 +231,12 @@ exports.syncProductCounts = async (req, res) => {
     const categories = await Category.find();
     
     for (const category of categories) {
-      const count = await Product.countDocuments({ category: category.name });
+      // Count products filtered by store
+      const query = {
+        category: category.name,
+        ...req.tenantFilter
+      };
+      const count = await Product.countDocuments(query);
       category.productCount = count;
       await category.save();
     }

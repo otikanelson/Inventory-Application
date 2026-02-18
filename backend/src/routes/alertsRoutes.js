@@ -3,6 +3,8 @@
 
 const express = require('express');
 const router = express.Router();
+const authenticate = require('../middleware/authenticate');
+const tenantFilter = require('../middleware/tenantFilter');
 
 const {
   getAlerts,
@@ -10,6 +12,10 @@ const {
   updateSettings,
   acknowledgeAlert
 } = require('../controllers/alertsController');
+
+// Apply authentication and tenant filter to all routes
+router.use(authenticate);
+router.use(tenantFilter);
 
 // @route   GET /api/alerts
 // @desc    Get all alerts with multi-threshold categorization

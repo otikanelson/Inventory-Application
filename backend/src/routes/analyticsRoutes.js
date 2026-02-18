@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const authenticate = require('../middleware/authenticate');
+const tenantFilter = require('../middleware/tenantFilter');
 
 const {
   getProductAnalytics,
@@ -23,6 +25,10 @@ const {
   recalculatePrediction,
   getAIStatus
 } = require('../controllers/analyticsController');
+
+// Apply authentication and tenant filter to all routes
+router.use(authenticate);
+router.use(tenantFilter);
 
 // @route   GET /api/analytics/dashboard
 // @desc    Get overall dashboard analytics

@@ -1,31 +1,40 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 
 // Load environment variables
 dotenv.config();
 
 // Try to connect to MongoDB, but don't block server startup
-connectDB().catch(err => {
-  console.error('⚠️  Server starting without MongoDB connection');
-  console.error('⚠️  Database operations will fail until connection is established');
-});
+connectDB()
+  .then(() => {
+    console.log('✅ Initial MongoDB connection successful');
+  })
+  .catch(err => {
+    console.error('⚠️  Server starting without MongoDB connection');
+    console.error('⚠️  Database operations will fail until connection is established');
+    // Retry connection after 5 seconds
+    setTimeout(() => {
+      console.log('🔄 Retrying MongoDB connection...');
+      connectDB().catch(e => console.error('❌ Retry failed:', e.message));
+    }, 5000);
+  });
 
 const app = express();
 
-// Middleware
+// Middleware - Allow all origins for mobile app
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://inventory-application-xjc5.onrender.com',
-        'https://frontend-domain.com'
-      ]
-    : true, // Allow all origins in development
+  origin: true, // Allow all origins (required for mobile apps)
   credentials: true
 }));
+
+// Enable gzip compression for faster responses
+app.use(compression());
 
 // Use appropriate logging for production
 if (process.env.NODE_ENV === 'production') {
@@ -68,9 +77,17 @@ app.get('/', (req, res) => {
 
 // API status endpoint
 app.get('/api', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const stateMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  
   res.json({
     message: 'InventiEase API',
     status: 'healthy',
+    mongodb: {
+      state: stateMap[dbState],
+      connected: dbState === 1,
+      uri_set: !!process.env.MONGO_URI
+    },
     endpoints: {
       auth: '/api/auth',
       products: '/api/products',
@@ -85,11 +102,59 @@ app.get('/api', (req, res) => {
 
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/author', require('./routes/authorRoutes'));
+app.use('/api/stores', require('./routes/storeRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/alerts', require('./routes/alertsRoutes'));
 app.use('/api/categories', require('./routes/categoryRoutes'));
+
+// Lightweight health check for uptime monitoring (must be after other routes)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// MongoDB connection test endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const dbState = mongoose.connection.readyState;
+    const stateMap = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+
+    if (dbState !== 1) {
+      return res.json({
+        success: false,
+        mongoState: stateMap[dbState],
+        message: 'MongoDB not connected',
+        mongoUri: process.env.MONGO_URI ? 'Set (hidden)' : 'NOT SET'
+      });
+    }
+
+    // Try to query the database
+    const User = require('./models/User');
+    const userCount = await User.countDocuments();
+
+    res.json({
+      success: true,
+      mongoState: stateMap[dbState],
+      message: 'MongoDB connected successfully',
+      userCount,
+      dbName: mongoose.connection.name,
+      host: mongoose.connection.host
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      mongoUri: process.env.MONGO_URI ? 'Set (hidden)' : 'NOT SET'
+    });
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

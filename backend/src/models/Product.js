@@ -11,9 +11,14 @@ const BatchSchema = new mongoose.Schema({
 
 const ProductSchema = new mongoose.Schema(
   {
+    storeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Store',
+      required: [true, 'Store ID is required']
+    },
     name: { type: String, required: true, trim: true },
-    barcode: { type: String, unique: true, sparse: true },
-    internalCode: { type: String, unique: true, sparse: true, trim: true },
+    barcode: { type: String, sparse: true },
+    internalCode: { type: String, sparse: true, trim: true },
     category: { type: String, required: true },
     isPerishable: { type: Boolean, default: false },
 
@@ -51,5 +56,11 @@ ProductSchema.pre("save", async function () {
     this.totalQuantity = 0;
   }
 });
+
+// Indexes for multi-tenant queries
+ProductSchema.index({ storeId: 1, barcode: 1 }, { unique: true, sparse: true });
+ProductSchema.index({ storeId: 1, internalCode: 1 }, { unique: true, sparse: true });
+ProductSchema.index({ storeId: 1, category: 1 });
+ProductSchema.index({ storeId: 1, totalQuantity: 1 });
 
 module.exports = mongoose.model("Product", ProductSchema);

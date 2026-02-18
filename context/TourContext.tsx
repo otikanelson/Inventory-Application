@@ -53,13 +53,26 @@ export const TourProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Auto-start tour if not completed
   useEffect(() => {
-    if (hasCompletedTour === false && pathname === '/(tabs)/') {
+    // Check if user is on the main tabs screen (index)
+    // The pathname can be '/(tabs)/', '/(tabs)', '/', or '/(tabs)/index'
+    const isOnMainScreen = 
+      pathname === '/(tabs)/' || 
+      pathname === '/(tabs)' || 
+      pathname === '/' ||
+      pathname === '/(tabs)/index' ||
+      pathname.startsWith('/(tabs)') && !pathname.includes('/scan') && !pathname.includes('/inventory') && !pathname.includes('/FEFO') && !pathname.includes('/add-products');
+    
+    console.log('Tour check - pathname:', pathname, 'isOnMainScreen:', isOnMainScreen, 'hasCompletedTour:', hasCompletedTour);
+    
+    if (hasCompletedTour === false && isOnMainScreen && !isTourActive) {
+      console.log('Auto-starting main tour in 2 seconds');
       const timer = setTimeout(() => {
+        console.log('Starting main tour now!');
         startTour();
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [hasCompletedTour, pathname]);
+  }, [hasCompletedTour, pathname, isTourActive]);
 
   // Navigate to correct screen when step changes
   useEffect(() => {
@@ -74,7 +87,9 @@ export const TourProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkTourStatus = async () => {
     try {
       const completed = await AsyncStorage.getItem(TOUR_KEY);
-      setHasCompletedTour(completed === 'true');
+      const tourCompleted = completed === 'true';
+      console.log('Main tour status:', tourCompleted ? 'completed' : 'not completed');
+      setHasCompletedTour(tourCompleted);
     } catch (error) {
       console.error('Error checking tour status:', error);
       setHasCompletedTour(false);

@@ -1,3 +1,4 @@
+import { HelpTooltip } from "@/components/HelpTooltip";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -17,7 +18,6 @@ import {
     View,
 } from "react-native";
 import Toast from "react-native-toast-message";
-import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 
 const { height } = Dimensions.get("window");
@@ -122,9 +122,27 @@ export default function ScanScreen() {
     setLoading(true);
 
     try {
-      const response = await axios.get(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`
-      );
+      let response;
+      try {
+        response = await axios.get(
+          `${process.env.EXPO_PUBLIC_API_URL}/products/registry/lookup/${data}`,
+          { timeout: 3000 }
+        );
+      } catch (apiError: any) {
+        // Network error - show offline message
+        console.log('Registry lookup failed, app is offline');
+        RegPlayer.play();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Toast.show({
+          type: 'error',
+          text1: 'Offline Mode',
+          text2: 'Scanning requires internet connection',
+          visibilityTime: 4000,
+        });
+        setScanned(false);
+        setLoading(false);
+        return;
+      }
 
       // LOOKUP MODE: Navigate to existing product
       if (tab === "lookup") {
@@ -335,7 +353,7 @@ export default function ScanScreen() {
     );
   }
 
-  const tabColor = tab === "lookup" ? "#00D1FF" : "#00FF00";
+  const tabColor = tab === "lookup" ? theme.primary : "#00FF00";
 
   return (
     <View style={styles.container}>
@@ -367,7 +385,7 @@ export default function ScanScreen() {
               }}
               style={[
                 styles.tab,
-                tab === "lookup" && { backgroundColor: "#00D1FF" },
+                tab === "lookup" && { backgroundColor: theme.primary },
               ]}
             >
               <Text
@@ -398,16 +416,6 @@ export default function ScanScreen() {
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <HelpTooltip
-              title="Scanner Modes"
-              content={[
-                "LOOKUP MODE: Quickly find products already in your inventory. Scan to view product details and stock levels.",
-                "REGISTRY MODE: Add new products or restock existing ones. Scan to register new items or add batches to existing products."
-              ]}
-              icon="help-circle"
-              iconSize={24}
-              iconColor="#FFF"
-            />
             <Pressable
               onPress={() => setTorch(!torch)}
               style={[
@@ -473,28 +481,40 @@ export default function ScanScreen() {
               "Rapid mode: Instant batch entry"
             : "Scan to Register or Add Batch"}
           </Text>
-          {tab === "registry" && (
-            <Pressable
-              style={styles.manualBtn}
-              onPress={() => {
-                // Generate unique barcode for manual entry
-                const timestamp = Date.now();
-                const random = Math.floor(Math.random() * 10000);
-                const generatedBarcode = `MAN-${timestamp}-${random}`;
-                
-                router.push({
-                  pathname: "/add-products",
-                  params: {
-                    barcode: generatedBarcode,
-                    mode: "manual",
-                    hasBarcode: "false"
-                  }
-                });
-              }}
-            >
-              <Text style={styles.manualBtnText}>Manual Entry</Text>
-            </Pressable>
-          )}
+          <View style={styles.bottomActions}>
+            {tab === "registry" && (
+              <Pressable
+                style={styles.manualBtn}
+                onPress={() => {
+                  // Generate unique barcode for manual entry
+                  const timestamp = Date.now();
+                  const random = Math.floor(Math.random() * 10000);
+                  const generatedBarcode = `MAN-${timestamp}-${random}`;
+                  
+                  router.push({
+                    pathname: "/add-products",
+                    params: {
+                      barcode: generatedBarcode,
+                      mode: "manual",
+                      hasBarcode: "false"
+                    }
+                  });
+                }}
+              >
+                <Text style={styles.manualBtnText}>Manual Entry</Text>
+              </Pressable>
+            )}
+            <HelpTooltip
+              title="Scanner Modes"
+              content={[
+                "LOOKUP MODE: Quickly find products already in your inventory. Scan to view product details and stock levels.",
+                "REGISTRY MODE: Add new products or restock existing ones. Scan to register new items or add batches to existing products."
+              ]}
+              icon="help-circle"
+              iconSize={24}
+              iconColor="#FFF"
+            />
+          </View>
         </View>
       </View>
 
@@ -725,6 +745,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontWeight: "600",
     textAlign: "center",
+  },
+  bottomActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 15,
   },
   manualBtn: {
     backgroundColor: "#FFF",

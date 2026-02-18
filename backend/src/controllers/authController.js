@@ -1,11 +1,68 @@
 const User = require('../models/User');
+const Store = require('../models/Store');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+
+// Author login with secret key
+exports.authorLogin = async (req, res) => {
+  try {
+    const { secretKey } = req.body;
+
+    if (!secretKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'Secret key is required'
+      });
+    }
+
+    // Hardcoded author password for simplicity
+    const validSecretKey = 'RADson29';
+    
+    if (secretKey !== validSecretKey) {
+      console.log('Invalid secret key provided');
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // Generate JWT token for author
+    const sessionToken = jwt.sign(
+      { 
+        userId: 'author',
+        role: 'author'
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: 'author',
+          name: 'Author',
+          role: 'author'
+        },
+        sessionToken
+      }
+    });
+  } catch (error) {
+    console.error('Author login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Authentication failed'
+    });
+  }
+};
 
 // Login user
 exports.login = async (req, res) => {
   try {
-    const { pin, role } = req.body;
+    const { pin, role, storeName } = req.body;
 
-    console.log('Login attempt:', { pin: pin ? '****' : 'missing', role });
+    console.log('Login attempt:', { pin: pin ? '****' : 'missing', role, storeName });
+    console.log('PIN details:', { value: pin, type: typeof pin, length: pin ? pin.length : 0 });
 
     if (!pin || !role) {
       return res.status(400).json({
@@ -14,10 +71,26 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Find user by PIN and role
-    const user = await User.findOne({ pin, role, isActive: true });
+    // Build query
+    const query = { pin, role, isActive: true };
+    
+    // For admin login, optionally filter by storeName if provided
+    if (role === 'admin' && storeName) {
+      query.storeName = storeName;
+    }
 
+    console.log('Query:', JSON.stringify(query));
+
+    // Find user by PIN and role
+    const user = await User.findOne(query);
+
+    console.log('User found:', user ? `Yes - ${user.name}` : 'No');
+    
     if (!user) {
+      // Debug: Check if user exists with different criteria
+      const allUsers = await User.find({ role, isActive: true }).select('name pin');
+      console.log('Available users for role:', allUsers.map(u => ({ name: u.name, pin: u.pin })));
+      
       console.log('User not found with provided credentials');
       return res.status(401).json({
         success: false,
@@ -29,8 +102,16 @@ exports.login = async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate session token
-    const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate JWT session token
+    const sessionToken = jwt.sign(
+      { 
+        userId: user._id.toString(),
+        role: user.role,
+        storeId: user.storeId ? user.storeId.toString() : null
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
 
     console.log('Login successful for user:', user._id);
 
@@ -40,7 +121,9 @@ exports.login = async (req, res) => {
         user: {
           id: user._id,
           name: user.name,
-          role: user.role
+          role: user.role,
+          storeId: user.storeId,
+          storeName: user.storeName
         },
         sessionToken
       }
@@ -60,7 +143,154 @@ exports.setupAdmin = async (req, res) => {
     console.log('=== SETUP ADMIN REQUEST RECEIVED ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     
+    const { name, pin, storeName } = req.body;
+
+    console.log('Extracted data:', { name, pin: pin ? '****' : 'missing', storeName });
+
+    if (!name || !pin || !storeName) {
+      console.log('❌ Validation failed: Missing name, PIN, or store name');
+      return res.status(400).json({
+        success: false,
+        error: 'Name, PIN, and store name are required'
+      });
+    }
+
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      console.log('❌ Validation failed: Invalid PIN format');
+      return res.status(400).json({
+        success: false,
+        error: 'PIN must be exactly 4 digits'
+      });
+    }
+
+    if (!storeName.trim()) {
+      console.log('❌ Validation failed: Empty store name');
+      return res.status(400).json({
+        success: false,
+        error: 'Store name cannot be empty'
+      });
+    }
+
+    console.log('✅ Validation passed, checking for existing store...');
+
+    // Check if store name already exists (case-insensitive)
+    const existingStore = await Store.findOne({
+      name: { $regex: new RegExp(`^${storeName.trim()}$`, 'i') }
+    });
+
+    if (existingStore) {
+      console.log('❌ Store name already exists:', existingStore._id);
+      return res.status(400).json({
+        success: false,
+        error: 'Store name already exists'
+      });
+    }
+
+    // Check if PIN is already in use by any admin
+    const existingAdmin = await User.findOne({ 
+      pin, 
+      role: 'admin'
+    });
+    
+    if (existingAdmin) {
+      console.log('❌ PIN already in use by another admin:', existingAdmin._id);
+      return res.status(400).json({
+        success: false,
+        error: 'This PIN is already in use. Please choose a different PIN.'
+      });
+    }
+
+    console.log('✅ Store name and PIN available, creating admin and store...');
+
+    // Use a transaction-like approach: create admin first, then store, then update admin
+    // This avoids the unique constraint issue with null storeId
+    
+    // Step 1: Create admin user with a temporary storeId placeholder
+    const tempStoreId = new mongoose.Types.ObjectId(); // Generate a temporary ID
+    
+    const admin = new User({
+      name,
+      pin,
+      role: 'admin',
+      storeId: tempStoreId,
+      storeName: storeName.trim()
+    });
+
+    console.log('Admin object created (before save):', {
+      name: admin.name,
+      role: admin.role,
+      storeName: admin.storeName
+    });
+
+    const savedAdmin = await admin.save();
+    console.log('✅ Admin saved successfully:', savedAdmin._id);
+
+    // Step 2: Create store with the admin's ID as ownerId
+    const store = new Store({
+      name: storeName.trim(),
+      ownerId: savedAdmin._id
+    });
+
+    const savedStore = await store.save();
+    console.log('✅ Store created:', savedStore._id);
+
+    // Step 3: Update admin with the actual storeId
+    savedAdmin.storeId = savedStore._id;
+    await savedAdmin.save();
+    console.log('✅ Admin updated with actual storeId');
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: {
+          id: savedAdmin._id,
+          name: savedAdmin.name,
+          role: savedAdmin.role,
+          storeId: savedAdmin.storeId,
+          storeName: savedAdmin.storeName
+        },
+        store: {
+          id: savedStore._id,
+          name: savedStore.name
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ SETUP ADMIN ERROR:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    
+    // Handle duplicate store name error from pre-save hook
+    if (error.code === 'DUPLICATE_STORE_NAME') {
+      return res.status(400).json({
+        success: false,
+        error: 'Store name already exists'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create admin user and store'
+    });
+  }
+};
+
+// Create staff user
+exports.createStaff = async (req, res) => {
+  try {
+    console.log('=== CREATE STAFF REQUEST RECEIVED ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request user:', req.user);
+    
     const { name, pin } = req.body;
+
+    // Validate admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can create staff members'
+      });
+    }
 
     console.log('Extracted data:', { name, pin: pin ? '****' : 'missing' });
 
@@ -80,108 +310,15 @@ exports.setupAdmin = async (req, res) => {
       });
     }
 
-    console.log('✅ Validation passed, checking for existing admin...');
-
-    // Check if admin already exists
-    const existingAdmin = await User.findOne({ role: 'admin' });
-    if (existingAdmin) {
-      console.log('❌ Admin already exists:', existingAdmin._id);
-      return res.status(400).json({
-        success: false,
-        error: 'Admin user already exists'
-      });
-    }
-
-    console.log('✅ No existing admin, creating new admin user...');
-
-    // Create admin user
-    const admin = new User({
-      name,
-      pin,
-      role: 'admin'
-    });
-
-    console.log('Admin object created (before save):', {
-      name: admin.name,
-      role: admin.role,
-      isActive: admin.isActive
-    });
-
-    console.log('Attempting to save to database...');
-    const savedAdmin = await admin.save();
-    
-    console.log('✅ Admin saved successfully!');
-    console.log('Saved admin ID:', savedAdmin._id);
-    console.log('Saved admin data:', {
-      id: savedAdmin._id,
-      name: savedAdmin.name,
-      role: savedAdmin.role,
-      createdAt: savedAdmin.createdAt
-    });
-
-    // Verify it was actually saved
-    const verifyUser = await User.findById(savedAdmin._id);
-    console.log('Verification check - User exists in DB:', !!verifyUser);
-    if (verifyUser) {
-      console.log('Verified user data:', {
-        id: verifyUser._id,
-        name: verifyUser.name,
-        role: verifyUser.role
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      data: {
-        user: {
-          id: savedAdmin._id,
-          name: savedAdmin.name,
-          role: savedAdmin.role
-        }
-      }
-    });
-  } catch (error) {
-    console.error('❌ SETUP ADMIN ERROR:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to create admin user'
-    });
-  }
-};
-
-// Create staff user
-exports.createStaff = async (req, res) => {
-  try {
-    console.log('=== CREATE STAFF REQUEST RECEIVED ===');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    
-    const { name, pin, createdBy } = req.body;
-
-    console.log('Extracted data:', { name, pin: pin ? '****' : 'missing', createdBy });
-
-    if (!name || !pin) {
-      console.log('❌ Validation failed: Missing name or PIN');
-      return res.status(400).json({
-        success: false,
-        error: 'Name and PIN are required'
-      });
-    }
-
-    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      console.log('❌ Validation failed: Invalid PIN format');
-      return res.status(400).json({
-        success: false,
-        error: 'PIN must be exactly 4 digits'
-      });
-    }
-
     console.log('✅ Validation passed, checking for existing user...');
 
-    // Check if PIN is already in use
-    const existingUser = await User.findOne({ pin });
+    // Check if PIN is already in use in this store
+    const existingUser = await User.findOne({ 
+      pin, 
+      storeId: req.user.storeId,
+      role: 'staff'
+    });
+    
     if (existingUser) {
       console.log('❌ PIN already in use by user:', existingUser._id);
       return res.status(400).json({
@@ -192,58 +329,27 @@ exports.createStaff = async (req, res) => {
 
     console.log('✅ PIN is available, creating new staff user...');
 
-    // Validate createdBy - must be a valid ObjectId or null
-    let validCreatedBy = null;
-    if (createdBy) {
-      // Check if it's a valid MongoDB ObjectId (24 character hex string)
-      if (/^[0-9a-fA-F]{24}$/.test(createdBy)) {
-        validCreatedBy = createdBy;
-        console.log('✅ Valid ObjectId for createdBy:', validCreatedBy);
-      } else {
-        console.log('⚠️  Invalid createdBy ObjectId format:', createdBy, '- setting to null');
-      }
-    } else {
-      console.log('ℹ️  No createdBy provided, setting to null');
-    }
-
-    console.log('Creating staff with createdBy:', validCreatedBy);
-
-    // Create staff user
+    // Create staff user with admin's store information
     const staff = new User({
       name,
       pin,
       role: 'staff',
-      createdBy: validCreatedBy
+      storeId: req.user.storeId,
+      storeName: req.user.storeName,
+      createdBy: req.user.id
     });
 
     console.log('Staff object created (before save):', {
       name: staff.name,
       role: staff.role,
-      isActive: staff.isActive
+      storeId: staff.storeId,
+      storeName: staff.storeName
     });
 
-    console.log('Attempting to save to database...');
     const savedStaff = await staff.save();
     
     console.log('✅ Staff saved successfully!');
     console.log('Saved staff ID:', savedStaff._id);
-    console.log('Saved staff data:', {
-      id: savedStaff._id,
-      name: savedStaff.name,
-      role: savedStaff.role,
-      createdAt: savedStaff.createdAt
-    });
-
-    // Verify it was actually saved
-    const verifyUser = await User.findById(savedStaff._id);
-    console.log('Verification check - User exists in DB:', !!verifyUser);
-    if (verifyUser) {
-      console.log('Verified user data:', {
-        id: verifyUser._id,
-        name: verifyUser.name,
-        role: verifyUser.role
-      });
-    }
 
     res.status(201).json({
       success: true,
@@ -251,15 +357,15 @@ exports.createStaff = async (req, res) => {
         user: {
           id: savedStaff._id,
           name: savedStaff.name,
-          role: savedStaff.role
+          role: savedStaff.role,
+          storeId: savedStaff.storeId,
+          storeName: savedStaff.storeName,
+          createdBy: savedStaff.createdBy
         }
       }
     });
   } catch (error) {
     console.error('❌ CREATE STAFF ERROR:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create staff user'
@@ -270,7 +376,15 @@ exports.createStaff = async (req, res) => {
 // Get all staff members
 exports.getStaff = async (req, res) => {
   try {
-    const staff = await User.find({ role: 'staff' })
+    // Build query based on user role
+    let query = { role: 'staff' };
+    
+    // If not author, filter by store
+    if (!req.user.isAuthor) {
+      query.storeId = req.user.storeId;
+    }
+
+    const staff = await User.find(query)
       .select('-pin')
       .sort({ createdAt: -1 });
 
@@ -313,12 +427,17 @@ exports.updateStaff = async (req, res) => {
         });
       }
 
-      // Check if new PIN is already in use by another user
-      const existingUser = await User.findOne({ pin, _id: { $ne: id } });
+      // Check if new PIN is already in use by another user in the same store
+      const existingUser = await User.findOne({ 
+        pin, 
+        storeId: staff.storeId,
+        _id: { $ne: id } 
+      });
+      
       if (existingUser) {
         return res.status(400).json({
           success: false,
-          error: 'PIN already in use'
+          error: 'This PIN is already in use in your store. Please choose a different PIN.'
         });
       }
 
@@ -352,12 +471,28 @@ exports.deleteStaff = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validate admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can delete staff members'
+      });
+    }
+
     const staff = await User.findOne({ _id: id, role: 'staff' });
 
     if (!staff) {
       return res.status(404).json({
         success: false,
         error: 'Staff member not found'
+      });
+    }
+
+    // Verify staff belongs to admin's store
+    if (staff.storeId.toString() !== req.user.storeId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this store'
       });
     }
 
@@ -396,12 +531,26 @@ exports.updateAdminPin = async (req, res) => {
     }
 
     // Find admin user
-    const admin = await User.findOne({ role: 'admin', pin: oldPin });
+    const admin = await User.findOne({ _id: req.user.id, role: 'admin', pin: oldPin });
 
     if (!admin) {
       return res.status(401).json({
         success: false,
         error: 'Invalid current PIN'
+      });
+    }
+
+    // Check if new PIN is already in use by another user in the same store
+    const existingUser = await User.findOne({ 
+      pin: newPin, 
+      storeId: admin.storeId,
+      _id: { $ne: admin._id } 
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'This PIN is already in use in your store. Please choose a different PIN.'
       });
     }
 
@@ -438,6 +587,53 @@ exports.checkSetup = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to check setup status'
+    });
+  }
+};
+
+// Verify admin PIN for a specific store (used by staff to access admin pages)
+exports.verifyAdminPin = async (req, res) => {
+  try {
+    const { pin, storeId } = req.body;
+
+    if (!pin || !storeId) {
+      return res.status(400).json({
+        success: false,
+        error: 'PIN and store ID are required'
+      });
+    }
+
+    // Find admin user for this store
+    const admin = await User.findOne({ 
+      role: 'admin', 
+      storeId: storeId,
+      isActive: true 
+    });
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: 'Admin not found for this store'
+      });
+    }
+
+    // Verify PIN
+    if (admin.pin === pin) {
+      res.json({
+        success: true,
+        message: 'Admin PIN verified'
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        error: 'Incorrect admin PIN'
+      });
+    }
+  } catch (error) {
+    console.error('Verify admin PIN error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify admin PIN'
     });
   }
 };
