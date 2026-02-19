@@ -14,7 +14,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View} from "react-native";
+  View
+} from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
 import { useAIPredictions } from "../../../hooks/useAIPredictions";
@@ -30,6 +31,24 @@ interface Batch {
   receivedDate?: string;
   price?: number;
 }
+
+// Helper functions for toast notifications
+const showSuccessToast = (title: string, message: string) => {
+  Toast.show({
+    type: "success",
+    text1: title,
+    text2: message,
+  });
+};
+
+const showErrorToast = (error: any, title: string) => {
+  const errorMessage = error?.response?.data?.message || error?.message || "An error occurred";
+  Toast.show({
+    type: "error",
+    text1: title,
+    text2: errorMessage,
+  });
+};
 
 export default function AdminProductDetails() {
   const { id } = useLocalSearchParams();

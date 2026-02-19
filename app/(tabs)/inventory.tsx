@@ -7,13 +7,14 @@ import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    FlatList,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 
 export default function InventoryScreen() {
@@ -347,7 +348,11 @@ export default function InventoryScreen() {
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
                     {item.imageUrl && item.imageUrl !== "cube" && item.imageUrl !== "" ? (
-                      
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={styles.image}
+                        resizeMode="contain"
+                      />
                     ) : (
                       <Ionicons
                         name="cube-outline"
