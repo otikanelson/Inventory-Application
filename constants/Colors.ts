@@ -1,7 +1,7 @@
 // constants/Colors.ts
 export const Colors = {
   light: {
-    background: '#eeeff2ff',
+    background: '#e0e0e0ff',
     tabSurface: '#dfdcdcff',
     surface: '#ecececff', // Search bars, categories
     text: '#0b0c0dff',
@@ -14,7 +14,7 @@ export const Colors = {
     header: '#c434c9ff',  // Semicircle purple
   },
   dark: {
-    background: '#0E0F13',
+    background: '#0f1425ff',
     tabSurface: '#0d1522ff',
     surface: '#152238', // Search bars, categories
     text: '#F5F3F0',    // Warm off-white for text
