@@ -115,18 +115,26 @@ exports.login = async (req, res) => {
 
     console.log('Login successful for user:', user._id);
 
+    // Prepare response data
+    const responseData = {
+      user: {
+        id: user._id,
+        name: user.name,
+        role: user.role,
+        storeId: user.storeId,
+        storeName: user.storeName
+      },
+      sessionToken
+    };
+
+    // Include Security PIN for admin users (needed for app functionality)
+    if (user.role === 'admin' && user.securityPin) {
+      responseData.user.securityPin = user.securityPin;
+    }
+
     res.json({
       success: true,
-      data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          role: user.role,
-          storeId: user.storeId,
-          storeName: user.storeName
-        },
-        sessionToken
-      }
+      data: responseData
     });
   } catch (error) {
     console.error('Login error:', error);

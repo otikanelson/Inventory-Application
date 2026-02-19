@@ -67,7 +67,7 @@ export default function AdminLayout() {
 
   const checkAuth = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem("admin_pin");
+      const storedPin = await AsyncStorage.getItem("admin_security_pin");
       const lastAuth = await AsyncStorage.getItem("admin_last_auth");
       const logoutEnabled = await AsyncStorage.getItem("admin_auto_logout");
       const logoutTime = await AsyncStorage.getItem("admin_auto_logout_time");
@@ -77,14 +77,14 @@ export default function AdminLayout() {
       setAutoLogoutEnabled(logoutEnabled !== "false");
       setAutoLogoutTime(logoutTime ? parseInt(logoutTime) : 30);
 
-      // If no PIN exists at all, allow entry but show setup prompt
+      // If no Security PIN exists at all, allow entry but show setup prompt
       if (!storedPin) {
         setHasPin(false);
         setIsAuthenticated(true);
         
         // Different message for staff vs admin
         if (userRole === 'staff') {
-          // Show message that admin must set PIN first
+          // Show message that admin must set Security PIN first
           Toast.show({
             type: "info",
             text1: "Admin Setup Required",
@@ -131,11 +131,11 @@ export default function AdminLayout() {
       const userRole = await AsyncStorage.getItem("auth_user_role");
       const storeId = await AsyncStorage.getItem("auth_store_id");
 
-      // For staff, we need to verify against their admin's PIN from the backend
+      // For staff, we need to verify against their admin's Security PIN from the backend
       if (userRole === 'staff' && storeId) {
         try {
-          // Call backend to verify admin PIN for this store
-          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/verify-admin-pin`, {
+          // Call backend to verify admin Security PIN for this store
+          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/verify-admin-security-pin`, {
             pin,
             storeId
           });
@@ -155,13 +155,13 @@ export default function AdminLayout() {
             Toast.show({
               type: "error",
               text1: "Access Denied",
-              text2: "Incorrect admin PIN",
+              text2: "Incorrect admin Security PIN",
             });
             setPin("");
           }
         } catch (error: any) {
           // If API fails, fall back to local storage (offline mode)
-          const storedPin = await AsyncStorage.getItem("admin_pin");
+          const storedPin = await AsyncStorage.getItem("admin_security_pin");
           if (pin === storedPin) {
             await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
             setIsAuthenticated(true);
@@ -177,14 +177,14 @@ export default function AdminLayout() {
             Toast.show({
               type: "error",
               text1: "Access Denied",
-              text2: "Incorrect admin PIN",
+              text2: "Incorrect admin Security PIN",
             });
             setPin("");
           }
         }
       } else {
-        // For admin users, check local storage
-        const storedPin = await AsyncStorage.getItem("admin_pin");
+        // For admin users, check local Security PIN
+        const storedPin = await AsyncStorage.getItem("admin_security_pin");
         if (pin === storedPin) {
           await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
           setIsAuthenticated(true);
@@ -194,7 +194,7 @@ export default function AdminLayout() {
           Toast.show({
             type: "error",
             text1: "Access Denied",
-            text2: "Incorrect PIN",
+            text2: "Incorrect Security PIN",
           });
           setPin("");
         }
@@ -230,8 +230,8 @@ export default function AdminLayout() {
         return;
       }
 
-      // Store new PIN
-      await AsyncStorage.setItem("admin_pin", newPin);
+      // Store new Security PIN
+      await AsyncStorage.setItem("admin_security_pin", newPin);
       await AsyncStorage.setItem("admin_first_setup", "completed");
       await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
 
@@ -242,14 +242,14 @@ export default function AdminLayout() {
 
       Toast.show({
         type: "success",
-        text1: "PIN Created",
-        text2: "Admin access is now secured",
+        text1: "Security PIN Created",
+        text2: "Admin dashboard is now secured",
       });
     } catch (error) {
       Toast.show({
         type: "error",
         text1: "Setup Failed",
-        text2: "Could not save PIN",
+        text2: "Could not save Security PIN",
       });
     }
   };
@@ -289,7 +289,7 @@ export default function AdminLayout() {
               Admin Access Required
             </Text>
             <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
-              Enter the admin PIN to continue
+              Enter the admin Security PIN to continue
             </Text>
             <TextInput
               style={[
@@ -301,7 +301,7 @@ export default function AdminLayout() {
               maxLength={4}
               value={pin}
               onChangeText={setPin}
-              placeholder="Admin PIN"
+              placeholder="Admin Security PIN"
               placeholderTextColor={theme.subtext}
               autoFocus
             />
@@ -482,10 +482,10 @@ export default function AdminLayout() {
               <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
             </View>
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Secure Your Admin Panel
+              Set Security PIN
             </Text>
             <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
-              Create a 4-digit PIN to protect your admin dashboard
+              Create a 4-digit Security PIN for sensitive admin operations
             </Text>
 
             <TextInput

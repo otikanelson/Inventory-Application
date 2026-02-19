@@ -134,8 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('💾 Storing auth data in AsyncStorage...');
           console.log('👤 User data:', JSON.stringify(userData, null, 2));
 
-          // Store auth data including store information
-          await AsyncStorage.multiSet([
+          // Prepare storage items
+          const storageItems: [string, string][] = [
             ['auth_session_token', sessionToken],
             ['auth_user_role', userData.role],
             ['auth_user_id', userData.id],
@@ -143,7 +143,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ['auth_last_login', Date.now().toString()],
             ['auth_store_id', userData.storeId || ''],
             ['auth_store_name', userData.storeName || ''],
-          ]);
+          ];
+
+          // Store Security PIN for admin users if provided
+          if (userData.role === 'admin' && userData.securityPin) {
+            storageItems.push(['admin_security_pin', userData.securityPin]);
+            console.log('🔐 Storing admin Security PIN');
+          }
+
+          // Store auth data including store information
+          await AsyncStorage.multiSet(storageItems);
 
           console.log('✅ Auth data stored successfully');
 

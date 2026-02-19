@@ -365,7 +365,7 @@ export default function AdminProfileScreen() {
           style={[styles.logoutBtn, { borderColor: '#FF4444' }]} 
           onPress={async () => {
             try {
-              // Clear ALL authentication data to fully log out
+              // Clear authentication session data but keep PINs
               await AsyncStorage.multiRemove([
                 'auth_session_token',
                 'auth_last_login',
@@ -380,9 +380,6 @@ export default function AdminProfileScreen() {
                 'admin_session_name',
                 'admin_session_store_id',
                 'admin_session_store_name',
-                'admin_login_pin',
-                'admin_security_pin',
-                'staff_login_pin',
               ]);
               
               Toast.show({
