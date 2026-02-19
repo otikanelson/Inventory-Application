@@ -7,7 +7,6 @@ import {
     ActivityIndicator,
     Dimensions,
     FlatList,
-    ImageBackground,
     Modal,
     Platform,
     Pressable,
@@ -153,10 +152,6 @@ export default function AdminSales() {
     }
   };
 
-  const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
-
   // Process FEFO Sale
   const finalizeSale = async () => {
     setIsSyncing(true);
@@ -293,10 +288,7 @@ export default function AdminSales() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
       {/* Technical Header */}
       <View style={styles.header}>

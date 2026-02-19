@@ -6,13 +6,11 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  ImageBackground,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
-  View,
-} from "react-native";
+  View} from "react-native";
 import Toast from "react-native-toast-message";
 import { AIInsightsBadge } from "../../components/AIInsightsBadge";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -165,10 +163,6 @@ export default function Dashboard() {
   const [recentlySoldBatches, setRecentlySoldBatches] = useState<any[]>([]);
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
 
-  const backgroundImage = isDark
-  ? require("../../assets/images/Background7.png")
-  : require("../../assets/images/Background9.png");
-
   // Fetch batch-level sales data when not viewing by product
   useEffect(() => {
     const fetchBatchSales = async () => {
@@ -279,10 +273,7 @@ export default function Dashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
         <FlatList
         data={loading ? Array(6).fill({}) : visibleData}

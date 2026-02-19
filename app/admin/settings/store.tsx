@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  ImageBackground,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -90,10 +89,6 @@ export default function StoreSettingsScreen() {
     }
   };
 
-  const backgroundImage = isDark
-    ? require("../../../assets/images/Background7.png")
-    : require("../../../assets/images/Background9.png");
-
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
@@ -105,7 +100,7 @@ export default function StoreSettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header with Back Button */}

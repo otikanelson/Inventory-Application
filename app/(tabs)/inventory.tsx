@@ -8,7 +8,6 @@ import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
     FlatList,
-    ImageBackground,
     Pressable,
     RefreshControl,
     StyleSheet,
@@ -106,15 +105,6 @@ export default function InventoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={
-          isDark
-            ? require("../../assets/images/Background7.png")
-            : require("../../assets/images/Background9.png")
-        }
-        style={StyleSheet.absoluteFill}
-      />
-
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>STOCK_MANAGEMENT</Text>
@@ -357,11 +347,7 @@ export default function InventoryScreen() {
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
                     {item.imageUrl && item.imageUrl !== "cube" && item.imageUrl !== "" ? (
-                      <ImageBackground
-                        source={{ uri: item.imageUrl }}
-                        style={styles.image}
-                        imageStyle={{ borderRadius: 12 }}
-                      />
+                      
                     ) : (
                       <Ionicons
                         name="cube-outline"

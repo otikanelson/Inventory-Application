@@ -5,14 +5,12 @@ import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Image,
-    ImageBackground,
     Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
-    View,
-} from "react-native";
+    View} from "react-native";
 import { useTheme } from "../../../context/ThemeContext";
 
 interface SaleRecord {
@@ -44,10 +42,6 @@ export default function ProductSalesDetails() {
   const [salesHistory, setSalesHistory] = useState<SaleRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const backgroundImage = isDark
-    ? require("../../../assets/images/Background7.png")
-    : require("../../../assets/images/Background9.png");
 
   const fetchData = async () => {
     try {
@@ -109,7 +103,7 @@ export default function ProductSalesDetails() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>
@@ -122,7 +116,7 @@ export default function ProductSalesDetails() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
       
       <ScrollView
         contentContainerStyle={styles.scrollContent}

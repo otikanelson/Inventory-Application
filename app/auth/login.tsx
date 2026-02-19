@@ -4,12 +4,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Image,
-  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View} from 'react-native';
 import { PinInput } from '../../components/PinInput';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,10 +22,6 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAuthorLogin, setShowAuthorLogin] = useState(false);
   const [pinKey, setPinKey] = useState(0); // Key to force PinInput reset
-
-  const backgroundImage = isDark
-    ? require('../../assets/images/Background7.png')
-    : require('../../assets/images/Background9.png');
 
   // Auto-select role if passed as parameter
   useEffect(() => {
@@ -84,11 +78,7 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      
 
       {/* Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>

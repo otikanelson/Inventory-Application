@@ -15,8 +15,7 @@ import {
     Pressable,
     StyleSheet,
     Text,
-    View,
-} from "react-native";
+    View} from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
 import { BarcodeScanner } from "../../components/BarcodeScanner";

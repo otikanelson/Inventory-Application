@@ -4,7 +4,6 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    ImageBackground,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -12,8 +11,7 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    View,
-} from 'react-native';
+    View} from 'react-native';
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
 import { useTheme } from '../../context/ThemeContext';
@@ -30,10 +28,6 @@ export default function StaffRegisterScreen() {
   const [pinError, setPinError] = useState(false);
   const [isFirstPin, setIsFirstPin] = useState(true);
   const [pinKey, setPinKey] = useState(0); // Key to force PinInput reset
-
-  const backgroundImage = isDark
-    ? require('../../assets/images/Background7.png')
-    : require('../../assets/images/Background9.png');
 
   const handlePinComplete = async (pin: string) => {
     if (isFirstPin) {
@@ -187,11 +181,7 @@ export default function StaffRegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}

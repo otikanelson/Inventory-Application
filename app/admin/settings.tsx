@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  ImageBackground,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../../components/AIStatusIndicator";
@@ -22,10 +21,6 @@ export default function AdminSettingsScreen() {
   const { resetTour, startTour } = useAdminTour();
 
 
-
-  const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
 
   const SettingRow = ({ icon, label, description, onPress, children }: any) => {
     const row = (
@@ -62,7 +57,7 @@ export default function AdminSettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>

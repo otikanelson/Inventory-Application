@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    ImageBackground,
     Modal,
     Platform,
     Pressable,
@@ -34,11 +33,6 @@ export default function Alerts() {
   const [adminPin, setAdminPin] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [showInfoCard, setShowInfoCard] = useState(false);
-
-  const backgroundImage =
-    isDark ?
-      require("../assets/images/Background7.png")
-    : require("../assets/images/Background9.png");
 
   const filteredAlerts = alerts.filter((alert) => {
     const matchesLevel =
@@ -178,10 +172,7 @@ export default function Alerts() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}

@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  ImageBackground,
   Platform,
   Pressable,
   RefreshControl,
@@ -38,10 +37,6 @@ export default function AdminStats() {
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
-
-  const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
 
   const summary = dashboardData?.summary;
   const topRisk = summary?.topRiskProducts || [];
@@ -803,10 +798,7 @@ export default function AdminStats() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}

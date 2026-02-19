@@ -4,15 +4,14 @@ import axios from "axios";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ImageBackground,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
@@ -26,10 +25,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { resetTour, startTour } = useTour();
   const { logout: authLogout } = useAuth();
-
-  const backgroundImage = isDark
-    ? require("../assets/images/Background7.png")
-    : require("../assets/images/Background9.png");
 
   // Admin Login State
   const [pinModal, setPinModal] = useState(false);
@@ -128,9 +123,9 @@ export default function SettingsScreen() {
     }
   };
 
-  const SettingRow = ({ icon, label, children, description, onPress }: any) => {
+  const SettingRow = ({ icon, label, children, description, onPress, style }: any) => {
     const row = (
-      <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
+      <View style={[styles.settingRow, { borderBottomColor: theme.border }, style]}>
         <View style={styles.settingMain}>
           <View
             style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}
@@ -165,7 +160,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView
         style={styles.container}
@@ -216,6 +211,13 @@ export default function SettingsScreen() {
           label="Admin Dashboard"
           description={hasAdminPin ? "Enter Admin Security PIN to access" : "Set up Admin Security PIN first"}
           onPress={() => setPinModal(true)}
+          style={{ 
+            backgroundColor: theme.primary + '10',
+            borderWidth: 2,
+            borderColor: theme.primary + '40',
+            borderRadius: 16,
+            marginBottom: 16
+          }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {!hasAdminPin && (
@@ -223,7 +225,10 @@ export default function SettingsScreen() {
                 <Text style={[styles.badgeText, { color: '#FF9500' }]}>SETUP REQUIRED</Text>
               </View>
             )}
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            <View style={[styles.adminBadge, { backgroundColor: theme.primary }]}>
+              <Ionicons name="shield-checkmark" size={16} color="#FFF" />
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.primary} />
           </View>
         </SettingRow>
       </View>
@@ -394,6 +399,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+  adminBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalOverlay: {
     flex: 1,

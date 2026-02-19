@@ -7,7 +7,6 @@ import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  ImageBackground,
   Platform,
   Pressable,
   ScrollView,
@@ -282,10 +281,6 @@ export default function DataSettingsScreen() {
     }
   };
 
-  const backgroundImage = isDark
-    ? require("../../../assets/images/Background7.png")
-    : require("../../../assets/images/Background9.png");
-
   const SettingRow = ({ icon, label, description, onPress, children, isLast }: any) => {
     const row = (
       <View style={[styles.settingRow, !isLast && { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
@@ -321,7 +316,7 @@ export default function DataSettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header with Back Button */}

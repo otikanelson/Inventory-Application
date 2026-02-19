@@ -5,12 +5,10 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Image,
-  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
-  View,
-} from "react-native";
+  View} from "react-native";
 import { AIOnboardingModal } from "../components/AIOnboardingModal";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -21,10 +19,6 @@ export default function WelcomeScreen() {
   const { role } = useAuth();
   const [showAIOnboarding, setShowAIOnboarding] = useState(false);
   const [showHelpTooltipIntro, setShowHelpTooltipIntro] = useState(false);
-
-  const backgroundImage = isDark
-    ? require("../assets/images/Background7.png")
-    : require("../assets/images/Background9.png");
 
   useEffect(() => {
     checkFirstLaunch();
@@ -110,11 +104,7 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      
 
       {/* Semicircular Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
@@ -9,7 +10,6 @@ import {
   BackHandler,
   FlatList,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -96,10 +96,18 @@ export default function AddProducts() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`);
+        const token = await AsyncStorage.getItem('auth_session_token');
+        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
         const data = await response.json();
         if (data.success) {
           setAdminCategories(data.data.map((cat: any) => cat.name).sort());
+        } else {
+          console.error('Failed to fetch categories:', data.error);
         }
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -440,8 +448,21 @@ export default function AddProducts() {
       highlightFields.push("category");
     }
 
-    // Category validation - must exist in admin-created categories
-    if (cleanCategory && adminCategories.length > 0) {
+    // CRITICAL: Category validation - must exist in admin-created categories
+    // Users cannot create custom categories - admin must create them first
+    if (adminCategories.length === 0) {
+      newErrors.push("category");
+      highlightFields.push("category");
+      setHighlightErrors(highlightFields);
+      setTimeout(() => setHighlightErrors([]), 2000);
+      return { 
+        isValid: false, 
+        error: "No categories available. Please ask admin to create categories first.", 
+        field: "Category" 
+      };
+    }
+    
+    if (cleanCategory) {
       const categoryExists = adminCategories.some(
         cat => cat.toLowerCase() === cleanCategory.toLowerCase()
       );
@@ -453,7 +474,7 @@ export default function AddProducts() {
         setTimeout(() => setHighlightErrors([]), 2000);
         return { 
           isValid: false, 
-          error: `Category "${cleanCategory}" does not exist. Please select from available categories or ask admin to create it.`, 
+          error: `Category "${cleanCategory}" does not exist. Please select from available categories.`, 
           field: "Category" 
         };
       }
@@ -554,24 +575,65 @@ export default function AddProducts() {
 
   const pickImage = async (useCamera: boolean) => {
     setShowPicker(false);
-    const perm = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Toast.show({ type: "error", text1: "Permission Denied", text2: "Camera or photo access needed" });
-      return;
-    }
     
-    // Improved image picker options with better compression
-    const options: ImagePicker.ImagePickerOptions = { 
-      quality: 0.3, // Reduced quality for smaller file size
-      allowsEditing: true, 
-      aspect: [1, 1],
-      base64: false, // Don't get base64 immediately to save memory
-    };
-    
-    let result = useCamera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-      setFormModified(true);
+    try {
+      const perm = useCamera 
+        ? await ImagePicker.requestCameraPermissionsAsync() 
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        
+      if (!perm.granted) {
+        Toast.show({ 
+          type: "error", 
+          text1: "Permission Denied", 
+          text2: "Camera or photo access needed" 
+        });
+        return;
+      }
+      
+      // Improved image picker options with better compression for iOS
+      const options: ImagePicker.ImagePickerOptions = { 
+        quality: 0.5, // Balanced quality for iOS
+        allowsEditing: true, 
+        aspect: [1, 1],
+        base64: false,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        // iOS-specific options
+        exif: false, // Don't include EXIF data to reduce size
+      };
+      
+      let result = useCamera 
+        ? await ImagePicker.launchCameraAsync(options) 
+        : await ImagePicker.launchImageLibraryAsync(options);
+        
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        
+        // Validate image URI
+        if (!imageUri) {
+          Toast.show({
+            type: "error",
+            text1: "Image Error",
+            text2: "Could not load image. Please try again."
+          });
+          return;
+        }
+        
+        setImage(imageUri);
+        setFormModified(true);
+        
+        Toast.show({
+          type: "success",
+          text1: "Image Selected",
+          text2: "Image will be uploaded when you save the product"
+        });
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Toast.show({
+        type: "error",
+        text1: "Image Selection Failed",
+        text2: "Please try again or choose a different image"
+      });
     }
   };
 
@@ -814,10 +876,7 @@ export default function AddProducts() {
   };
 
   return (
-    <ImageBackground
-      source={isDark ? require("../../assets/images/Background7.png") : require("../../assets/images/Background9.png")}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -1263,7 +1322,7 @@ export default function AddProducts() {
                 color: formData.category ? theme.text : theme.subtext,
                 flex: 1,
               }}>
-                {formData.category || "Select or enter category"}
+                {formData.category || "Select category"}
               </Text>
               {!(mode === "inventory" && existingProduct && existingProduct.category) && (
                 <Ionicons name="chevron-down" size={20} color={theme.subtext} />
@@ -1616,69 +1675,55 @@ export default function AddProducts() {
               </Pressable>
             </View>
             
-            {/* Search/Filter Input */}
-            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <View style={[styles.searchContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                <Ionicons name="search" size={20} color={theme.subtext} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.text }]}
-                  placeholder="Search categories..."
-                  placeholderTextColor={theme.subtext}
-                  value={formData.category}
-                  onChangeText={(t) => setFormData((prev) => ({ ...prev, category: t }))}
-                />
-                {formData.category && (
-                  <Pressable onPress={() => setFormData((prev) => ({ ...prev, category: "" }))}>
-                    <Ionicons name="close-circle" size={20} color={theme.subtext} />
+            {adminCategories.length === 0 ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Ionicons name="alert-circle-outline" size={64} color={theme.notification} />
+                <Text style={{ color: theme.text, marginTop: 16, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>
+                  No Categories Available
+                </Text>
+                <Text style={{ color: theme.subtext, fontSize: 14, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+                  Please ask your admin to create product categories before adding products.
+                </Text>
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: theme.primary, marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }]}
+                  onPress={() => setShowCategoryPicker(false)}
+                >
+                  <Text style={{ color: "#FFF", fontWeight: "700" }}>Close</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <FlatList
+                data={adminCategories}
+                keyExtractor={(item) => item}
+                style={{ maxHeight: 400 }}
+                renderItem={({ item }) => (
+                  <Pressable 
+                    style={[
+                      styles.categoryItem,
+                      formData.category === item && { backgroundColor: theme.primary + '15' }
+                    ]} 
+                    onPress={() => handleCategorySelect(item)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <Ionicons 
+                        name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
+                        size={20} 
+                        color={formData.category === item ? theme.primary : theme.subtext} 
+                      />
+                      <Text style={{ 
+                        color: formData.category === item ? theme.primary : theme.text, 
+                        fontSize: 16,
+                        marginLeft: 12,
+                        fontWeight: formData.category === item ? '600' : '400'
+                      }}>
+                        {item}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
                   </Pressable>
                 )}
-              </View>
-            </View>
-            
-            <FlatList
-              data={adminCategories.filter(cat => 
-                cat.toLowerCase().includes(formData.category.toLowerCase())
-              )}
-              keyExtractor={(item) => item}
-              style={{ maxHeight: 400 }}
-              ListEmptyComponent={
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                  <Ionicons name="search-outline" size={48} color={theme.subtext} />
-                  <Text style={{ color: theme.subtext, marginTop: 12, textAlign: 'center' }}>
-                    No matching categories found
-                  </Text>
-                  <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-                    Ask admin to create &quot;{formData.category}&quot; category
-                  </Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <Pressable 
-                  style={[
-                    styles.categoryItem,
-                    formData.category === item && { backgroundColor: theme.primary + '15' }
-                  ]} 
-                  onPress={() => handleCategorySelect(item)}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <Ionicons 
-                      name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
-                      size={20} 
-                      color={formData.category === item ? theme.primary : theme.subtext} 
-                    />
-                    <Text style={{ 
-                      color: formData.category === item ? theme.primary : theme.text, 
-                      fontSize: 16,
-                      marginLeft: 12,
-                      fontWeight: formData.category === item ? '600' : '400'
-                    }}>
-                      {item}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-                </Pressable>
-              )}
-            />
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -1718,7 +1763,7 @@ export default function AddProducts() {
           router.push('/settings');
         }}
       />
-    </ImageBackground>
+    </View>
   );
 }
 

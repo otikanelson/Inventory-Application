@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -50,10 +49,6 @@ export default function AdminProfileScreen() {
   const [adminSessionName, setAdminSessionName] = useState<string | null>(null);
   const [adminInfo, setAdminInfo] = useState<{ name: string; storeId: string; storeName: string } | null>(null);
   const [isStaffViewingAdmin, setIsStaffViewingAdmin] = useState(false);
-
-  const backgroundImage = isDark
-    ? require('../../../assets/images/Background7.png')
-    : require('../../../assets/images/Background9.png');
 
   useEffect(() => {
     checkAdminSession();
@@ -226,7 +221,7 @@ export default function AdminProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header */}

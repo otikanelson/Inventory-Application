@@ -6,13 +6,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
     FlatList,
     Image,
-    ImageBackground,
     Pressable,
     RefreshControl,
     StyleSheet,
     Text,
     TextInput,
-    View,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -185,15 +184,6 @@ export default function AdminInventory() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={
-          isDark
-            ? require("../../assets/images/Background7.png")
-            : require("../../assets/images/Background9.png")
-        }
-        style={StyleSheet.absoluteFill}
-      />
-
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>

@@ -61,9 +61,6 @@ exports.login = async (req, res) => {
   try {
     const { pin, role, storeName } = req.body;
 
-    console.log('Login attempt:', { pin: pin ? '****' : 'missing', role, storeName });
-    console.log('PIN details:', { value: pin, type: typeof pin, length: pin ? pin.length : 0 });
-
     if (!pin || !role) {
       return res.status(400).json({
         success: false,
@@ -79,19 +76,10 @@ exports.login = async (req, res) => {
       query.storeName = storeName;
     }
 
-    console.log('Query:', JSON.stringify(query));
-
     // Find user by loginPin and role
     const user = await User.findOne(query);
-
-    console.log('User found:', user ? `Yes - ${user.name}` : 'No');
     
     if (!user) {
-      // Debug: Check if user exists with different criteria
-      const allUsers = await User.find({ role, isActive: true }).select('name loginPin');
-      console.log('Available users for role:', allUsers.map(u => ({ name: u.name, loginPin: u.loginPin })));
-      
-      console.log('User not found with provided credentials');
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials'
@@ -113,10 +101,6 @@ exports.login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    console.log('Login successful for user:', user._id);
-    console.log('User Security PIN from DB:', user.securityPin);
-    console.log('User role:', user.role);
-
     // Prepare response data
     const responseData = {
       user: {
@@ -132,13 +116,6 @@ exports.login = async (req, res) => {
     // Include Security PIN for admin users (needed for app functionality)
     if (user.role === 'admin' && user.securityPin) {
       responseData.user.securityPin = user.securityPin;
-      console.log('✅ Security PIN added to response:', user.securityPin);
-    } else {
-      console.log('⚠️ Security PIN NOT added to response:', {
-        role: user.role,
-        hasSecurityPin: !!user.securityPin,
-        securityPinValue: user.securityPin
-      });
     }
 
     res.json({

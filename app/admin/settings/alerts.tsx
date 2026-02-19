@@ -3,7 +3,6 @@ import axios from 'axios';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ImageBackground,
     Modal,
     Pressable,
     ScrollView,
@@ -244,13 +243,9 @@ export default function AlertSettingsScreen() {
     }
   };
 
-  const backgroundImage = isDark
-    ? require("../../../assets/images/Background7.png")
-    : require("../../../assets/images/Background9.png");
-
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header with Back Button */}

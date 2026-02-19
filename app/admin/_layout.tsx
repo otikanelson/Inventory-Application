@@ -73,20 +73,12 @@ export default function AdminLayout() {
       const logoutTime = await AsyncStorage.getItem("admin_auto_logout_time");
       const userRole = await AsyncStorage.getItem("auth_user_role");
 
-      console.log('🔍 Admin Layout checkAuth:', {
-        hasSecurityPin: !!storedPin,
-        securityPinValue: storedPin,
-        userRole,
-        hasLastAuth: !!lastAuth
-      });
-
       // Load settings
       setAutoLogoutEnabled(logoutEnabled !== "false");
       setAutoLogoutTime(logoutTime ? parseInt(logoutTime) : 30);
 
       // If no Security PIN exists at all, allow entry but show setup prompt
       if (!storedPin) {
-        console.log('⚠️ No Security PIN found in AsyncStorage');
         setHasPin(false);
         setIsAuthenticated(true);
         
@@ -100,7 +92,6 @@ export default function AdminLayout() {
             visibilityTime: 5000,
           });
         } else {
-          console.log('📝 Showing setup modal for admin user');
           setShowSetupModal(true);
         }
         
@@ -108,7 +99,6 @@ export default function AdminLayout() {
         return;
       }
 
-      console.log('✅ Security PIN found, checking auth session...');
       setHasPin(true);
 
       // Check if we have a recent auth session

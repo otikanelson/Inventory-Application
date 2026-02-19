@@ -16,8 +16,7 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    View,
-} from "react-native";
+    View} from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
 import { hasSecurityPIN } from "../../utils/securityPINCheck";

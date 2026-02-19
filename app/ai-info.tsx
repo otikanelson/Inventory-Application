@@ -3,13 +3,11 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ImageBackground,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
-    View,
-} from 'react-native';
+    View} from 'react-native';
 import { AIStatusIndicator } from '../components/AIStatusIndicator';
 import { useTheme } from '../context/ThemeContext';
 
@@ -17,10 +15,6 @@ export default function AIInfoScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const [aiStatus, setAiStatus] = useState<any>(null);
-
-  const backgroundImage = isDark
-    ? require('../assets/images/Background7.png')
-    : require('../assets/images/Background9.png');
 
   useEffect(() => {
     fetchAIStatus();
@@ -41,11 +35,7 @@ export default function AIInfoScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.surface }]}>

@@ -8,15 +8,13 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
-  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  View,
-} from "react-native";
+  View} from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
 import { useAIPredictions } from "../../../hooks/useAIPredictions";
@@ -71,10 +69,6 @@ export default function AdminProductDetails() {
   const [showDeleteWarning, setShowDeleteWarning] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [deletePin, setDeletePin] = useState("");
-
-  const backgroundImage = isDark
-    ? require("../../../assets/images/Background7.png")
-    : require("../../../assets/images/Background9.png");
 
   useEffect(() => {
     loadProduct();
@@ -454,7 +448,7 @@ export default function AdminProductDetails() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView
         showsVerticalScrollIndicator={false}

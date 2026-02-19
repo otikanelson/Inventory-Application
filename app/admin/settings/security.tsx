@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -343,10 +342,6 @@ export default function SecuritySettingsScreen() {
     }
   };
 
-  const backgroundImage = isDark
-    ? require("../../../assets/images/Background7.png")
-    : require("../../../assets/images/Background9.png");
-
   const SettingRow = ({ icon, label, description, onPress, children }: any) => {
     const row = (
       <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
@@ -382,7 +377,7 @@ export default function SecuritySettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header with Back Button */}

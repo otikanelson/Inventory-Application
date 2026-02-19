@@ -4,13 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  ImageBackground,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-} from "react-native";
+  View} from "react-native";
 import { PredictionCard } from "../../components/PredictionCard";
 import { useTheme } from "../../context/ThemeContext";
 import { useAIPredictions } from "../../hooks/useAIPredictions";
@@ -37,10 +35,6 @@ export default function ProductDetails() {
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
 
   useEffect(() => {
     loadProduct();
@@ -117,7 +111,7 @@ export default function ProductDetails() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>
@@ -131,7 +125,7 @@ export default function ProductDetails() {
   if (!product) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        
         <View style={styles.loadingContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={theme.subtext} />
           <Text style={[styles.errorText, { color: theme.text }]}>
@@ -158,7 +152,7 @@ export default function ProductDetails() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
       
       <ScrollView
         style={styles.scrollView}
