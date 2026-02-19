@@ -4,14 +4,14 @@ import axios from "axios";
 import { Tabs, useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    Dimensions,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import { Path, Svg } from "react-native-svg";
 import Toast from "react-native-toast-message";
@@ -71,6 +71,7 @@ export default function AdminLayout() {
       const lastAuth = await AsyncStorage.getItem("admin_last_auth");
       const logoutEnabled = await AsyncStorage.getItem("admin_auto_logout");
       const logoutTime = await AsyncStorage.getItem("admin_auto_logout_time");
+      const userRole = await AsyncStorage.getItem("auth_user_role");
 
       // Load settings
       setAutoLogoutEnabled(logoutEnabled !== "false");
@@ -80,7 +81,20 @@ export default function AdminLayout() {
       if (!storedPin) {
         setHasPin(false);
         setIsAuthenticated(true);
-        setShowSetupModal(true);
+        
+        // Different message for staff vs admin
+        if (userRole === 'staff') {
+          // Show message that admin must set PIN first
+          Toast.show({
+            type: "info",
+            text1: "Admin Setup Required",
+            text2: "Your admin must set up the Security PIN first",
+            visibilityTime: 5000,
+          });
+        } else {
+          setShowSetupModal(true);
+        }
+        
         setLoading(false);
         return;
       }

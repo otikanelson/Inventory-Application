@@ -68,10 +68,17 @@ export default function AdminScanScreen() {
   }, []);
 
   const checkSecurityPIN = async () => {
-    const pinSet = await hasSecurityPIN();
-    if (!pinSet) {
-      setSecurityPINWarningVisible(true);
+    // Check if user is authenticated as admin
+    const userRole = await AsyncStorage.getItem('auth_user_role');
+    
+    // Only check Security PIN for staff users
+    if (userRole === 'staff') {
+      const pinSet = await hasSecurityPIN();
+      if (!pinSet) {
+        setSecurityPINWarningVisible(true);
+      }
     }
+    // Admin users don't need Security PIN prompt when already authenticated
   };
 
   const handleNavigateToSettings = () => {

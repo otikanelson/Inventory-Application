@@ -120,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           pin,
           role: userRole
         }, {
-          timeout: 5000 // 5 second timeout
+          timeout: 15000 // Increased to 15 second timeout to match global timeout
         });
 
         console.log('✅ Login response received!');
@@ -331,6 +331,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await AsyncStorage.multiRemove([
         'auth_session_token',
         'auth_last_login',
+        'auth_user_role',
+        'auth_user_id',
+        'auth_user_name',
+        'auth_store_id',
+        'auth_store_name',
       ]);
 
       setUser(null);

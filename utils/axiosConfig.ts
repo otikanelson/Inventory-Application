@@ -5,6 +5,11 @@ import axios from 'axios';
 axios.defaults.timeout = 15000; // 15 seconds max wait
 axios.defaults.headers.common['Accept'] = 'application/json';
 axios.defaults.headers.common['Content-Type'] = 'application/json';
+axios.defaults.headers.common['User-Agent'] = 'InventiEase-Mobile/1.0';
+
+// Add retry configuration for network errors
+axios.defaults.retry = 2;
+axios.defaults.retryDelay = 1000;
 
 // Configure axios to automatically add auth token to all requests
 axios.interceptors.request.use(
@@ -97,6 +102,12 @@ axios.interceptors.response.use(
           message: error.message,
           url: url,
         });
+        console.error(`🔍 [NETWORK DEBUG] Possible causes:`);
+        console.error(`   1. Emulator network configuration issue`);
+        console.error(`   2. SSL certificate validation failure`);
+        console.error(`   3. Firewall/proxy blocking the request`);
+        console.error(`   4. DNS resolution failure`);
+        console.error(`💡 [TIP] Try testing on a real device or different network`);
       } else if (!error.response) {
         console.error(`📡 [NO RESPONSE] ${url} - Server didn't respond`);
         console.error(`🔍 [DEBUG] Error details:`, {

@@ -5,21 +5,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  BackHandler,
-  FlatList,
-  Image,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    BackHandler,
+    FlatList,
+    Image,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
@@ -83,10 +83,17 @@ export default function AddProducts() {
   // Check for Admin Security PIN on mount
   useEffect(() => {
     const checkSecurityPIN = async () => {
-      const hasPIN = await hasSecurityPIN();
-      if (!hasPIN) {
-        setShowSecurityPINWarning(true);
+      // Check if user is authenticated as admin
+      const userRole = await AsyncStorage.getItem('auth_user_role');
+      
+      // Only check Security PIN for staff users
+      if (userRole === 'staff') {
+        const hasPIN = await hasSecurityPIN();
+        if (!hasPIN) {
+          setShowSecurityPINWarning(true);
+        }
       }
+      // Admin users don't need Security PIN prompt when already authenticated
     };
     checkSecurityPIN();
   }, []);
