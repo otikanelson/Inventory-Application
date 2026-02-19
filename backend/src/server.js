@@ -10,20 +10,29 @@ const connectDB = require('./config/db');
 // Load environment variables
 dotenv.config();
 
-// Try to connect to MongoDB, but don't block server startup
-connectDB()
-  .then(() => {
+// Connect to MongoDB with retry logic
+let isDBConnected = false;
+
+const connectWithRetry = async (retryCount = 0) => {
+  try {
+    await connectDB();
     console.log('✅ Initial MongoDB connection successful');
-  })
-  .catch(err => {
-    console.error('⚠️  Server starting without MongoDB connection');
-    console.error('⚠️  Database operations will fail until connection is established');
-    // Retry connection after 5 seconds
-    setTimeout(() => {
-      console.log('🔄 Retrying MongoDB connection...');
-      connectDB().catch(e => console.error('❌ Retry failed:', e.message));
-    }, 5000);
-  });
+    isDBConnected = true;
+  } catch (err) {
+    console.error('⚠️  MongoDB connection failed');
+    if (retryCount < 3) {
+      const delay = Math.min(5000 * (retryCount + 1), 15000); // Exponential backoff: 5s, 10s, 15s
+      console.log(`🔄 Retrying MongoDB connection in ${delay/1000}s... (attempt ${retryCount + 1}/3)`);
+      setTimeout(() => connectWithRetry(retryCount + 1), delay);
+    } else {
+      console.error('❌ Failed to connect to MongoDB after 3 attempts');
+      console.error('⚠️  Server will continue running but database operations will fail');
+    }
+  }
+};
+
+// Start connection process
+connectWithRetry();
 
 const app = express();
 
@@ -187,6 +196,12 @@ initializeWebSocket(server);
 
 // Cache warming function
 const warmupCache = async () => {
+  // Check if DB is connected before warming cache
+  if (!isDBConnected) {
+    console.log('⏸️  Skipping cache warmup - waiting for database connection');
+    return;
+  }
+
   try {
     console.log('🔥 Starting cache warmup...');
     
@@ -232,9 +247,22 @@ server.listen(PORT, async () => {
   console.log(`Cloudinary Status: ${process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '❌ Not Configured'}`);
   console.log(`WebSocket: ✅ Enabled (Real-time predictions active)`);
   
-  // Warm up cache on startup (after a short delay to let DB connect)
-  setTimeout(async () => {
-    await warmupCache();
-    scheduleCacheRefresh();
-  }, 3000); // 3 second delay
+  // Wait for DB connection before warming cache
+  const waitForDB = setInterval(() => {
+    if (isDBConnected) {
+      clearInterval(waitForDB);
+      console.log('🔥 Database connected, starting cache warmup...');
+      warmupCache().then(() => {
+        scheduleCacheRefresh();
+      });
+    }
+  }, 1000); // Check every second
+  
+  // Timeout after 60 seconds
+  setTimeout(() => {
+    clearInterval(waitForDB);
+    if (!isDBConnected) {
+      console.log('⚠️  Cache warmup skipped - database connection timeout');
+    }
+  }, 60000);
 });

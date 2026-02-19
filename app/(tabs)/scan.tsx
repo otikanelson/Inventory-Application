@@ -1,3 +1,4 @@
+import AdminSecurityPINWarning from "@/components/AdminSecurityPINWarning";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
+import { hasSecurityPIN } from "../../utils/securityPINCheck";
 
 const { height } = Dimensions.get("window");
 
@@ -45,6 +47,7 @@ export default function ScanScreen() {
   const [pendingData, setPendingData] = useState<any>(null);
   const [adminPin, setAdminPin] = useState("");
   const [rapidScanEnabled, setRapidScanEnabled] = useState(false);
+  const [securityPINWarningVisible, setSecurityPINWarningVisible] = useState(false);
 
   // CRITICAL: Key to force camera remount when screen focuses
   const [cameraKey, setCameraKey] = useState(0);
@@ -59,6 +62,18 @@ export default function ScanScreen() {
   useEffect(() => {
     loadRapidScanSetting();
   }, []);
+
+  // Check security PIN on mount
+  useEffect(() => {
+    checkSecurityPIN();
+  }, []);
+
+  const checkSecurityPIN = async () => {
+    const pinSet = await hasSecurityPIN();
+    if (!pinSet) {
+      setSecurityPINWarningVisible(true);
+    }
+  };
 
   const loadRapidScanSetting = async () => {
     try {
@@ -229,7 +244,7 @@ export default function ScanScreen() {
       }
     } catch (err) {
       console.error("Scan Error:", err);
-      Toast.show({ type: "error", text1: "Error", text2: "Check connection" });
+      Toast.show({ type: "error", text1: "Scan Failed", text2: "Please try again" });
       setScanned(false);
     } finally {
       setLoading(false);
@@ -321,6 +336,15 @@ export default function ScanScreen() {
     setPinModal(false);
     setAdminPin("");
     setScanned(false);
+  };
+
+  const handleSecurityPINWarningClose = () => {
+    setSecurityPINWarningVisible(false);
+  };
+
+  const handleNavigateToSettings = () => {
+    setSecurityPINWarningVisible(false);
+    router.push('/settings');
   };
 
   // Handle camera permissions
@@ -624,6 +648,13 @@ export default function ScanScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* SECURITY PIN WARNING MODAL */}
+      <AdminSecurityPINWarning
+        visible={securityPINWarningVisible}
+        onClose={handleSecurityPINWarningClose}
+        onNavigateToSettings={handleNavigateToSettings}
+      />
     </View>
   );
 }

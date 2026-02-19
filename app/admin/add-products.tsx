@@ -5,26 +5,25 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  BackHandler,
-  FlatList,
-  Image,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    BackHandler,
+    FlatList,
+    Image,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
 import { HelpTooltip } from "../../components/HelpTooltip";
-import { lineHeight, margin, padding, touchTarget } from "../../constants/spacing";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
 import { hasSecurityPIN } from "../../utils/securityPINCheck";
@@ -176,24 +175,21 @@ export default function AddProducts() {
     }, [params.barcode, params.mode]),
   );
 
+  // ADMIN-SPECIFIC: Always intercept back button to prevent navigation to staff pages
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        // If coming from admin scanner, prevent back and redirect to admin inventory
-        if (params.fromAdmin === "true") {
-          router.replace("/admin/inventory");
-          return true;
-        }
-        
+        // Always redirect to admin inventory on back press
         if (formModified) {
           setShowExitModal(true);
           return true;
         }
-        return false;
+        router.replace("/admin/inventory");
+        return true;
       };
       const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
       return () => subscription.remove();
-    }, [formModified, params.fromAdmin]),
+    }, [formModified]),
   );
 
   useEffect(() => {
@@ -729,9 +725,8 @@ export default function AddProducts() {
         
         Toast.show({ type: "success", text1: "Product Registered" });
         resetForm();
-        // If coming from admin, redirect to admin inventory, otherwise go to staff tabs
-        const redirectPath = params.fromAdmin === "true" ? "/admin/inventory" : "/(tabs)";
-        setTimeout(() => router.replace(redirectPath as any), 800);
+        // ADMIN-SPECIFIC: Always redirect to admin inventory
+        setTimeout(() => router.replace("/admin/inventory" as any), 800);
       } else {
         // ... (Your registry lookup logic remains the same)
         let productInRegistry = false;
@@ -772,9 +767,8 @@ export default function AddProducts() {
 
         Toast.show({ type: "success", text1: "Batch Added" });
         resetForm();
-        // If coming from admin, redirect to admin inventory, otherwise go to staff tabs
-        const redirectPath = params.fromAdmin === "true" ? "/admin/inventory" : "/(tabs)";
-        setTimeout(() => router.replace(redirectPath as any), 800);
+        // ADMIN-SPECIFIC: Always redirect to admin inventory
+        setTimeout(() => router.replace("/admin/inventory" as any), 800);
       }
     } catch (err: any) {
       console.error("Save Error:", err);
@@ -785,7 +779,7 @@ export default function AddProducts() {
   };
 
   const handleScannerPress = () => {
-    if (formModified) { setShowExitModal(true); } else { router.push("/(tabs)/scan"); }
+    if (formModified) { setShowExitModal(true); } else { router.push("/admin/scan"); }
   };
 
   const handleCategorySelect = (category: string) => {
@@ -851,7 +845,7 @@ export default function AddProducts() {
                   onPress={() => {
                     setFormData(prev => ({ ...prev, mode: "registry" }));
                     router.replace({
-                      pathname: "/(tabs)/add-products",
+                      pathname: "/admin/add-products",
                       params: { mode: "registry" }
                     });
                   }}
@@ -890,7 +884,7 @@ export default function AddProducts() {
                   onPress={() => {
                     setFormData(prev => ({ ...prev, mode: "manual" }));
                     router.replace({
-                      pathname: "/(tabs)/add-products",
+                      pathname: "/admin/add-products",
                       params: { mode: "manual" }
                     });
                   }}
@@ -1678,9 +1672,8 @@ export default function AddProducts() {
                 onPress={() => {
                   setShowExitModal(false);
                   resetForm();
-                  if (typeof pendingNavAction === "function") { pendingNavAction(); } 
-                  else if (pendingNavAction && navigation.dispatch) { navigation.dispatch(pendingNavAction); } 
-                  else { router.back(); }
+                  // ADMIN-SPECIFIC: Always redirect to admin inventory
+                  router.replace("/admin/inventory");
                 }}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>Discard</Text>
@@ -1696,7 +1689,7 @@ export default function AddProducts() {
         onClose={() => setShowSecurityPINWarning(false)}
         onNavigateToSettings={() => {
           setShowSecurityPINWarning(false);
-          router.push('/settings');
+          router.push('/admin/settings');
         }}
       />
     </ImageBackground>
@@ -1704,15 +1697,15 @@ export default function AddProducts() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: padding.container, paddingTop: 50, paddingBottom: 100 },
+  container: { padding: 25, paddingTop: 50, paddingBottom: 100 },
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 5,
   },
   refreshBtn: {
-    width: touchTarget.minWidth,
-    height: touchTarget.minHeight,
+    width: 44,
+    height: 44,
     borderRadius: 22,
     borderWidth: 1,
     justifyContent: "center",
@@ -1720,8 +1713,8 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   backBtn: {
-    width: touchTarget.minWidth,
-    height: touchTarget.minHeight,
+    width: 44,
+    height: 44,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
@@ -1731,13 +1724,13 @@ const styles = StyleSheet.create({
   
   // Enhanced mode selection
   modeSelection: {
-    marginBottom: margin.divider,
+    marginBottom: 25,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: margin.formField,
+    marginBottom: 15,
   },
   modeButtons: {
     flexDirection: "row",
@@ -1745,7 +1738,7 @@ const styles = StyleSheet.create({
   },
   modeBtn: {
     flex: 1,
-    padding: padding.card,
+    padding: 20,
     borderRadius: 15,
     borderWidth: 2,
     alignItems: "center",
@@ -1754,7 +1747,7 @@ const styles = StyleSheet.create({
   
   // Progress indicator
   progressContainer: {
-    marginBottom: margin.divider,
+    marginBottom: 20,
     alignItems: "center",
   },
   progressBar: {
@@ -1776,12 +1769,12 @@ const styles = StyleSheet.create({
   
   // Enhanced input groups
   inputGroup: {
-    marginBottom: margin.divider,
+    marginBottom: 20,
   },
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: margin.element,
+    marginBottom: 8,
     gap: 6,
   },
   required: {
@@ -1796,7 +1789,7 @@ const styles = StyleSheet.create({
   },
   helpText: {
     fontSize: 12,
-    lineHeight: lineHeight.help * 12,
+    lineHeight: 16,
   },
   inputFooter: {
     flexDirection: "row",
@@ -1928,7 +1921,7 @@ const styles = StyleSheet.create({
   },
   helpModeDesc: {
     fontSize: 14,
-    lineHeight: lineHeight.description * 14,
+    lineHeight: 20,
   },
   
   // Existing styles
@@ -1941,7 +1934,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 15,
   },
-  infoText: { flex: 1, fontSize: 13, lineHeight: lineHeight.body * 13 },
+  infoText: { flex: 1, fontSize: 13, lineHeight: 18 },
   scanShortcut: {
     flexDirection: "row",
     alignItems: "center",

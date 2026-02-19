@@ -1134,7 +1134,7 @@ export default function AdminProductDetails() {
                 style={[styles.modalBtn, { backgroundColor: "#FF3B30" }]}
                 onPress={handlePinSubmit}
               >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>Confirm</Text>
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Delete Product</Text>
               </Pressable>
             </View>
           </View>

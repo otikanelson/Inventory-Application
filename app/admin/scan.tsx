@@ -17,9 +17,11 @@ import {
     View,
 } from "react-native";
 import Toast from "react-native-toast-message";
+import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
+import { hasSecurityPIN } from "../../utils/securityPINCheck";
 
 const { height, width } = Dimensions.get("window");
 
@@ -50,12 +52,32 @@ export default function AdminScanScreen() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCartModal, setShowCartModal] = useState(false);
 
+  // Security PIN Warning State
+  const [securityPINWarningVisible, setSecurityPINWarningVisible] = useState(false);
+
   // Cart Icon Animation
   const cartBounceAnim = useRef(new Animated.Value(1)).current;
   const cartShakeAnim = useRef(new Animated.Value(0)).current;
 
   // Audio
   const scanBeep = useAudioPlayer(require("../../assets/sounds/beep.mp3"));
+
+  // Check security PIN on mount
+  useEffect(() => {
+    checkSecurityPIN();
+  }, []);
+
+  const checkSecurityPIN = async () => {
+    const pinSet = await hasSecurityPIN();
+    if (!pinSet) {
+      setSecurityPINWarningVisible(true);
+    }
+  };
+
+  const handleNavigateToSettings = () => {
+    setSecurityPINWarningVisible(false);
+    router.push('/admin/settings');
+  };
 
   // Reset on focus
   useFocusEffect(
@@ -197,7 +219,7 @@ export default function AdminScanScreen() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           
           router.push({
-            pathname: "/(tabs)/add-products",
+            pathname: "/admin/add-products",
             params: {
               barcode: data,
               name: productData.name || "",
@@ -213,7 +235,7 @@ export default function AdminScanScreen() {
           // Product NOT in registry - navigate to register new product
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           router.push({
-            pathname: "/(tabs)/add-products",
+            pathname: "/admin/add-products",
             params: {
               barcode: data,
               mode: "registry",
@@ -331,7 +353,7 @@ export default function AdminScanScreen() {
       }
     } catch (err) {
       console.error("Scan Error:", err);
-      Toast.show({ type: "error", text1: "Scan Failed", text2: "Check connection" });
+      Toast.show({ type: "error", text1: "Scan Failed", text2: "Please try again" });
       setScanned(false);
     } finally {
       setLoading(false);
@@ -534,7 +556,7 @@ export default function AdminScanScreen() {
                 const generatedBarcode = `MAN-${timestamp}-${random}`;
                 
                 router.push({
-                  pathname: "/(tabs)/add-products",
+                  pathname: "/admin/add-products",
                   params: {
                     barcode: generatedBarcode,
                     mode: "manual",
@@ -690,6 +712,13 @@ export default function AdminScanScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* SECURITY PIN WARNING MODAL */}
+      <AdminSecurityPINWarning
+        visible={securityPINWarningVisible}
+        onClose={() => setSecurityPINWarningVisible(false)}
+        onNavigateToSettings={handleNavigateToSettings}
+      />
     </View>
   );
 }

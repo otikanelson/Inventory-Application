@@ -3,18 +3,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
+import { lineHeight, margin, padding, touchTarget } from "../constants/spacing";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useTour } from "../context/TourContext";
@@ -59,8 +60,8 @@ export default function SettingsScreen() {
         
         Toast.show({
           type: 'info',
-          text1: 'No PIN Set',
-          text2: 'Please set up your admin PIN in Security settings'
+          text1: 'No Admin Login PIN Set',
+          text2: 'Please set up your Admin Login PIN in Security settings'
         });
         
         router.push("../admin");
@@ -86,7 +87,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Toast.show({
         type: 'error',
-        text1: 'Authentication Error',
+        text1: 'Login Error',
         text2: 'Could not verify credentials'
       });
     }
@@ -152,7 +153,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="moon-outline"
           label="Dark Mode"
-          description="Switch between light and dark themes"
+          description="Toggle light/dark theme"
         >
           <Switch
             value={isDark}
@@ -170,7 +171,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="person-circle-outline"
           label="My Profile"
-          description="View your account details and permissions"
+          description="View account details"
           onPress={() => router.push('/profile' as any)}
         >
           <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
@@ -178,7 +179,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="shield"
           label="Admin Dashboard"
-          description={hasAdminPin ? "Manage inventory, sales, and security" : "Set up admin PIN to secure your dashboard"}
+          description={hasAdminPin ? "Manage inventory and sales" : "Set up Admin Login PIN first"}
           onPress={() => setPinModal(true)}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -202,18 +203,9 @@ export default function SettingsScreen() {
         <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
         
         <SettingRow
-          icon="pulse-outline"
-          label="API Diagnostics"
-          description="Test backend connectivity and view network status"
-          onPress={() => router.push("/test-api" as any)}
-        >
-          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-        </SettingRow>
-        
-        <SettingRow
           icon="log-out-outline"
           label="Logout from Store"
-          description="Clear store data and return to setup page"
+          description="Clear data and return to setup"
           onPress={async () => {
             try {
               // CRITICAL: Clear token FIRST to prevent API calls with invalid token
@@ -260,7 +252,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="help-circle-outline"
           label="Restart App Tour"
-          description="See the onboarding tour again to learn about all features"
+          description="View onboarding tour again"
           onPress={async () => {
             try {
               resetTour();
@@ -305,12 +297,12 @@ export default function SettingsScreen() {
             </View>
             
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {hasAdminPin ? "Admin Access" : "First Time Access"}
+              {hasAdminPin ? "Admin Login PIN" : "First Time Access"}
             </Text>
             <Text style={[styles.modalDesc, { color: theme.subtext }]}>
               {hasAdminPin 
-                ? "Enter your admin PIN to continue"
-                : "No PIN set yet. You'll be prompted to create one inside."
+                ? "Enter your PIN to access admin dashboard"
+                : "No PIN set. You'll create one inside."
               }
             </Text>
 
@@ -321,7 +313,7 @@ export default function SettingsScreen() {
                     styles.pinInput,
                     { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                   ]}
-                  placeholder="Enter PIN"
+                  placeholder="Enter Admin Login PIN"
                   placeholderTextColor={theme.subtext}
                   secureTextEntry={!showPin}
                   keyboardType="numeric"
@@ -361,7 +353,7 @@ export default function SettingsScreen() {
                 onPress={handleAdminAuth}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  {hasAdminPin ? "VERIFY" : "CONTINUE"}
+                  {hasAdminPin ? "VERIFY PIN" : "CONTINUE"}
                 </Text>
               </Pressable>
             </View>
@@ -374,15 +366,15 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
-  header: { marginTop: 70, marginBottom: 30 },
+  header: { marginTop: 70, marginBottom: margin.section },
   headerSub: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
   headerTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
-  section: { marginBottom: 35 },
+  section: { marginBottom: margin.section },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 1.5,
-    marginBottom: 15,
+    marginBottom: margin.formField,
   },
   settingRow: {
     flexDirection: "row",
@@ -393,8 +385,8 @@ const styles = StyleSheet.create({
   },
   settingMain: { flexDirection: "row", alignItems: "center", flex: 1 },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: touchTarget.minWidth,
+    height: touchTarget.minHeight,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
@@ -418,12 +410,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: padding.container,
   },
   modalContent: {
     width: "100%",
     maxWidth: 400,
-    padding: 30,
+    padding: padding.modal,
     borderRadius: 30,
     alignItems: "center",
   },
@@ -452,7 +444,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginBottom: 25,
-    lineHeight: 20,
+    lineHeight: lineHeight.description * 14,
   },
   inputContainer: {
     width: "100%",

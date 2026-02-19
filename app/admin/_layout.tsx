@@ -302,7 +302,7 @@ export default function AdminLayout() {
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
                 onPress={handlePinSubmit}
               >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>Verify</Text>
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Verify PIN</Text>
               </Pressable>
             </View>
           </View>

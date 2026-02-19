@@ -793,7 +793,7 @@ export default function AdminSales() {
                   <Text
                     style={[styles.modalButtonText, { color: "#FFF" }]}
                   >
-                    Confirm
+                    Complete Sale
                   </Text>
                 </Pressable>
               </View>

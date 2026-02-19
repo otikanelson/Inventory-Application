@@ -2,8 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Toast from 'react-native-toast-message';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
+import { API_URL } from '../config/api';
 
 type UserRole = 'admin' | 'staff' | 'viewer' | null;
 
@@ -102,14 +101,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Login function - now uses backend API with comprehensive error handling
   const login = async (pin: string, userRole: 'admin' | 'staff'): Promise<boolean> => {
     try {
-      console.log('=== LOGIN ATTEMPT ===');
-      console.log('API_URL:', API_URL);
-      console.log('Full endpoint:', `${API_URL}/auth/login`);
-      console.log('PIN:', pin);
-      console.log('Role:', userRole);
+      console.log('🔐 === LOGIN ATTEMPT START ===');
+      console.log('🌐 API_URL:', API_URL);
+      console.log('📍 Full endpoint:', `${API_URL}/auth/login`);
+      console.log('🔢 PIN:', pin);
+      console.log('👤 Role:', userRole);
+      console.log('⏰ Timestamp:', new Date().toISOString());
       
       // Try backend API first
       try {
+        console.log('📤 Sending login request to backend...');
         const response = await axios.post(`${API_URL}/auth/login`, {
           pin,
           role: userRole
@@ -117,11 +118,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           timeout: 5000 // 5 second timeout
         });
 
-        console.log('Login response status:', response.status);
-        console.log('Login response success:', response.data.success);
+        console.log('✅ Login response received!');
+        console.log('📊 Response status:', response.status);
+        console.log('✔️ Response success:', response.data.success);
+        console.log('📦 Response data:', JSON.stringify(response.data, null, 2));
 
         if (response.data.success) {
           const { user: userData, sessionToken } = response.data.data;
+          
+          console.log('💾 Storing auth data in AsyncStorage...');
+          console.log('👤 User data:', JSON.stringify(userData, null, 2));
 
           // Store auth data including store information
           await AsyncStorage.multiSet([
@@ -133,6 +139,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ['auth_store_id', userData.storeId || ''],
             ['auth_store_name', userData.storeName || ''],
           ]);
+
+          console.log('✅ Auth data stored successfully');
 
           setUser({
             ...userData,
@@ -147,13 +155,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             text2: `Logged in as ${userData.name}`,
           });
 
+          console.log('🎉 LOGIN SUCCESS - User authenticated');
           return true;
         } else {
           // Backend returned unsuccessful response
+          console.error('❌ Backend returned unsuccessful response');
           throw new Error(response.data.error || 'Login failed');
         }
       } catch (apiError: any) {
         // Comprehensive error handling for different failure types
+        console.error('💥 API ERROR CAUGHT');
+        console.error('🔍 Error type:', apiError.constructor.name);
+        console.error('🔍 Error code:', apiError.code);
+        console.error('🔍 Error message:', apiError.message);
+        
         let errorMessage = 'Could not connect to server';
         let shouldFallbackToLocal = false;
 
@@ -161,44 +176,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Server responded with error status
           const status = apiError.response.status;
           const serverError = apiError.response.data?.error;
+          
+          console.error(`📡 Server responded with status: ${status}`);
+          console.error(`📡 Server error message:`, serverError);
 
           if (status === 401) {
             // Invalid credentials - don't fallback to local
             errorMessage = serverError || 'Invalid PIN';
-            // Don't log repeatedly for invalid credentials
+            console.log('🔒 Invalid credentials - no fallback');
           } else if (status === 404) {
             // User not found - try local storage
             errorMessage = 'User not found';
             shouldFallbackToLocal = true;
-            console.log('User not found on server, trying local storage');
+            console.log('🔍 User not found on server, trying local storage');
           } else if (status >= 500) {
             // Server error - try local storage
             errorMessage = 'Server error, using offline mode';
             shouldFallbackToLocal = true;
-            console.log('Server error, falling back to local storage');
+            console.log('💥 Server error, falling back to local storage');
           } else {
             errorMessage = serverError || 'Login failed';
             shouldFallbackToLocal = true;
+            console.log(`⚠️ Status ${status}, falling back to local storage`);
           }
         } else if (apiError.code === 'ECONNABORTED') {
           // Timeout - try local storage
           errorMessage = 'Connection timeout, using offline mode';
           shouldFallbackToLocal = true;
-          console.log('Request timeout, falling back to local storage');
+          console.log('⏱️ Request timeout, falling back to local storage');
         } else if (apiError.code === 'ERR_NETWORK' || !apiError.response) {
           // Network error - try local storage
           errorMessage = 'Network error, using offline mode';
           shouldFallbackToLocal = true;
-          console.log('Network error, falling back to local storage');
+          console.log('🌐 Network error, falling back to local storage');
         } else {
           // Unknown error - try local storage
           errorMessage = apiError.message || 'Unknown error occurred';
           shouldFallbackToLocal = true;
-          console.log('Unknown error:', apiError.message);
+          console.log('❓ Unknown error:', apiError.message);
         }
 
         // Fallback to local storage if appropriate
         if (shouldFallbackToLocal) {
+          console.log('💾 Attempting local storage authentication...');
           console.log('Attempting local storage authentication');
           
           let isValid = false;
