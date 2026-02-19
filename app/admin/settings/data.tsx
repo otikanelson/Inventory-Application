@@ -6,26 +6,24 @@ import { useRouter } from "expo-router";
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    ImageBackground,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    View
+  ActivityIndicator,
+  ImageBackground,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
-import { useAdminTour } from "../../../context/AdminTourContext";
 import { useTheme } from "../../../context/ThemeContext";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
-export default function AccountSettingsScreen() {
-  const { theme, isDark, toggleTheme } = useTheme();
+export default function DataSettingsScreen() {
+  const { theme, isDark } = useTheme();
   const router = useRouter();
-  const { resetTour, startTour } = useAdminTour();
 
   // Data Management State
   const [enableBackup, setEnableBackup] = useState(false);
@@ -83,8 +81,6 @@ export default function AccountSettingsScreen() {
 
   const performBackup = async () => {
     try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL;
-      
       // Fetch all data
       const [productsRes, salesRes, predictionsRes] = await Promise.all([
         axios.get(`${API_URL}/products`),
@@ -137,9 +133,7 @@ export default function AccountSettingsScreen() {
           });
         } else {
           // Mobile: Save backup to device
-          // @ts-ignore - expo-file-system types issue
           const fileUri = FileSystem.documentDirectory + filename;
-          // @ts-ignore
           await FileSystem.writeAsStringAsync(fileUri, backupJson);
           
           // Store backup metadata
@@ -250,9 +244,7 @@ export default function AccountSettingsScreen() {
           });
         } else {
           // Mobile: Save and share file
-          // @ts-ignore - expo-file-system types issue
           const fileUri = FileSystem.documentDirectory + filename;
-          // @ts-ignore
           await FileSystem.writeAsStringAsync(fileUri, csvContent);
           
           // Check if sharing is available
@@ -294,9 +286,9 @@ export default function AccountSettingsScreen() {
     ? require("../../../assets/images/Background7.png")
     : require("../../../assets/images/Background9.png");
 
-  const SettingRow = ({ icon, label, description, onPress, children }: any) => {
+  const SettingRow = ({ icon, label, description, onPress, children, isLast }: any) => {
     const row = (
-      <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
+      <View style={[styles.settingRow, !isLast && { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
         <View style={styles.settingMain}>
           <View style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}>
             <Ionicons name={icon} size={20} color={theme.primary} />
@@ -335,7 +327,7 @@ export default function AccountSettingsScreen() {
         {/* Header with Back Button */}
         <View style={styles.header}>
           <Pressable 
-            onPress={() => router.back()}
+            onPress={() => router.push('/admin/settings')}
             style={[styles.backButton, { backgroundColor: theme.surface }]}
           >
             <Ionicons name="arrow-back" size={24} color={theme.primary} />
@@ -345,64 +337,9 @@ export default function AccountSettingsScreen() {
               ADMIN_SETTINGS
             </Text>
             <Text style={[styles.headerTitle, { color: theme.text }]}>
-              ACCOUNT
+              DATA
             </Text>
           </View>
-        </View>
-
-        {/* APPEARANCE SECTION */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 15 }]}>
-            DISPLAY PREFERENCES
-          </Text>
-          
-          <SettingRow
-            icon="moon-outline"
-            label="Dark Mode"
-            description="Toggle light/dark theme"
-          >
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ true: theme.primary }}
-            />
-          </SettingRow>
-        </View>
-
-        {/* USER TOUR SECTION */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 15 }]}>
-            HELP & GUIDANCE
-          </Text>
-
-          <SettingRow
-            icon="help-circle-outline"
-            label="Reset Admin Tour"
-            description="Restart guided tour"
-            onPress={async () => {
-              try {
-                await resetTour();
-                Toast.show({
-                  type: 'success',
-                  text1: 'Tour Reset',
-                  text2: 'Go to Admin Dashboard to see the tour again'
-                });
-                // Navigate to admin dashboard and start tour
-                router.push('../admin');
-                setTimeout(() => {
-                  startTour();
-                }, 500);
-              } catch (error) {
-                Toast.show({
-                  type: 'error',
-                  text1: 'Error',
-                  text2: 'Please try again'
-                });
-              }
-            }}
-          >
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-          </SettingRow>
         </View>
 
         {/* DATA MANAGEMENT SECTION */}
@@ -411,47 +348,50 @@ export default function AccountSettingsScreen() {
             DATA EXPORT
           </Text>
 
-          <SettingRow
-            icon="cloud-upload-outline"
-            label="Auto Backup"
-            description={
-              enableBackup 
-                ? (lastBackupDate 
-                    ? `Last: ${new Date(lastBackupDate).toLocaleDateString()}` 
-                    : "Backs up every 7 days")
-                : "Enable automatic backups"
-            }
-          >
-            <Switch
-              value={enableBackup}
-              onValueChange={handleAutoBackupToggle}
-              trackColor={{ true: theme.primary }}
-            />
-          </SettingRow>
-
-          {!enableBackup && (
+          <View style={[styles.settingsContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <SettingRow
-              icon="save-outline"
-              label="Backup Now"
-              description="Create manual backup"
-              onPress={performBackup}
+              icon="cloud-upload-outline"
+              label="Auto Backup"
+              description={
+                enableBackup 
+                  ? (lastBackupDate 
+                      ? `Last: ${new Date(lastBackupDate).toLocaleDateString()}` 
+                      : "Backs up every 7 days")
+                  : "Enable automatic backups"
+              }
             >
-              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+              <Switch
+                value={enableBackup}
+                onValueChange={handleAutoBackupToggle}
+                trackColor={{ true: theme.primary }}
+              />
             </SettingRow>
-          )}
 
-          <SettingRow
-            icon="download-outline"
-            label="Export Inventory CSV"
-            description="Download inventory as CSV"
-            onPress={handleExportData}
-          >
-            {isExporting ? (
-              <ActivityIndicator size="small" color={theme.primary} />
-            ) : (
-              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            {!enableBackup && (
+              <SettingRow
+                icon="save-outline"
+                label="Backup Now"
+                description="Create manual backup"
+                onPress={performBackup}
+              >
+                <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+              </SettingRow>
             )}
-          </SettingRow>
+
+            <SettingRow
+              icon="download-outline"
+              label="Export Inventory CSV"
+              description="Download inventory as CSV"
+              onPress={handleExportData}
+              isLast
+            >
+              {isExporting ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+              )}
+            </SettingRow>
+          </View>
         </View>
 
         <View style={{ height: 100 }} />
@@ -484,12 +424,17 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1.5,
   },
+  settingsContainer: {
+    borderRadius: 20,
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
   settingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
   },
   settingMain: { flexDirection: "row", alignItems: "center", flex: 1 },
   iconBox: {

@@ -22,9 +22,11 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.son_the_nel.Inventory",
       "permissions": [
-        "INTERNET"
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
       ],
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": "./android/network_security_config.xml"
     },
     "web": {
       "output": "static",

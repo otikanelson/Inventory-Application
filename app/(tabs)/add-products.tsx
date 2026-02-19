@@ -440,6 +440,25 @@ export default function AddProducts() {
       highlightFields.push("category");
     }
 
+    // Category validation - must exist in admin-created categories
+    if (cleanCategory && adminCategories.length > 0) {
+      const categoryExists = adminCategories.some(
+        cat => cat.toLowerCase() === cleanCategory.toLowerCase()
+      );
+      
+      if (!categoryExists) {
+        newErrors.push("category");
+        highlightFields.push("category");
+        setHighlightErrors(highlightFields);
+        setTimeout(() => setHighlightErrors([]), 2000);
+        return { 
+          isValid: false, 
+          error: `Category "${cleanCategory}" does not exist. Please select from available categories or ask admin to create it.`, 
+          field: "Category" 
+        };
+      }
+    }
+
     // Image validation - Image is now optional
     // No validation needed for image field
 

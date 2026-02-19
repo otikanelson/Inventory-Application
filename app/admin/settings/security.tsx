@@ -1,18 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
@@ -23,19 +22,26 @@ export default function SecuritySettingsScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
 
-  // PIN Update State
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [showRemovePinModal, setShowRemovePinModal] = useState(false);
-  const [oldPin, setOldPin] = useState("");
-  const [newPin, setNewPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-  const [removePinConfirm, setRemovePinConfirm] = useState("");
+  // Login PIN Update State
+  const [showLoginPinModal, setShowLoginPinModal] = useState(false);
+  const [oldLoginPin, setOldLoginPin] = useState("");
+  const [newLoginPin, setNewLoginPin] = useState("");
+  const [confirmLoginPin, setConfirmLoginPin] = useState("");
+
+  // Security PIN Update State
+  const [showSecurityPinModal, setShowSecurityPinModal] = useState(false);
+  const [showRemoveSecurityPinModal, setShowRemoveSecurityPinModal] = useState(false);
+  const [oldSecurityPin, setOldSecurityPin] = useState("");
+  const [newSecurityPin, setNewSecurityPin] = useState("");
+  const [confirmSecurityPin, setConfirmSecurityPin] = useState("");
+  const [removeSecurityPinConfirm, setRemoveSecurityPinConfirm] = useState("");
 
   // Security Settings State
   const [autoLogout, setAutoLogout] = useState(true);
   const [autoLogoutTime, setAutoLogoutTime] = useState(30); // minutes
-  const [requirePinForDelete, setRequirePinForDelete] = useState(true);
-  const [hasPin, setHasPin] = useState(false);
+  const [requireSecurityPinForDelete, setRequireSecurityPinForDelete] = useState(true);
+  const [hasLoginPin, setHasLoginPin] = useState(false);
+  const [hasSecurityPin, setHasSecurityPin] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -44,13 +50,15 @@ export default function SecuritySettingsScreen() {
 
   const loadSettings = async () => {
     try {
-      const pin = await AsyncStorage.getItem('admin_pin');
-      const pinRequired = await AsyncStorage.getItem('admin_require_pin_delete');
+      const loginPin = await AsyncStorage.getItem('admin_login_pin');
+      const securityPin = await AsyncStorage.getItem('admin_security_pin');
+      const pinRequired = await AsyncStorage.getItem('admin_require_security_pin_delete');
       const logoutEnabled = await AsyncStorage.getItem('admin_auto_logout');
       const logoutTime = await AsyncStorage.getItem('admin_auto_logout_time');
       
-      setHasPin(!!pin);
-      if (pinRequired !== null) setRequirePinForDelete(pinRequired === 'true');
+      setHasLoginPin(!!loginPin);
+      setHasSecurityPin(!!securityPin);
+      if (pinRequired !== null) setRequireSecurityPinForDelete(pinRequired === 'true');
       if (logoutEnabled !== null) setAutoLogout(logoutEnabled === 'true');
       if (logoutTime !== null) setAutoLogoutTime(parseInt(logoutTime));
     } catch (error) {
@@ -58,14 +66,14 @@ export default function SecuritySettingsScreen() {
     }
   };
 
-  const handleRequirePinToggle = async (value: boolean) => {
-    setRequirePinForDelete(value);
+  const handleRequireSecurityPinToggle = async (value: boolean) => {
+    setRequireSecurityPinForDelete(value);
     try {
-      await AsyncStorage.setItem('admin_require_pin_delete', value.toString());
+      await AsyncStorage.setItem('admin_require_security_pin_delete', value.toString());
       Toast.show({
         type: 'success',
         text1: 'Setting Updated',
-        text2: `Login PIN ${value ? 'required' : 'not required'} for deletions`
+        text2: `Admin Security PIN ${value ? 'required' : 'not required'} for deletions`
       });
     } catch (error) {
       Toast.show({
@@ -112,20 +120,86 @@ export default function SecuritySettingsScreen() {
     }
   };
 
-  const handleFirstTimeSetup = async () => {
+  const handleLoginPinUpdate = async () => {
     try {
-      // Validate PIN format
-      if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      // Get stored Login PIN
+      const storedPin = await AsyncStorage.getItem('admin_login_pin');
+      
+      if (!storedPin) {
+        Toast.show({
+          type: 'error',
+          text1: 'No Login PIN Set',
+          text2: 'Please set up your Login PIN first'
+        });
+        return;
+      }
+      
+      // Validate old PIN
+      if (oldLoginPin !== storedPin) {
+        Toast.show({
+          type: 'error',
+          text1: 'Authentication Failed',
+          text2: 'Current Login PIN is incorrect'
+        });
+        return;
+      }
+
+      // Validate new PIN format
+      if (newLoginPin.length !== 4 || !/^\d{4}$/.test(newLoginPin)) {
         Toast.show({
           type: 'error',
           text1: 'Invalid PIN',
-          text2: 'PIN must be exactly 4 digits'
+          text2: 'Login PIN must be exactly 4 digits'
         });
         return;
       }
 
       // Validate confirmation
-      if (newPin !== confirmPin) {
+      if (newLoginPin !== confirmLoginPin) {
+        Toast.show({
+          type: 'error',
+          text1: 'PIN Mismatch',
+          text2: 'New PIN and confirmation do not match'
+        });
+        return;
+      }
+
+      // Update local storage
+      await AsyncStorage.setItem('admin_login_pin', newLoginPin);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Login PIN Updated',
+        text2: 'Your Login PIN has been changed successfully'
+      });
+
+      setShowLoginPinModal(false);
+      setOldLoginPin("");
+      setNewLoginPin("");
+      setConfirmLoginPin("");
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Please try again'
+      });
+    }
+  };
+
+  const handleSecurityPinFirstTimeSetup = async () => {
+    try {
+      // Validate PIN format
+      if (newSecurityPin.length !== 4 || !/^\d{4}$/.test(newSecurityPin)) {
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid PIN',
+          text2: 'Security PIN must be exactly 4 digits'
+        });
+        return;
+      }
+
+      // Validate confirmation
+      if (newSecurityPin !== confirmSecurityPin) {
         Toast.show({
           type: 'error',
           text1: 'PIN Mismatch',
@@ -134,61 +208,21 @@ export default function SecuritySettingsScreen() {
         return;
       }
 
-      // Get admin name from AsyncStorage or use default
-      const adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
+      // Store Security PIN locally
+      await AsyncStorage.setItem('admin_security_pin', newSecurityPin);
+      
+      setHasSecurityPin(true);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Security PIN Created',
+        text2: 'Admin Security PIN has been set successfully'
+      });
 
-      // Create admin user in database
-      try {
-        const response = await axios.post(`${API_URL}/auth/setup`, {
-          name: adminName,
-          pin: newPin
-        });
-
-        if (response.data.success) {
-          const adminId = response.data.data.user.id;
-          
-          // Store admin data locally
-          await AsyncStorage.multiSet([
-            ['admin_pin', newPin],
-            ['admin_first_setup', 'completed'],
-            ['auth_user_id', adminId],
-            ['auth_user_name', adminName],
-            ['auth_user_role', 'admin']
-          ]);
-          
-          setHasPin(true);
-          
-          Toast.show({
-            type: 'success',
-            text1: 'Login PIN Created',
-            text2: 'Admin Login PIN has been set successfully'
-          });
-
-          setShowPinModal(false);
-          setOldPin("");
-          setNewPin("");
-          setConfirmPin("");
-        }
-      } catch (apiError: any) {
-        console.log('API setup failed, using local storage only:', apiError.message);
-        
-        // Fallback to local storage only if API fails
-        await AsyncStorage.setItem('admin_pin', newPin);
-        await AsyncStorage.setItem('admin_first_setup', 'completed');
-        
-        setHasPin(true);
-        
-        Toast.show({
-          type: 'success',
-          text1: 'Login PIN Created',
-          text2: 'Admin Login PIN has been set successfully (local only)'
-        });
-
-        setShowPinModal(false);
-        setOldPin("");
-        setNewPin("");
-        setConfirmPin("");
-      }
+      setShowSecurityPinModal(false);
+      setOldSecurityPin("");
+      setNewSecurityPin("");
+      setConfirmSecurityPin("");
     } catch (error) {
       Toast.show({
         type: 'error',
@@ -198,21 +232,87 @@ export default function SecuritySettingsScreen() {
     }
   };
 
-  const handleRemovePin = async () => {
+  const handleSecurityPinUpdate = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem('admin_pin');
+      // Get stored Security PIN
+      const storedPin = await AsyncStorage.getItem('admin_security_pin');
       
       if (!storedPin) {
         Toast.show({
           type: 'error',
-          text1: 'No Login PIN Set',
-          text2: 'There is no Admin Login PIN to remove'
+          text1: 'No Security PIN Set',
+          text2: 'Please set up your Admin Security PIN first'
         });
-        setShowRemovePinModal(false);
+        return;
+      }
+      
+      // Validate old PIN
+      if (oldSecurityPin !== storedPin) {
+        Toast.show({
+          type: 'error',
+          text1: 'Authentication Failed',
+          text2: 'Current Security PIN is incorrect'
+        });
         return;
       }
 
-      if (removePinConfirm !== storedPin) {
+      // Validate new PIN format
+      if (newSecurityPin.length !== 4 || !/^\d{4}$/.test(newSecurityPin)) {
+        Toast.show({
+          type: 'error',
+          text1: 'Invalid PIN',
+          text2: 'Security PIN must be exactly 4 digits'
+        });
+        return;
+      }
+
+      // Validate confirmation
+      if (newSecurityPin !== confirmSecurityPin) {
+        Toast.show({
+          type: 'error',
+          text1: 'PIN Mismatch',
+          text2: 'New PIN and confirmation do not match'
+        });
+        return;
+      }
+
+      // Update local storage
+      await AsyncStorage.setItem('admin_security_pin', newSecurityPin);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Security PIN Updated',
+        text2: 'Admin Security PIN has been changed successfully'
+      });
+
+      setShowSecurityPinModal(false);
+      setOldSecurityPin("");
+      setNewSecurityPin("");
+      setConfirmSecurityPin("");
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: 'Please try again'
+      });
+    }
+  };
+
+  const handleRemoveSecurityPin = async () => {
+    try {
+      const storedPin = await AsyncStorage.getItem('admin_security_pin');
+      
+      if (!storedPin) {
+        Toast.show({
+          type: 'error',
+          text1: 'No Security PIN Set',
+          text2: 'There is no Admin Security PIN to remove'
+        });
+        setShowRemoveSecurityPinModal(false);
+        return;
+      }
+
+      if (removeSecurityPinConfirm !== storedPin) {
         Toast.show({
           type: 'error',
           text1: 'Authentication Failed',
@@ -222,115 +322,22 @@ export default function SecuritySettingsScreen() {
       }
 
       // Remove PIN from storage
-      await AsyncStorage.removeItem('admin_pin');
-      await AsyncStorage.removeItem('admin_first_setup');
+      await AsyncStorage.removeItem('admin_security_pin');
       
-      setHasPin(false);
+      setHasSecurityPin(false);
       
       Toast.show({
         type: 'success',
-        text1: 'Login PIN Removed',
-        text2: 'Admin dashboard access is now unrestricted'
+        text1: 'Security PIN Removed',
+        text2: 'Sensitive operations are now unrestricted'
       });
 
-      setShowRemovePinModal(false);
-      setRemovePinConfirm("");
+      setShowRemoveSecurityPinModal(false);
+      setRemoveSecurityPinConfirm("");
     } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Removal Failed',
-        text2: 'Please try again'
-      });
-    }
-  };
-
-  const handlePinUpdate = async () => {
-    try {
-      // Get stored PIN - NO DEFAULT VALUE
-      const storedPin = await AsyncStorage.getItem('admin_pin');
-      
-      if (!storedPin) {
-        Toast.show({
-          type: 'error',
-          text1: 'No Login PIN Set',
-          text2: 'Please set up your Admin Login PIN first'
-        });
-        return;
-      }
-      
-      // Validate old PIN
-      if (oldPin !== storedPin) {
-        Toast.show({
-          type: 'error',
-          text1: 'Authentication Failed',
-          text2: 'Current PIN is incorrect'
-        });
-        return;
-      }
-
-      // Validate new PIN format
-      if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
-        Toast.show({
-          type: 'error',
-          text1: 'Invalid PIN',
-          text2: 'PIN must be exactly 4 digits'
-        });
-        return;
-      }
-
-      // Validate confirmation
-      if (newPin !== confirmPin) {
-        Toast.show({
-          type: 'error',
-          text1: 'PIN Mismatch',
-          text2: 'New PIN and confirmation do not match'
-        });
-        return;
-      }
-
-      // Try to update in database first
-      try {
-        const response = await axios.put(`${API_URL}/auth/admin/pin`, {
-          oldPin: oldPin,
-          newPin: newPin
-        });
-
-        if (response.data.success) {
-          // Update local storage
-          await AsyncStorage.setItem('admin_pin', newPin);
-          
-          Toast.show({
-            type: 'success',
-            text1: 'Login PIN Updated',
-            text2: 'Admin Login PIN has been changed successfully'
-          });
-
-          setShowPinModal(false);
-          setOldPin("");
-          setNewPin("");
-          setConfirmPin("");
-        }
-      } catch (apiError: any) {
-        console.log('API update failed, using local storage only:', apiError.message);
-        
-        // Fallback to local storage only
-        await AsyncStorage.setItem('admin_pin', newPin);
-        
-        Toast.show({
-          type: 'success',
-          text1: 'Login PIN Updated',
-          text2: 'Admin Login PIN has been changed successfully (local only)'
-        });
-
-        setShowPinModal(false);
-        setOldPin("");
-        setNewPin("");
-        setConfirmPin("");
-      }
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Update Failed',
         text2: 'Please try again'
       });
     }
@@ -381,7 +388,7 @@ export default function SecuritySettingsScreen() {
         {/* Header with Back Button */}
         <View style={styles.header}>
           <Pressable 
-            onPress={() => router.back()}
+            onPress={() => router.push('/admin/settings')}
             style={[styles.backButton, { backgroundColor: theme.surface }]}
           >
             <Ionicons name="arrow-back" size={24} color={theme.primary} />
@@ -396,21 +403,54 @@ export default function SecuritySettingsScreen() {
           </View>
         </View>
 
-        {/* SECURITY SECTION */}
+        {/* LOGIN PIN MANAGEMENT SECTION */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-              PIN MANAGEMENT
+              LOGIN PIN MANAGEMENT
             </Text>
-            {!hasPin && (
-              <View style={[styles.statusBadge, { backgroundColor: '#FF9500' + '15', borderColor: '#FF9500' }]}>
-                <Ionicons name="alert-circle" size={14} color="#FF9500" />
-                <Text style={[styles.statusBadgeText, { color: '#FF9500' }]}>
-                  NO PIN SET
+            {hasLoginPin && (
+              <View style={[styles.statusBadge, { backgroundColor: '#34C759' + '15', borderColor: '#34C759' }]}>
+                <Ionicons name="checkmark-circle" size={14} color="#34C759" />
+                <Text style={[styles.statusBadgeText, { color: '#34C759' }]}>
+                  CONFIGURED
                 </Text>
               </View>
             )}
-            {hasPin && (
+          </View>
+
+          <SettingRow
+            icon="log-in-outline"
+            label="Update Login PIN"
+            description="Used to log into your admin account"
+            onPress={() => setShowLoginPinModal(true)}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+
+          <View style={[styles.infoBanner, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '30' }]}>
+            <Ionicons name="information-circle-outline" size={20} color={theme.primary} />
+            <Text style={[styles.infoText, { color: theme.text }]}>
+              Your Login PIN is used to authenticate and access your admin account. It's different from the Security PIN used for sensitive operations.
+            </Text>
+          </View>
+        </View>
+
+        {/* ADMIN PIN MANAGEMENT SECTION */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+              ADMIN PIN MANAGEMENT
+            </Text>
+            {!hasSecurityPin && (
+              <View style={[styles.statusBadge, { backgroundColor: '#FF9500' + '15', borderColor: '#FF9500' }]}>
+                <Ionicons name="alert-circle" size={14} color="#FF9500" />
+                <Text style={[styles.statusBadgeText, { color: '#FF9500' }]}>
+                  NOT SET
+                </Text>
+              </View>
+            )}
+            {hasSecurityPin && (
               <View style={[styles.statusBadge, { backgroundColor: '#34C759' + '15', borderColor: '#34C759' }]}>
                 <Ionicons name="shield-checkmark" size={14} color="#34C759" />
                 <Text style={[styles.statusBadgeText, { color: '#34C759' }]}>
@@ -421,51 +461,36 @@ export default function SecuritySettingsScreen() {
           </View>
 
           <SettingRow
-            icon="log-in-outline"
-            label={hasPin ? "Update Admin Login PIN" : "Set Admin Login PIN"}
-            description="Access admin dashboard"
-            onPress={() => setShowPinModal(true)}
-          >
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-          </SettingRow>
-
-          <SettingRow
             icon="shield-outline"
-            label="Admin Security PIN"
-            description="Required for registering new products"
-            onPress={() => {
-              Toast.show({
-                type: 'info',
-                text1: 'Coming Soon',
-                text2: 'Security PIN management will be available in the next update'
-              });
-            }}
+            label={hasSecurityPin ? "Update Admin Security PIN" : "Set Admin Security PIN"}
+            description="Required for registering products and deleting items"
+            onPress={() => setShowSecurityPinModal(true)}
           >
             <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </SettingRow>
 
-          {hasPin && (
+          {hasSecurityPin && (
             <SettingRow
               icon="lock-open-outline"
-              label="Remove Login PIN"
-              description="Disable PIN protection"
-              onPress={() => setShowRemovePinModal(true)}
+              label="Remove Security PIN"
+              description="Disable PIN protection for sensitive operations"
+              onPress={() => setShowRemoveSecurityPinModal(true)}
             >
               <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
             </SettingRow>
           )}
 
-          {!hasPin && (
+          {!hasSecurityPin && (
             <View style={[styles.warningBanner, { backgroundColor: '#FF9500' + '15', borderColor: '#FF9500' }]}>
               <Ionicons name="warning-outline" size={20} color="#FF9500" />
               <Text style={[styles.warningText, { color: '#FF9500' }]}>
-                No Admin Login PIN set. Anyone can access admin dashboard.
+                No Admin Security PIN set. Anyone can register products and perform sensitive operations.
               </Text>
             </View>
           )}
         </View>
 
-        {/* AUTO-LOGOUT SECTION */}
+        {/* SESSION MANAGEMENT SECTION */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.primary, marginBottom: 15 }]}>
             SESSION MANAGEMENT
@@ -473,14 +498,14 @@ export default function SecuritySettingsScreen() {
 
           <SettingRow
             icon="shield-checkmark-outline"
-            label="Require Login PIN for Delete"
-            description="Ask for PIN before deleting products"
+            label="Require Admin Security PIN for Delete"
+            description="Ask for Security PIN before deleting products"
           >
             <Switch
-              value={requirePinForDelete}
-              onValueChange={handleRequirePinToggle}
+              value={requireSecurityPinForDelete}
+              onValueChange={handleRequireSecurityPinToggle}
               trackColor={{ true: theme.primary }}
-              disabled={!hasPin}
+              disabled={!hasSecurityPin}
             />
           </SettingRow>
 
@@ -541,8 +566,79 @@ export default function SecuritySettingsScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* PIN UPDATE MODAL */}
-      <Modal visible={showPinModal} transparent animationType="slide">
+      {/* LOGIN PIN UPDATE MODAL */}
+      <Modal visible={showLoginPinModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="log-in" size={32} color={theme.primary} />
+            </View>
+
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Update Login PIN
+            </Text>
+            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+              Enter your current Login PIN and choose a new 4-digit code.
+            </Text>
+
+            <TextInput
+              style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+              placeholder="Current Login PIN"
+              placeholderTextColor={theme.subtext}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              value={oldLoginPin}
+              onChangeText={setOldLoginPin}
+            />
+
+            <TextInput
+              style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+              placeholder="New Login PIN"
+              placeholderTextColor={theme.subtext}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              value={newLoginPin}
+              onChangeText={setNewLoginPin}
+            />
+
+            <TextInput
+              style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+              placeholder="Confirm New PIN"
+              placeholderTextColor={theme.subtext}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={4}
+              value={confirmLoginPin}
+              onChangeText={setConfirmLoginPin}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
+                onPress={() => {
+                  setShowLoginPinModal(false);
+                  setOldLoginPin("");
+                  setNewLoginPin("");
+                  setConfirmLoginPin("");
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                onPress={handleLoginPinUpdate}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>UPDATE PIN</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SECURITY PIN UPDATE MODAL */}
+      <Modal visible={showSecurityPinModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
@@ -550,68 +646,68 @@ export default function SecuritySettingsScreen() {
             </View>
 
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {hasPin ? "Update Admin Login PIN" : "Set Admin Login PIN"}
+              {hasSecurityPin ? "Update Admin Security PIN" : "Set Admin Security PIN"}
             </Text>
             <Text style={[styles.modalDesc, { color: theme.subtext }]}>
-              {hasPin 
-                ? "Enter current PIN and choose a new 4-digit code."
-                : "Create a 4-digit PIN to access the admin dashboard."
+              {hasSecurityPin 
+                ? "Enter current Security PIN and choose a new 4-digit code."
+                : "Create a 4-digit Security PIN for sensitive operations like registering products."
               }
             </Text>
 
-            {hasPin && (
+            {hasSecurityPin && (
               <TextInput
                 style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
-                placeholder="Current PIN"
+                placeholder="Current Security PIN"
                 placeholderTextColor={theme.subtext}
                 secureTextEntry
                 keyboardType="numeric"
                 maxLength={4}
-                value={oldPin}
-                onChangeText={setOldPin}
+                value={oldSecurityPin}
+                onChangeText={setOldSecurityPin}
               />
             )}
 
             <TextInput
               style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
-              placeholder={hasPin ? "New PIN" : "Enter PIN"}
+              placeholder={hasSecurityPin ? "New Security PIN" : "Enter Security PIN"}
               placeholderTextColor={theme.subtext}
               secureTextEntry
               keyboardType="numeric"
               maxLength={4}
-              value={newPin}
-              onChangeText={setNewPin}
+              value={newSecurityPin}
+              onChangeText={setNewSecurityPin}
             />
 
             <TextInput
               style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
-              placeholder="Confirm PIN"
+              placeholder="Confirm Security PIN"
               placeholderTextColor={theme.subtext}
               secureTextEntry
               keyboardType="numeric"
               maxLength={4}
-              value={confirmPin}
-              onChangeText={setConfirmPin}
+              value={confirmSecurityPin}
+              onChangeText={setConfirmSecurityPin}
             />
 
             <View style={styles.modalActions}>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
                 onPress={() => {
-                  setShowPinModal(false);
-                  setOldPin("");
-                  setNewPin("");
-                  setConfirmPin("");
+                  setShowSecurityPinModal(false);
+                  setOldSecurityPin("");
+                  setNewSecurityPin("");
+                  setConfirmSecurityPin("");
                 }}
               >
                 <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
-                onPress={hasPin ? handlePinUpdate : handleFirstTimeSetup}
+                onPress={hasSecurityPin ? handleSecurityPinUpdate : handleSecurityPinFirstTimeSetup}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  {hasPin ? "UPDATE PIN" : "CREATE PIN"}
+                  {hasSecurityPin ? "UPDATE PIN" : "CREATE PIN"}
                 </Text>
               </Pressable>
             </View>
@@ -619,8 +715,8 @@ export default function SecuritySettingsScreen() {
         </View>
       </Modal>
 
-      {/* REMOVE PIN MODAL */}
-      <Modal visible={showRemovePinModal} transparent animationType="slide">
+      {/* REMOVE SECURITY PIN MODAL */}
+      <Modal visible={showRemoveSecurityPinModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalIconBox, { backgroundColor: '#FF4444' + "15" }]}>
@@ -628,36 +724,36 @@ export default function SecuritySettingsScreen() {
             </View>
 
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Remove Admin Login PIN
+              Remove Admin Security PIN
             </Text>
             <Text style={[styles.modalDesc, { color: theme.subtext }]}>
-              Warning: Removing the PIN allows unrestricted admin access.
+              Warning: Removing the Security PIN allows unrestricted access to sensitive operations.
             </Text>
 
             <TextInput
               style={[styles.pinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
-              placeholder="Enter Current PIN to Confirm"
+              placeholder="Enter Current Security PIN to Confirm"
               placeholderTextColor={theme.subtext}
               secureTextEntry
               keyboardType="numeric"
               maxLength={4}
-              value={removePinConfirm}
-              onChangeText={setRemovePinConfirm}
+              value={removeSecurityPinConfirm}
+              onChangeText={setRemoveSecurityPinConfirm}
             />
 
             <View style={styles.modalActions}>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]}
                 onPress={() => {
-                  setShowRemovePinModal(false);
-                  setRemovePinConfirm("");
+                  setShowRemoveSecurityPinModal(false);
+                  setRemoveSecurityPinConfirm("");
                 }}
               >
                 <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: '#FF4444' }]}
-                onPress={handleRemovePin}
+                onPress={handleRemoveSecurityPin}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>Remove PIN</Text>
               </Pressable>
@@ -771,6 +867,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: "600",
+    lineHeight: 18,
+  },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
     lineHeight: 18,
   },
   modalOverlay: {

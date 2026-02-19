@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Toast from 'react-native-toast-message';
 import { API_URL } from '../config/api';
+import axios from '../utils/axiosConfig';
+import { migrateAdminPins } from '../utils/pinMigration';
 
 type UserRole = 'admin' | 'staff' | 'viewer' | null;
 
@@ -25,6 +26,7 @@ interface AuthContextType {
   hasPermission: (action: string) => boolean;
   checkAuth: () => Promise<void>;
   updateSession: () => Promise<void>;
+  verifySecurityPIN: (pin: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,6 +44,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check authentication status on app load
   const checkAuth = async () => {
     try {
+      // Run PIN migration before checking auth
+      await migrateAdminPins();
+
       const [userRole, userId, userName, sessionToken, lastLogin, storeId, storeName] = await AsyncStorage.multiGet([
         'auth_user_role',
         'auth_user_id',
@@ -168,6 +173,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('🔍 Error type:', apiError.constructor.name);
         console.error('🔍 Error code:', apiError.code);
         console.error('🔍 Error message:', apiError.message);
+        console.error('🔍 Full error object:', JSON.stringify(apiError, Object.getOwnPropertyNames(apiError), 2));
+        
+        // Log request config if available
+        if (apiError.config) {
+          console.error('🔍 Request config:', {
+            url: apiError.config.url,
+            method: apiError.config.method,
+            headers: apiError.config.headers,
+            timeout: apiError.config.timeout
+          });
+        }
         
         let errorMessage = 'Could not connect to server';
         let shouldFallbackToLocal = false;
@@ -227,9 +243,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           try {
             if (userRole === 'admin') {
-              // Validate admin PIN
-              const storedPin = await AsyncStorage.getItem('admin_pin');
-              if (pin === storedPin) {
+              // Validate admin Login PIN
+              const storedLoginPin = await AsyncStorage.getItem('admin_login_pin');
+              if (pin === storedLoginPin) {
                 isValid = true;
                 userId = 'admin_001';
                 const storedName = await AsyncStorage.getItem('auth_user_name');
@@ -237,7 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             } else if (userRole === 'staff') {
               // Validate staff PIN
-              const staffPin = await AsyncStorage.getItem('auth_staff_pin');
+              const staffPin = await AsyncStorage.getItem('staff_login_pin');
               const staffId = await AsyncStorage.getItem('auth_staff_id');
               const staffName = await AsyncStorage.getItem('auth_staff_name');
               
@@ -350,6 +366,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return userPermissions.includes('*') || userPermissions.includes(action);
   };
 
+  // Verify Security PIN for sensitive operations (product registration, deletion)
+  const verifySecurityPIN = async (pin: string): Promise<boolean> => {
+    try {
+      if (!user) {
+        console.error('No user logged in');
+        return false;
+      }
+
+      // For admin users, verify against local admin_security_pin
+      if (user.role === 'admin') {
+        const storedSecurityPin = await AsyncStorage.getItem('admin_security_pin');
+        if (pin === storedSecurityPin) {
+          return true;
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Access Denied',
+            text2: 'Incorrect Admin Security PIN',
+          });
+          return false;
+        }
+      }
+
+      // For staff users, verify against admin's Security PIN via backend
+      if (user.role === 'staff' && user.storeId) {
+        try {
+          const response = await axios.post(`${API_URL}/auth/verify-admin-security-pin`, {
+            pin,
+            storeId: user.storeId
+          });
+
+          if (response.data.success) {
+            return true;
+          } else {
+            Toast.show({
+              type: 'error',
+              text1: 'Access Denied',
+              text2: 'Incorrect Admin Security PIN',
+            });
+            return false;
+          }
+        } catch (error: any) {
+          // Fallback to local storage if backend is unavailable
+          console.log('Backend unavailable, trying local storage');
+          const storedSecurityPin = await AsyncStorage.getItem('admin_security_pin');
+          if (pin === storedSecurityPin) {
+            return true;
+          } else {
+            Toast.show({
+              type: 'error',
+              text1: 'Access Denied',
+              text2: 'Incorrect Admin Security PIN (Offline)',
+            });
+            return false;
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error verifying Security PIN:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Verification Failed',
+        text2: 'Could not verify Security PIN',
+      });
+      return false;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -362,6 +448,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hasPermission,
         checkAuth,
         updateSession,
+        verifySecurityPIN,
       }}
     >
       {children}

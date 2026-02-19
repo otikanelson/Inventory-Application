@@ -4,14 +4,14 @@ import axios from "axios";
 import { Tabs, useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import { Path, Svg } from "react-native-svg";
 import Toast from "react-native-toast-message";
@@ -382,6 +382,20 @@ export default function AdminLayout() {
         />
 
         <Tabs.Screen
+          name="add-products"
+          options={{
+            title: "ADD",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? "add-circle" : "add-circle-outline"}
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
           name="stats"
           options={{
             title: "STATS",
@@ -395,22 +409,49 @@ export default function AdminLayout() {
           }}
         />
 
+      {/* Settings hidden from Tab Bar but accessible via button */}
         <Tabs.Screen
           name="settings"
           options={{
-            title: "SETTINGS",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "settings" : "settings-outline"}
-                size={22}
-                color={color}
-              />
-            ),
+            href: null,
           }}
         />
+
       {/* Detail page hidden from Tab Bar */}
         <Tabs.Screen
           name="product/[id]"
+          options={{
+            href: null,
+          }}
+        />
+        
+        {/* Settings sub-pages hidden from Tab Bar */}
+        <Tabs.Screen
+          name="settings/profile"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/security"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/alerts"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/store"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/data"
           options={{
             href: null,
           }}

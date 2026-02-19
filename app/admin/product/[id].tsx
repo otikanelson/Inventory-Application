@@ -5,17 +5,17 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
@@ -255,11 +255,10 @@ export default function AdminProductDetails() {
       
       await axios.patch(endpoint, updatePayload);
 
-      Toast.show({
-        type: "success",
-        text1: isGlobalProduct ? "Global Product Updated" : "Product Updated",
-        text2: "Changes saved successfully",
-      });
+      showSuccessToast(
+        isGlobalProduct ? "Global Product Updated" : "Product Updated",
+        "Changes saved successfully"
+      );
 
       setIsEditing(false);
       if (!isGlobalProduct) {
@@ -268,12 +267,7 @@ export default function AdminProductDetails() {
       await loadProduct();
     } catch (error: any) {
       console.error("Save error:", error);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || "Could not save changes";
-      Toast.show({
-        type: "error",
-        text1: "Update Failed",
-        text2: errorMessage,
-      });
+      showErrorToast(error, "Update Failed");
     } finally {
       setIsSaving(false);
     }
@@ -292,45 +286,45 @@ export default function AdminProductDetails() {
     }
 
     try {
-      await axios.put(
-        `${process.env.EXPO_PUBLIC_API_URL}/products/${id}/generic-price`,
-        { genericPrice: priceValue }
-      );
+      // Use different endpoint based on whether it's a global product
+      const endpoint = isGlobalProduct
+        ? `${process.env.EXPO_PUBLIC_API_URL}/products/registry/${id}`
+        : `${process.env.EXPO_PUBLIC_API_URL}/products/${id}/generic-price`;
+      
+      // Use PATCH for global products, PUT for inventory products
+      if (isGlobalProduct) {
+        await axios.patch(endpoint, { genericPrice: priceValue });
+      } else {
+        await axios.put(endpoint, { genericPrice: priceValue });
+      }
 
       setEditedGenericPrice(priceValue.toString());
       setShowPriceModal(false);
       setTempPrice("");
 
-      Toast.show({
-        type: "success",
-        text1: "Price Updated",
-        text2: `Generic price set to ₦${priceValue.toFixed(2)}`,
-      });
+      showSuccessToast("Price Updated", `Generic price set to ₦${priceValue.toFixed(2)}`);
 
       await loadProduct();
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Update Failed",
-        text2: "Could not update price",
-      });
+    } catch (error: any) {
+      console.error('Price update error:', error);
+      showErrorToast(error, "Update Failed");
     }
   };
 
   const handleDelete = async () => {
     try {
-      const requirePin = await AsyncStorage.getItem('admin_require_pin_delete');
-      const hasPin = await AsyncStorage.getItem('admin_pin');
+      const requirePin = await AsyncStorage.getItem('admin_require_security_pin_delete');
+      const hasPin = await AsyncStorage.getItem('admin_security_pin');
       
       console.log('Delete check - requirePin:', requirePin, 'hasPin:', hasPin ? 'SET' : 'NOT SET');
       
       // Only require PIN if setting is enabled AND a PIN is actually set
       if (requirePin === 'true' && hasPin && hasPin.length > 0) {
-        console.log('PIN required - showing PIN modal');
+        console.log('Security PIN required - showing PIN modal');
         setShowDeleteWarning(false);
         setShowPinModal(true);
       } else {
-        console.log('PIN not required - proceeding with delete');
+        console.log('Security PIN not required - proceeding with delete');
         // If no PIN is set or setting is disabled, proceed with delete
         setShowDeleteWarning(false);
         await performDelete();
@@ -358,13 +352,12 @@ export default function AdminProductDetails() {
       
       console.log('Delete response:', response.data);
 
-      Toast.show({
-        type: "success",
-        text1: isGlobalProduct ? "Global Product Deleted" : "Product Deleted",
-        text2: isGlobalProduct 
+      showSuccessToast(
+        isGlobalProduct ? "Global Product Deleted" : "Product Deleted",
+        isGlobalProduct 
           ? "Product removed from global registry" 
-          : "Product removed from inventory",
-      });
+          : "Product removed from inventory"
+      );
 
       if (!isGlobalProduct) {
         await refresh();
@@ -372,18 +365,13 @@ export default function AdminProductDetails() {
       router.back();
     } catch (error: any) {
       console.error('Delete error:', error);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || "Could not delete product";
-      Toast.show({
-        type: "error",
-        text1: "Delete Failed",
-        text2: errorMessage,
-      });
+      showErrorToast(error, "Delete Failed");
     }
   };
 
   const handlePinSubmit = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem('admin_pin');
+      const storedPin = await AsyncStorage.getItem('admin_security_pin');
       
       if (deletePin === storedPin) {
         setShowPinModal(false);
@@ -393,7 +381,7 @@ export default function AdminProductDetails() {
         Toast.show({
           type: "error",
           text1: "Access Denied",
-          text2: "Incorrect PIN",
+          text2: "Incorrect Admin Security PIN",
         });
         setDeletePin("");
       }
@@ -1106,7 +1094,7 @@ export default function AdminProductDetails() {
               Confirm Deletion
             </Text>
             <Text style={[styles.modalDesc, { color: theme.subtext }]}>
-              Enter admin PIN to authorize deletion
+              Enter Admin Security PIN to authorize deletion
             </Text>
 
             <TextInput
@@ -1116,7 +1104,7 @@ export default function AdminProductDetails() {
               maxLength={4}
               value={deletePin}
               onChangeText={setDeletePin}
-              placeholder="Enter PIN"
+              placeholder="Enter Admin Security PIN"
               placeholderTextColor={theme.subtext}
             />
 

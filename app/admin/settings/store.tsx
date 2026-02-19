@@ -3,13 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ImageBackground,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
@@ -24,6 +25,7 @@ export default function StoreSettingsScreen() {
   const [storePhone, setStorePhone] = useState("");
   const [storeEmail, setStoreEmail] = useState("");
   const [businessHours, setBusinessHours] = useState("");
+  const [loading, setLoading] = useState(true);
 
   // Load settings on mount
   useEffect(() => {
@@ -32,31 +34,47 @@ export default function StoreSettingsScreen() {
 
   const loadStoreSettings = async () => {
     try {
-      const name = await AsyncStorage.getItem('store_name');
+      setLoading(true);
+      
+      // Load all data from local storage
+      const localName = await AsyncStorage.getItem('auth_store_name');
       const address = await AsyncStorage.getItem('store_address');
       const phone = await AsyncStorage.getItem('store_phone');
       const email = await AsyncStorage.getItem('store_email');
       const hours = await AsyncStorage.getItem('store_business_hours');
       
-      if (name) setStoreName(name);
+      if (localName) setStoreName(localName);
       if (address) setStoreAddress(address);
       if (phone) setStorePhone(phone);
       if (email) setStoreEmail(email);
       if (hours) setBusinessHours(hours);
+      
     } catch (error) {
       console.error('Error loading store settings:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Load Failed',
+        text2: 'Could not load store information'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSaveStoreInfo = async () => {
     try {
+      // Save to local storage
       await AsyncStorage.multiSet([
-        ['store_name', storeName],
         ['store_address', storeAddress],
         ['store_phone', storePhone],
         ['store_email', storeEmail],
         ['store_business_hours', businessHours]
       ]);
+      
+      // Update store name in auth storage
+      if (storeName) {
+        await AsyncStorage.setItem('auth_store_name', storeName);
+      }
       
       Toast.show({
         type: 'success',
@@ -76,6 +94,15 @@ export default function StoreSettingsScreen() {
     ? require("../../../assets/images/Background7.png")
     : require("../../../assets/images/Background9.png");
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ color: theme.text, marginTop: 16, fontSize: 14 }}>Loading store information...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
@@ -84,7 +111,7 @@ export default function StoreSettingsScreen() {
         {/* Header with Back Button */}
         <View style={styles.header}>
           <Pressable 
-            onPress={() => router.back()}
+            onPress={() => router.push('/admin/settings')}
             style={[styles.backButton, { backgroundColor: theme.surface }]}
           >
             <Ionicons name="arrow-back" size={24} color={theme.primary} />
@@ -130,7 +157,11 @@ export default function StoreSettingsScreen() {
                 placeholderTextColor={theme.subtext}
                 value={storeName}
                 onChangeText={setStoreName}
+                editable={false}
               />
+              <Text style={[styles.helperText, { color: theme.subtext }]}>
+                Store name is set during account creation
+              </Text>
             </View>
 
             {/* Store Address */}
@@ -288,6 +319,11 @@ const styles = StyleSheet.create({
   labelText: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   textInput: {
     width: "100%",

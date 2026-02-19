@@ -1,22 +1,24 @@
+import { HelpTooltipIntroModal } from "@/components/HelpTooltipIntroModal";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    Image,
-    ImageBackground,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Image,
+  ImageBackground,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { HelpTooltipIntroModal } from "@/components/HelpTooltipIntroModal";
 import { AIOnboardingModal } from "../components/AIOnboardingModal";
+import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
+  const { role } = useAuth();
   const [showAIOnboarding, setShowAIOnboarding] = useState(false);
   const [showHelpTooltipIntro, setShowHelpTooltipIntro] = useState(false);
 
@@ -81,6 +83,31 @@ export default function WelcomeScreen() {
     router.push("/ai-info" as any);
   };
 
+  // Role-based navigation helpers
+  const handleViewInventory = () => {
+    if (role === 'admin') {
+      router.push("/admin/inventory" as any);
+    } else {
+      router.push("/(tabs)" as any);
+    }
+  };
+
+  const handleAddProduct = () => {
+    if (role === 'admin') {
+      router.push("/admin/add-products" as any);
+    } else {
+      router.push("/(tabs)/add-products" as any);
+    }
+  };
+
+  const handleScanBarcode = () => {
+    if (role === 'admin') {
+      router.push("/admin/scan" as any);
+    } else {
+      router.push("/(tabs)/scan" as any);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <ImageBackground
@@ -110,7 +137,7 @@ export default function WelcomeScreen() {
       <View style={styles.actions}>
         <Pressable
           style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-          onPress={() => router.push("/(tabs)")}
+          onPress={handleViewInventory}
         >
           <Text style={styles.primaryText}>View Inventory</Text>
         </Pressable>
@@ -123,7 +150,7 @@ export default function WelcomeScreen() {
               borderColor: theme.border,
             },
           ]}
-          onPress={() => router.push("/(tabs)/add-products")}
+          onPress={handleAddProduct}
         >
           <Text style={[styles.secondaryText, { color: theme.text }]}>
             Add Product
@@ -132,7 +159,7 @@ export default function WelcomeScreen() {
 
         <Pressable
           style={styles.ghostButton}
-          onPress={() => router.push("/scan")}
+          onPress={handleScanBarcode}
         >
           <View style={styles.ghostBtncontent}>
             <Ionicons name="scan-outline" size={24} color={theme.primary} />

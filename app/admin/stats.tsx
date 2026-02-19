@@ -5,16 +5,16 @@ import { useRouter } from "expo-router";
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    ImageBackground,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Dimensions,
+  ImageBackground,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -36,7 +36,8 @@ export default function AdminStats() {
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [salesTrends, setSalesTrends] = useState<any>(null);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
@@ -84,7 +85,7 @@ export default function AdminStats() {
   // Export to CSV
   const handleExportCSV = async () => {
     try {
-      setExporting(true);
+      setExportingCSV(true);
       
       // Fetch all AI insights data
       const [dashboardRes, categoryRes, trendsRes] = await Promise.all([
@@ -211,14 +212,14 @@ export default function AdminStats() {
         text2: 'Could not export CSV'
       });
     } finally {
-      setExporting(false);
+      setExportingCSV(false);
     }
   };
 
   // Export to PDF (simplified - creates a detailed text report)
   const handleExportPDF = async () => {
     try {
-      setExporting(true);
+      setExportingPDF(true);
       
       // Fetch all AI insights data
       const [dashboardRes, categoryRes, trendsRes] = await Promise.all([
@@ -360,7 +361,7 @@ export default function AdminStats() {
         text2: 'Could not export report'
       });
     } finally {
-      setExporting(false);
+      setExportingPDF(false);
     }
   };
 
@@ -845,17 +846,26 @@ export default function AdminStats() {
             />
           </View>
           
-          {/* Export Buttons */}
+          {/* Export Buttons and Settings */}
           <View style={styles.exportButtons}>
             <Pressable
-              onPress={handleExportCSV}
-              disabled={exporting}
+              onPress={() => router.push('/admin/settings')}
               style={[
                 styles.exportBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
             >
-              {exporting ? (
+              <Ionicons name="settings-outline" size={16} color={theme.primary} />
+            </Pressable>
+            <Pressable
+              onPress={handleExportCSV}
+              disabled={exportingCSV || exportingPDF}
+              style={[
+                styles.exportBtn,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              {exportingCSV ? (
                 <ActivityIndicator size="small" color={theme.primary} />
               ) : (
                 <Ionicons name="document-text-outline" size={16} color={theme.primary} />
@@ -863,13 +873,13 @@ export default function AdminStats() {
             </Pressable>
             <Pressable
               onPress={handleExportPDF}
-              disabled={exporting}
+              disabled={exportingCSV || exportingPDF}
               style={[
                 styles.exportBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
             >
-              {exporting ? (
+              {exportingPDF ? (
                 <ActivityIndicator size="small" color={theme.primary} />
               ) : (
                 <Ionicons name="document-outline" size={16} color={theme.primary} />

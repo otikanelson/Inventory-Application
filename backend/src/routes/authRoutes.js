@@ -20,6 +20,9 @@ router.get('/setup/status', authController.checkSetup);
 // Verify admin PIN for a specific store (used by staff to access admin pages)
 router.post('/verify-admin-pin', authController.verifyAdminPin);
 
+// Verify admin Security PIN for sensitive operations (product registration/deletion)
+router.post('/verify-admin-security-pin', authController.verifyAdminSecurityPin);
+
 // Protected routes (authentication required)
 // Staff management
 router.post('/staff', authenticate, tenantFilter, authController.createStaff);

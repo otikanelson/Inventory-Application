@@ -256,7 +256,7 @@ export default function AlertSettingsScreen() {
         {/* Header with Back Button */}
         <View style={styles.header}>
           <Pressable 
-            onPress={() => router.back()}
+            onPress={() => router.push('/admin/settings')}
             style={[styles.backButton, { backgroundColor: theme.surface }]}
           >
             <Ionicons name="arrow-back" size={24} color={theme.primary} />
@@ -890,6 +890,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 25,
   },
   deleteBtn: {
     flexDirection: "row",

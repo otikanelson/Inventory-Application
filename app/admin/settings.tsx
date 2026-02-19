@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
-import { lineHeight, margin, padding, touchTarget } from "../../constants/spacing";
+import { margin, touchTarget } from "../../constants/spacing";
 import { useAdminTour } from "../../context/AdminTourContext";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -53,28 +53,6 @@ export default function AdminSettingsScreen() {
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
     : require("../../assets/images/Background9.png");
-
-  // Category Card Component
-  const CategoryCard = ({ icon, title, description, route, iconColor }: any) => (
-    <Pressable
-      style={[styles.categoryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-      onPress={() => router.push(route)}
-      android_ripple={{ color: theme.primary + "25" }}
-    >
-      <View style={[styles.categoryIconBox, { backgroundColor: iconColor + "15" }]}>
-        <Ionicons name={icon} size={32} color={iconColor} />
-      </View>
-      <Text style={[styles.categoryTitle, { color: theme.text }]}>
-        {title}
-      </Text>
-      <Text style={[styles.categoryDescription, { color: theme.subtext }]}>
-        {description}
-      </Text>
-      <View style={styles.categoryArrow}>
-        <Ionicons name="chevron-forward" size={24} color={theme.primary} />
-      </View>
-    </Pressable>
-  );
 
   const SettingRow = ({ icon, label, description, onPress, children }: any) => {
     const row = (
@@ -130,9 +108,9 @@ export default function AdminSettingsScreen() {
               content={[
                 "Manage all admin settings from one place. Select a category to configure specific settings.",
                 "Security: Manage PINs, auto-logout, and access controls",
-                "Alerts: Configure expiry alert levels and category alerts",
+                "Alerts & Categories: Add categories and Configure expiry alert levels and category alerts",
                 "Store: Update business information and details",
-                "Account: Manage profile, preferences, and data export"
+                "Data: Manage profile, preferences, and data export"
               ]}
               icon="help-circle"
               iconSize={18}
@@ -147,43 +125,72 @@ export default function AdminSettingsScreen() {
             SETTINGS CATEGORIES
           </Text>
           
-          <View style={styles.categoryGrid}>
-            <CategoryCard
-              icon="shield-checkmark"
-              title="Security"
-              description="PIN management and access controls"
-              route="/admin/settings/security"
-              iconColor="#FF3B30"
+          <SettingRow
+            icon="person-circle"
+            label="Profile"
+            description="Personal information and account details"
+            onPress={() => router.push('/admin/settings/profile')}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+
+          <SettingRow
+            icon="shield-checkmark"
+            label="Security"
+            description="PIN management and access controls"
+            onPress={() => router.push('/admin/settings/security')}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+          
+          <SettingRow
+            icon="notifications"
+            label="Alerts & Categories"
+            description="Add categories and Configure expiry alert levels"
+            onPress={() => router.push('/admin/settings/alerts')}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+          
+          <SettingRow
+            icon="storefront"
+            label="Store"
+            description="Business information and details"
+            onPress={() => router.push('/admin/settings/store')}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+          
+          <SettingRow
+            icon="cloud-download"
+            label="Data"
+            description="Backup and data export"
+            onPress={() => router.push('/admin/settings/data')}
+          >
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+          </SettingRow>
+        </View>
+
+        {/* APPEARANCE SECTION */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+            APPEARANCE
+          </Text>
+          <SettingRow
+            icon="moon-outline"
+            label="Dark Mode"
+            description="Toggle light/dark theme"
+          >
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ true: theme.primary }}
             />
-            
-            <CategoryCard
-              icon="notifications"
-              title="Alerts"
-              description="Configure expiry alert levels"
-              route="/admin/settings/alerts"
-              iconColor="#FF9500"
-            />
-            
-            <CategoryCard
-              icon="storefront"
-              title="Store"
-              description="Business information and details"
-              route="/admin/settings/store"
-              iconColor="#34C759"
-            />
-            
-            <CategoryCard
-              icon="person-circle"
-              title="Account"
-              description="Profile and data export"
-              route="/admin/settings/account"
-              iconColor="#007AFF"
-            />
-          </View>
+          </SettingRow>
         </View>
 
         {/* HELP & SUPPORT SECTION */}
-        <View style={[styles.section, {marginBottom: 20}]}>
+        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>
             HELP & SUPPORT
           </Text>
@@ -215,35 +222,18 @@ export default function AdminSettingsScreen() {
           >
             <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </SettingRow>
-        </View>
-
-        {/* APPEARANCE SECTION */}
-        <View style={[styles.section, {marginBottom: 20}]}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-            APPEARANCE
-          </Text>
           
           <SettingRow
-            icon="moon-outline"
-            label="Dark Mode"
-            description="Toggle light/dark theme"
+            icon="log-out-outline"
+            label="Logout from Admin"
+            description="Return to staff dashboard"
+            onPress={handleLogout}
           >
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ true: theme.primary }}
-            />
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </SettingRow>
         </View>
 
-        {/* LOGOUT */}
-        <Pressable
-          style={[styles.logoutBtn, { borderColor: '#FF4444' }]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={22} color="#FF4444" />
-          <Text style={styles.logoutText}>Logout from Admin</Text>
-        </Pressable>
+        <View style={{ height: 10 }} />
 
         <Text style={styles.versionText}>
           Build v2.0.5 - Production Environment
@@ -264,40 +254,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 1.5,
-    marginBottom: margin.divider,
-  },
-  categoryGrid: {
-    gap: margin.divider,
-  },
-  categoryCard: {
-    padding: padding.card,
-    borderRadius: 20,
-    borderWidth: 2,
-    minHeight: 140,
-    position: 'relative',
-  },
-  categoryIconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  categoryTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  categoryDescription: {
-    fontSize: 14,
-    lineHeight: lineHeight.description * 14,
-    marginBottom: 8,
-  },
-  categoryArrow: {
-    position: 'absolute',
-    top: 24,
-    right: 24,
+    marginBottom: margin.formField,
   },
   settingRow: {
     flexDirection: "row",
@@ -318,18 +275,6 @@ const styles = StyleSheet.create({
   textStack: { flex: 1 },
   settingLabel: { fontSize: 16, fontWeight: "600" },
   settingDesc: { fontSize: 12, marginTop: 2 },
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    padding: padding.button,
-    borderRadius: 20,
-    borderWidth: 2,
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  logoutText: { color: "#FF4444", fontWeight: "900", fontSize: 14 },
   versionText: {
     textAlign: "center",
     color: "#888",

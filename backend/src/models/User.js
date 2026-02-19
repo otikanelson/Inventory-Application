@@ -8,8 +8,30 @@ const userSchema = new mongoose.Schema({
   },
   pin: {
     type: String,
-    required: true,
+    required: false, // Made optional for migration
     length: 4
+  },
+  loginPin: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        return /^\d{4}$/.test(v);
+      },
+      message: 'Login PIN must be exactly 4 digits'
+    }
+  },
+  securityPin: {
+    type: String,
+    required: function() {
+      return this.role === 'admin';
+    },
+    validate: {
+      validator: function(v) {
+        return !v || /^\d{4}$/.test(v);
+      },
+      message: 'Security PIN must be exactly 4 digits'
+    }
   },
   role: {
     type: String,
@@ -45,8 +67,8 @@ const userSchema = new mongoose.Schema({
   timestamps: true // This automatically adds createdAt and updatedAt
 });
 
-// Create compound index for PIN, role, and storeId to ensure uniqueness per role per store
-userSchema.index({ pin: 1, role: 1, storeId: 1 }, { unique: true });
+// Create compound index for loginPin, role, and storeId to ensure uniqueness per role per store
+userSchema.index({ loginPin: 1, role: 1, storeId: 1 }, { unique: true });
 
 // Index for querying users by store and role
 userSchema.index({ storeId: 1, role: 1 });
@@ -54,10 +76,12 @@ userSchema.index({ storeId: 1, role: 1 });
 // Index for querying users by role (for author queries)
 userSchema.index({ role: 1 });
 
-// Don't return PIN in JSON responses
+// Don't return PINs in JSON responses
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.pin;
+  delete user.loginPin;
+  delete user.securityPin;
   return user;
 };
 

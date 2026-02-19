@@ -42,8 +42,8 @@ export default function SettingsScreen() {
 
   const checkAdminPinStatus = async () => {
     try {
-      const adminPin = await AsyncStorage.getItem('admin_pin');
-      setHasAdminPin(!!adminPin);
+      const adminLoginPin = await AsyncStorage.getItem('admin_login_pin');
+      setHasAdminPin(!!adminLoginPin);
     } catch (error) {
       console.error('Error checking admin PIN:', error);
     }
@@ -51,7 +51,7 @@ export default function SettingsScreen() {
 
   const handleAdminAuth = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem('admin_pin');
+      const storedPin = await AsyncStorage.getItem('admin_login_pin');
       
       // If no PIN is set, allow entry but prompt them to set one
       if (!storedPin) {
