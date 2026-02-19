@@ -48,16 +48,16 @@ export default function AdminProfileScreen() {
 
   // Admin session state (for staff logged in as admin)
   const [adminSessionName, setAdminSessionName] = useState<string | null>(null);
+  const [adminInfo, setAdminInfo] = useState<{ name: string; storeId: string; storeName: string } | null>(null);
+  const [isStaffViewingAdmin, setIsStaffViewingAdmin] = useState(false);
 
   const backgroundImage = isDark
     ? require('../../../assets/images/Background7.png')
     : require('../../../assets/images/Background9.png');
 
   useEffect(() => {
-    if (role === 'admin') {
-      fetchStaffMembers();
-    }
     checkAdminSession();
+    fetchAdminInfo();
   }, [role]);
 
   const checkAdminSession = async () => {
@@ -68,6 +68,27 @@ export default function AdminProfileScreen() {
       }
     } catch (error) {
       console.error('Error checking admin session:', error);
+    }
+  };
+
+  const fetchAdminInfo = async () => {
+    try {
+      // If user is staff, fetch the admin's information
+      if (role === 'staff' && user?.storeId) {
+        setIsStaffViewingAdmin(true);
+        const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/auth/admin-info/${user.storeId}`);
+        if (response.data.success) {
+          setAdminInfo(response.data.data);
+          // Fetch staff members for the admin
+          fetchStaffMembers();
+        }
+      } else if (role === 'admin') {
+        setIsStaffViewingAdmin(false);
+        // For actual admin, fetch their staff members
+        fetchStaffMembers();
+      }
+    } catch (error: any) {
+      console.error('Error fetching admin info:', error);
     }
   };
 
@@ -219,27 +240,29 @@ export default function AdminProfileScreen() {
 
         {/* Profile Card */}
         <View style={[styles.profileCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <View style={[styles.avatarContainer, { backgroundColor: getRoleColor() + '20' }]}>
-            <Ionicons name="person" size={48} color={getRoleColor()} />
+          <View style={[styles.avatarContainer, { backgroundColor: '#FF3B30' + '20' }]}>
+            <Ionicons name="person" size={48} color="#FF3B30" />
           </View>
 
           <Text style={[styles.userName, { color: theme.text }]}>
-            {adminSessionName || user?.name || 'User'}
+            {isStaffViewingAdmin && adminInfo ? adminInfo.name : (user?.name || 'User')}
           </Text>
 
-          <View style={[styles.roleBadge, { backgroundColor: getRoleColor() + '20' }]}>
-            <Ionicons name={role === 'admin' ? 'shield-checkmark' : 'person'} size={16} color={getRoleColor()} />
-            <Text style={[styles.roleText, { color: getRoleColor() }]}>{getRoleDisplay()}</Text>
+          <View style={[styles.roleBadge, { backgroundColor: '#FF3B30' + '20' }]}>
+            <Ionicons name="shield-checkmark" size={16} color="#FF3B30" />
+            <Text style={[styles.roleText, { color: '#FF3B30' }]}>Administrator</Text>
           </View>
 
-          <Text style={[styles.userId, { color: theme.subtext }]}>ID: {user?.id || 'N/A'}</Text>
+          <Text style={[styles.userId, { color: theme.subtext }]}>
+            ID: {isStaffViewingAdmin && adminInfo ? 'Admin' : (user?.id || 'N/A')}
+          </Text>
           
-          {user?.storeName && (
-            <View style={[styles.storeInfo, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '30' }]}>
-              <Ionicons name="storefront" size={16} color={theme.primary} />
-              <Text style={[styles.storeText, { color: theme.text }]}>{user.storeName}</Text>
-            </View>
-          )}
+          <View style={[styles.storeInfo, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '30' }]}>
+            <Ionicons name="storefront" size={16} color={theme.primary} />
+            <Text style={[styles.storeText, { color: theme.text }]}>
+              {isStaffViewingAdmin && adminInfo ? adminInfo.storeName : (user?.storeName || 'Store')}
+            </Text>
+          </View>
         </View>
 
         {/* Account Settings */}
@@ -277,93 +300,76 @@ export default function AdminProfileScreen() {
 
         {/* Permissions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>YOUR PERMISSIONS</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>ADMIN PERMISSIONS</Text>
 
           <View style={[styles.permissionsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            {role === 'admin' ? (
-              <>
-                <PermissionItem icon="checkmark-circle" label="Full system access" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Manage inventory" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Process sales" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="View analytics" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Manage staff" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="System settings" granted theme={theme} />
-              </>
-            ) : (
-              <>
-                <PermissionItem icon="checkmark-circle" label="View inventory" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Add products" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Edit products" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Process sales" granted theme={theme} />
-                <PermissionItem icon="checkmark-circle" label="Scan barcodes" granted theme={theme} />
-                <PermissionItem icon="close-circle" label="Delete products" granted={false} theme={theme} />
-                <PermissionItem icon="close-circle" label="Admin settings" granted={false} theme={theme} />
-                <PermissionItem icon="close-circle" label="Manage staff" granted={false} theme={theme} />
-              </>
-            )}
+            <PermissionItem icon="checkmark-circle" label="Full system access" granted theme={theme} />
+            <PermissionItem icon="checkmark-circle" label="Manage inventory" granted theme={theme} />
+            <PermissionItem icon="checkmark-circle" label="Process sales" granted theme={theme} />
+            <PermissionItem icon="checkmark-circle" label="View analytics" granted theme={theme} />
+            <PermissionItem icon="checkmark-circle" label="Manage staff" granted theme={theme} />
+            <PermissionItem icon="checkmark-circle" label="System settings" granted theme={theme} />
           </View>
         </View>
 
-        {/* Staff Management Section - Admin Only */}
-        {role === 'admin' && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.primary }]}>STAFF MEMBERS</Text>
+        {/* Staff Management Section - Always show in admin dashboard */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>STAFF MEMBERS</Text>
 
-            {loadingStaff ? (
-              <View style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <ActivityIndicator size="small" color={theme.primary} />
-                <Text style={[styles.settingDesc, { color: theme.subtext, marginLeft: 12 }]}>
-                  Loading staff members...
-                </Text>
-              </View>
-            ) : staffMembers.length > 0 ? (
-              staffMembers.map((staff) => (
-                <View
-                  key={staff._id}
-                  style={[styles.staffCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                >
-                  <View style={[styles.staffAvatar, { backgroundColor: '#007AFF' + '20' }]}>
-                    <Ionicons name="person" size={20} color="#007AFF" />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.staffName, { color: theme.text }]}>{staff.name}</Text>
-                    <View style={styles.staffMeta}>
-                      <View style={[styles.staffRoleBadge, { backgroundColor: '#007AFF' + '15' }]}>
-                        <Text style={[styles.staffRoleText, { color: '#007AFF' }]}>Staff</Text>
-                      </View>
-                      {staff.lastLogin && (
-                        <Text style={[styles.staffLastLogin, { color: theme.subtext }]}>
-                          Last login: {new Date(staff.lastLogin).toLocaleDateString()}
-                        </Text>
-                      )}
+          {loadingStaff ? (
+            <View style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={[styles.settingDesc, { color: theme.subtext, marginLeft: 12 }]}>
+                Loading staff members...
+              </Text>
+            </View>
+          ) : staffMembers.length > 0 ? (
+            staffMembers.map((staff) => (
+              <View
+                key={staff._id}
+                style={[styles.staffCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              >
+                <View style={[styles.staffAvatar, { backgroundColor: '#007AFF' + '20' }]}>
+                  <Ionicons name="person" size={20} color="#007AFF" />
+                </View>
+                
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.staffName, { color: theme.text }]}>{staff.name}</Text>
+                  <View style={styles.staffMeta}>
+                    <View style={[styles.staffRoleBadge, { backgroundColor: '#007AFF' + '15' }]}>
+                      <Text style={[styles.staffRoleText, { color: '#007AFF' }]}>Staff</Text>
                     </View>
-                  </View>
-
-                  <View style={styles.staffActions}>
-                    <View style={[styles.staffStatusDot, { backgroundColor: staff.isActive ? '#34C759' : '#FF3B30' }]} />
-                    <Pressable
-                      onPress={() => handleDeleteStaff(staff)}
-                      style={[styles.deleteStaffBtn, { backgroundColor: '#FF3B30' + '15' }]}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#FF3B30" />
-                    </Pressable>
+                    {staff.lastLogin && (
+                      <Text style={[styles.staffLastLogin, { color: theme.subtext }]}>
+                        Last login: {new Date(staff.lastLogin).toLocaleDateString()}
+                      </Text>
+                    )}
                   </View>
                 </View>
-              ))
-            ) : (
-              <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Ionicons name="people-outline" size={40} color={theme.subtext} />
-                <Text style={[styles.emptyStateText, { color: theme.subtext }]}>
-                  No staff members yet
-                </Text>
-                <Text style={[styles.emptyStateDesc, { color: theme.subtext }]}>
-                  Staff members will appear here once added
-                </Text>
+
+                <View style={styles.staffActions}>
+                  <View style={[styles.staffStatusDot, { backgroundColor: staff.isActive ? '#34C759' : '#FF3B30' }]} />
+                  <Pressable
+                    onPress={() => handleDeleteStaff(staff)}
+                    style={[styles.deleteStaffBtn, { backgroundColor: '#FF3B30' + '15' }]}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                  </Pressable>
+                </View>
               </View>
-            )}
-          </View>
-        )}
+            ))
+          ) : (
+            <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="people-outline" size={40} color={theme.subtext} />
+              <Text style={[styles.emptyStateText, { color: theme.subtext }]}>
+                No staff members yet
+              </Text>
+              <Text style={[styles.emptyStateDesc, { color: theme.subtext }]}>
+                Staff members will appear here once added
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* Logout Button */}
         <Pressable 

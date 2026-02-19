@@ -148,6 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Store Security PIN for admin users if provided
           if (userData.role === 'admin' && userData.securityPin) {
             storageItems.push(['admin_security_pin', userData.securityPin]);
+            // Also set admin_last_auth to avoid immediate Security PIN prompt
+            storageItems.push(['admin_last_auth', Date.now().toString()]);
             console.log('🔐 Storing admin Security PIN:', userData.securityPin);
           } else {
             console.log('⚠️ Security PIN not stored:', {
