@@ -14,15 +14,15 @@ const connectDB = async () => {
     console.log('🔄 Attempting to connect to MongoDB...');
     console.log('Using MONGO_URI:', process.env.MONGO_URI ? 'Set (hidden)' : 'NOT SET');
     
-    // Optimize for faster initial connection
+    // Optimize for serverless - CRITICAL: bufferCommands must be TRUE for Vercel
     const conn = await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 10000, // Reduced from 30s to 10s for faster failure detection
-      connectTimeoutMS: 10000, // Reduced from 30s to 10s
+      serverSelectionTimeoutMS: 10000, // 10 seconds for faster failure detection
+      connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,
       maxPoolSize: 10,
       minPoolSize: 1,
       family: 4, // Use IPv4, skip trying IPv6
-      bufferCommands: false, // Disable mongoose buffering
+      bufferCommands: true, // CHANGED: Enable buffering for serverless (Vercel needs this)
       autoIndex: false, // Don't build indexes in production
       retryWrites: true,
       retryReads: true,
