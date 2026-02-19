@@ -75,7 +75,8 @@ export default function SetupScreen() {
 
             // Also save to local storage
             await AsyncStorage.multiSet([
-              ['admin_pin', pin],
+              ['admin_login_pin', pin],
+              ['admin_security_pin', pin],
               ['admin_first_setup', 'completed'],
               ['auth_user_name', adminName || 'Admin'],
               ['auth_user_id', adminId],
@@ -137,7 +138,8 @@ export default function SetupScreen() {
           if (shouldFallbackToLocal) {
             try {
               await AsyncStorage.multiSet([
-                ['admin_pin', pin],
+                ['admin_login_pin', pin],
+                ['admin_security_pin', pin],
                 ['admin_first_setup', 'completed'],
                 ['auth_user_name', adminName || 'Admin'],
               ]);

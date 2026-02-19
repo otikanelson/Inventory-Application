@@ -6,11 +6,6 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  pin: {
-    type: String,
-    required: false, // Made optional for migration
-    length: 4
-  },
   loginPin: {
     type: String,
     required: true,
@@ -79,7 +74,6 @@ userSchema.index({ role: 1 });
 // Don't return PINs in JSON responses
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
-  delete user.pin;
   delete user.loginPin;
   delete user.securityPin;
   return user;
