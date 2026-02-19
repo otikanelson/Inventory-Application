@@ -114,6 +114,8 @@ exports.login = async (req, res) => {
     );
 
     console.log('Login successful for user:', user._id);
+    console.log('User Security PIN from DB:', user.securityPin);
+    console.log('User role:', user.role);
 
     // Prepare response data
     const responseData = {
@@ -130,6 +132,13 @@ exports.login = async (req, res) => {
     // Include Security PIN for admin users (needed for app functionality)
     if (user.role === 'admin' && user.securityPin) {
       responseData.user.securityPin = user.securityPin;
+      console.log('✅ Security PIN added to response:', user.securityPin);
+    } else {
+      console.log('⚠️ Security PIN NOT added to response:', {
+        role: user.role,
+        hasSecurityPin: !!user.securityPin,
+        securityPinValue: user.securityPin
+      });
     }
 
     res.json({

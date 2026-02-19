@@ -148,13 +148,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Store Security PIN for admin users if provided
           if (userData.role === 'admin' && userData.securityPin) {
             storageItems.push(['admin_security_pin', userData.securityPin]);
-            console.log('🔐 Storing admin Security PIN');
+            console.log('🔐 Storing admin Security PIN:', userData.securityPin);
+          } else {
+            console.log('⚠️ Security PIN not stored:', {
+              role: userData.role,
+              hasSecurityPin: !!userData.securityPin,
+              securityPinValue: userData.securityPin
+            });
           }
 
           // Store auth data including store information
           await AsyncStorage.multiSet(storageItems);
 
           console.log('✅ Auth data stored successfully');
+
+          // Verify Security PIN was stored (for debugging)
+          if (userData.role === 'admin') {
+            const verifyPin = await AsyncStorage.getItem('admin_security_pin');
+            console.log('🔍 Verification - Security PIN in AsyncStorage:', verifyPin);
+          }
 
           setUser({
             ...userData,
@@ -345,6 +357,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'auth_user_name',
         'auth_store_id',
         'auth_store_name',
+        'admin_last_auth',
+        'admin_session_name',
+        'admin_session_store_id',
+        'admin_session_store_name',
       ]);
 
       setUser(null);

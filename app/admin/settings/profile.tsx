@@ -4,15 +4,15 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../../context/AuthContext';
@@ -31,7 +31,7 @@ interface StaffMember {
 export default function AdminProfileScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
-  const { user, role } = useAuth();
+  const { user, role, logout } = useAuth();
 
   const [showPinModal, setShowPinModal] = useState(false);
   const [oldPin, setOldPin] = useState('');
@@ -196,6 +196,11 @@ export default function AdminProfileScreen() {
       default:
         return theme.primary;
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/auth/setup' as any);
   };
 
   return (
@@ -363,43 +368,7 @@ export default function AdminProfileScreen() {
         {/* Logout Button */}
         <Pressable 
           style={[styles.logoutBtn, { borderColor: '#FF4444' }]} 
-          onPress={async () => {
-            try {
-              // Clear authentication session data but keep PINs
-              await AsyncStorage.multiRemove([
-                'auth_session_token',
-                'auth_last_login',
-                'auth_user_role',
-                'auth_user_id',
-                'auth_user_name',
-                'auth_store_id',
-                'auth_store_name',
-                'admin_session',
-                'admin_session_time',
-                'admin_last_auth',
-                'admin_session_name',
-                'admin_session_store_id',
-                'admin_session_store_name',
-              ]);
-              
-              Toast.show({
-                type: 'success',
-                text1: 'Logged Out',
-                text2: 'Returning to setup...'
-              });
-              
-              // Navigate to setup page after a short delay
-              setTimeout(() => {
-                router.replace('/auth/setup' as any);
-              }, 500);
-            } catch (error) {
-              Toast.show({
-                type: 'error',
-                text1: 'Logout Failed',
-                text2: 'Could not end session'
-              });
-            }
-          }}
+          onPress={handleLogout}
         >
           <Ionicons name="log-out-outline" size={22} color="#FF4444" />
           <Text style={styles.logoutText}>Logout from Admin</Text>
