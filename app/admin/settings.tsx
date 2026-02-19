@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import {
   ImageBackground,
@@ -11,6 +10,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { AIStatusIndicator } from "../../components/AIStatusIndicator";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { margin, touchTarget } from "../../constants/spacing";
 import { useAdminTour } from "../../context/AdminTourContext";
@@ -21,34 +21,7 @@ export default function AdminSettingsScreen() {
   const router = useRouter();
   const { resetTour, startTour } = useAdminTour();
 
-  const handleLogout = async () => {
-    try {
-      // Clear only admin session data, preserve staff authentication
-      await AsyncStorage.multiRemove([
-        'admin_session',
-        'admin_session_time',
-        'admin_last_auth',
-      ]);
-      
-      // Navigate to staff dashboard (staff member is still logged in)
-      router.replace('/' as any);
-      
-      // Show toast after navigation
-      setTimeout(() => {
-        Toast.show({
-          type: 'success',
-          text1: 'Logged Out',
-          text2: 'Admin session ended'
-        });
-      }, 100);
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Logout Failed',
-        text2: 'Could not end session'
-      });
-    }
-  };
+
 
   const backgroundImage = isDark
     ? require("../../assets/images/Background7.png")
@@ -194,13 +167,17 @@ export default function AdminSettingsScreen() {
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>
             HELP & SUPPORT
           </Text>
+          
+          {/* AI Status Indicator */}
+          <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
+          
           <SettingRow
             icon="help-circle-outline"
             label="Restart Admin Tour"
             description="View admin onboarding tour again"
             onPress={async () => {
               try {
-                await resetTour();
+                resetTour();
                 Toast.show({
                   type: 'success',
                   text1: 'Tour Reset',
@@ -223,14 +200,7 @@ export default function AdminSettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </SettingRow>
           
-          <SettingRow
-            icon="log-out-outline"
-            label="Logout from Admin"
-            description="Return to staff dashboard"
-            onPress={handleLogout}
-          >
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-          </SettingRow>
+
         </View>
 
         <View style={{ height: 10 }} />

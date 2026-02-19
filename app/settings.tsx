@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -42,8 +43,8 @@ export default function SettingsScreen() {
 
   const checkAdminPinStatus = async () => {
     try {
-      const adminLoginPin = await AsyncStorage.getItem('admin_login_pin');
-      setHasAdminPin(!!adminLoginPin);
+      const adminSecurityPin = await AsyncStorage.getItem('admin_security_pin');
+      setHasAdminPin(!!adminSecurityPin);
     } catch (error) {
       console.error('Error checking admin PIN:', error);
     }
@@ -51,27 +52,61 @@ export default function SettingsScreen() {
 
   const handleAdminAuth = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem('admin_login_pin');
+      const storedPin = await AsyncStorage.getItem('admin_security_pin');
+      const userRole = await AsyncStorage.getItem('auth_user_role');
+      const storeId = await AsyncStorage.getItem('auth_store_id');
       
-      // If no PIN is set, allow entry but prompt them to set one
+      // If no Security PIN is set, prevent access
       if (!storedPin) {
         setPinModal(false);
         setPin("");
         
         Toast.show({
-          type: 'info',
-          text1: 'No Admin Login PIN Set',
-          text2: 'Please set up your Admin Login PIN in Security settings'
+          type: 'error',
+          text1: 'No Admin Security PIN Set',
+          text2: 'Please set up your Admin Security PIN first'
         });
-        
-        router.push("../admin");
         return;
       }
 
-      // Validate PIN if it exists
+      // Validate Security PIN
       if (pin === storedPin) {
         // Update last auth time
         await AsyncStorage.setItem('admin_last_auth', Date.now().toString());
+        
+        let adminName = 'Admin';
+        let adminStoreId = storeId || '';
+        let adminStoreName = '';
+        
+        // If staff is logging in, fetch admin details from backend
+        if (userRole === 'staff' && storeId) {
+          try {
+            const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/auth/admin-info/${storeId}`);
+            if (response.data.success) {
+              adminName = response.data.data.name;
+              adminStoreId = response.data.data.storeId;
+              adminStoreName = response.data.data.storeName;
+            }
+          } catch (error) {
+            console.error('Error fetching admin info:', error);
+            // Fallback to local storage
+            adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
+            adminStoreName = await AsyncStorage.getItem('auth_store_name') || '';
+          }
+        } else {
+          // Admin is logging in - use their own info
+          adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
+          adminStoreName = await AsyncStorage.getItem('auth_store_name') || '';
+        }
+        
+        // Store admin session data
+        await AsyncStorage.multiSet([
+          ['admin_session', 'active'],
+          ['admin_session_time', Date.now().toString()],
+          ['admin_session_name', adminName],
+          ['admin_session_store_id', adminStoreId],
+          ['admin_session_store_name', adminStoreName],
+        ]);
         
         setPinModal(false);
         setPin("");
@@ -80,7 +115,7 @@ export default function SettingsScreen() {
         Toast.show({
           type: 'error',
           text1: 'Access Denied',
-          text2: 'Incorrect PIN'
+          text2: 'Incorrect Security PIN'
         });
         setPin("");
       }
@@ -179,7 +214,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="shield"
           label="Admin Dashboard"
-          description={hasAdminPin ? "Manage inventory and sales" : "Set up Admin Login PIN first"}
+          description={hasAdminPin ? "Enter Admin Security PIN to access" : "Set up Admin Security PIN first"}
           onPress={() => setPinModal(true)}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -202,52 +237,7 @@ export default function SettingsScreen() {
         {/* AI Status Indicator */}
         <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
         
-        <SettingRow
-          icon="log-out-outline"
-          label="Logout from Store"
-          description="Clear data and return to setup"
-          onPress={async () => {
-            try {
-              // CRITICAL: Clear token FIRST to prevent API calls with invalid token
-              await AsyncStorage.multiRemove([
-                'auth_session_token',
-                'auth_last_login',
-                'auth_user_role',
-                'auth_user_id',
-                'auth_user_name',
-                'auth_store_id',
-                'auth_store_name',
-                'admin_pin',
-                'admin_first_setup',
-                'admin_last_auth',
-                'auth_is_author',
-              ]);
-              
-              // Update auth context state
-              await authLogout();
-              
-              // Navigate after clearing data
-              router.replace('/auth/setup' as any);
-              
-              // Show toast after navigation
-              setTimeout(() => {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Logged Out',
-                  text2: 'Returning to setup...'
-                });
-              }, 100);
-            } catch (error) {
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: 'Could not logout'
-              });
-            }
-          }}
-        >
-          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-        </SettingRow>
+
         
         <SettingRow
           icon="help-circle-outline"
@@ -297,12 +287,12 @@ export default function SettingsScreen() {
             </View>
             
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {hasAdminPin ? "Admin Login PIN" : "First Time Access"}
+              {hasAdminPin ? "Admin Security PIN" : "Setup Required"}
             </Text>
             <Text style={[styles.modalDesc, { color: theme.subtext }]}>
               {hasAdminPin 
-                ? "Enter your PIN to access admin dashboard"
-                : "No PIN set. You'll create one inside."
+                ? "Enter your Admin Security PIN to access admin dashboard"
+                : "Please set up your Admin Security PIN in admin settings first"
               }
             </Text>
 
@@ -313,7 +303,7 @@ export default function SettingsScreen() {
                     styles.pinInput,
                     { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                   ]}
-                  placeholder="Enter Admin Login PIN"
+                  placeholder="Enter Admin Security PIN"
                   placeholderTextColor={theme.subtext}
                   secureTextEntry={!showPin}
                   keyboardType="numeric"
@@ -353,7 +343,7 @@ export default function SettingsScreen() {
                 onPress={handleAdminAuth}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  {hasAdminPin ? "VERIFY PIN" : "CONTINUE"}
+                  {hasAdminPin ? "VERIFY PIN" : "OK"}
                 </Text>
               </Pressable>
             </View>

@@ -10,6 +10,40 @@ import { TourProvider } from '../context/TourContext';
 // Import axios configuration to set up interceptors
 import '../utils/axiosConfig';
 
+// Suppress console warnings in production
+if (__DEV__ === false) {
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  
+  console.warn = (...args) => {
+    const message = args[0];
+    // Suppress WebSocket and transform warnings
+    if (
+      typeof message === 'string' &&
+      (message.includes('WebSocket') ||
+       message.includes('socket.io') ||
+       message.includes('transform') ||
+       message.includes('deprecated'))
+    ) {
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+  
+  console.error = (...args) => {
+    const message = args[0];
+    // Suppress non-critical WebSocket errors
+    if (
+      typeof message === 'string' &&
+      (message.includes('WebSocket connection error') ||
+       message.includes('socket.io'))
+    ) {
+      return;
+    }
+    originalError.apply(console, args);
+  };
+}
+
 function RootLayoutNav() {
   const { isAuthenticated, loading } = useAuth();
   const segments = useSegments();
@@ -58,6 +92,12 @@ function RootLayoutNav() {
       return isAuthor === 'true';
     };
 
+    // Check user role for navigation
+    const checkUserRole = async () => {
+      const userRole = await AsyncStorage.getItem('auth_user_role');
+      return userRole;
+    };
+
     checkAuthorStatus().then((isAuthor) => {
       // Authors bypass all first-time setup checks
       if (isAuthor) {
@@ -73,9 +113,15 @@ function RootLayoutNav() {
       // Priority 1: If authenticated, ensure they're in the app (not auth screens)
       if (isAuthenticated) {
         if (inAuthGroup && !isStaffRegister) {
-          // Authenticated but in auth screens - redirect to app
-          hasNavigatedRef.current = true;
-          router.replace('/(tabs)');
+          // Authenticated but in auth screens - redirect based on role
+          checkUserRole().then((role) => {
+            hasNavigatedRef.current = true;
+            if (role === 'admin') {
+              router.replace('/admin/stats' as any);
+            } else {
+              router.replace('/(tabs)');
+            }
+          });
         }
         return;
       }

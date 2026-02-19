@@ -3,14 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    ImageBackground,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../context/AuthContext';
@@ -90,7 +90,7 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/auth/login' as any);
+    router.replace('/auth/setup' as any);
   };
 
   const getRoleDisplay = () => {
@@ -212,7 +212,7 @@ export default function ProfileScreen() {
         {/* Logout Button */}
         <Pressable style={[styles.logoutBtn, { borderColor: '#FF4444' }]} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={22} color="#FF4444" />
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>Logout from Store</Text>
         </Pressable>
 
         <View style={{ height: 50 }} />

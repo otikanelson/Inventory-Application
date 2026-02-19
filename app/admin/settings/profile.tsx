@@ -46,6 +46,9 @@ export default function AdminProfileScreen() {
   const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
   const [deletingStaff, setDeletingStaff] = useState(false);
 
+  // Admin session state (for staff logged in as admin)
+  const [adminSessionName, setAdminSessionName] = useState<string | null>(null);
+
   const backgroundImage = isDark
     ? require('../../../assets/images/Background7.png')
     : require('../../../assets/images/Background9.png');
@@ -54,7 +57,19 @@ export default function AdminProfileScreen() {
     if (role === 'admin') {
       fetchStaffMembers();
     }
+    checkAdminSession();
   }, [role]);
+
+  const checkAdminSession = async () => {
+    try {
+      const sessionName = await AsyncStorage.getItem('admin_session_name');
+      if (sessionName) {
+        setAdminSessionName(sessionName);
+      }
+    } catch (error) {
+      console.error('Error checking admin session:', error);
+    }
+  };
 
   const fetchStaffMembers = async () => {
     setLoadingStaff(true);
@@ -203,7 +218,9 @@ export default function AdminProfileScreen() {
             <Ionicons name="person" size={48} color={getRoleColor()} />
           </View>
 
-          <Text style={[styles.userName, { color: theme.text }]}>{user?.name || 'User'}</Text>
+          <Text style={[styles.userName, { color: theme.text }]}>
+            {adminSessionName || user?.name || 'User'}
+          </Text>
 
           <View style={[styles.roleBadge, { backgroundColor: getRoleColor() + '20' }]}>
             <Ionicons name={role === 'admin' ? 'shield-checkmark' : 'person'} size={16} color={getRoleColor()} />
@@ -342,6 +359,54 @@ export default function AdminProfileScreen() {
             )}
           </View>
         )}
+
+        {/* Logout Button */}
+        <Pressable 
+          style={[styles.logoutBtn, { borderColor: '#FF4444' }]} 
+          onPress={async () => {
+            try {
+              // Clear ALL authentication data to fully log out
+              await AsyncStorage.multiRemove([
+                'auth_session_token',
+                'auth_last_login',
+                'auth_user_role',
+                'auth_user_id',
+                'auth_user_name',
+                'auth_store_id',
+                'auth_store_name',
+                'admin_session',
+                'admin_session_time',
+                'admin_last_auth',
+                'admin_session_name',
+                'admin_session_store_id',
+                'admin_session_store_name',
+                'admin_login_pin',
+                'admin_security_pin',
+                'staff_login_pin',
+              ]);
+              
+              Toast.show({
+                type: 'success',
+                text1: 'Logged Out',
+                text2: 'Returning to setup...'
+              });
+              
+              // Navigate to setup page after a short delay
+              setTimeout(() => {
+                router.replace('/auth/setup' as any);
+              }, 500);
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Logout Failed',
+                text2: 'Could not end session'
+              });
+            }
+          }}
+        >
+          <Ionicons name="log-out-outline" size={22} color="#FF4444" />
+          <Text style={styles.logoutText}>Logout from Admin</Text>
+        </Pressable>
 
         <View style={{ height: 50 }} />
       </ScrollView>
@@ -683,6 +748,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 2,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  logoutText: {
+    color: '#FF4444',
+    fontWeight: '900',
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,

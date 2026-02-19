@@ -717,3 +717,46 @@ exports.verifyAdminSecurityPin = async (req, res) => {
     });
   }
 };
+
+// Get admin info by store ID (used by staff to display admin name when accessing admin dashboard)
+exports.getAdminInfo = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+
+    if (!storeId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+
+    // Find admin user for this store
+    const admin = await User.findOne({ 
+      role: 'admin', 
+      storeId: storeId,
+      isActive: true 
+    }).select('name storeId storeName');
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: 'Admin not found for this store'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        name: admin.name,
+        storeId: admin.storeId,
+        storeName: admin.storeName
+      }
+    });
+  } catch (error) {
+    console.error('Get admin info error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get admin info'
+    });
+  }
+};

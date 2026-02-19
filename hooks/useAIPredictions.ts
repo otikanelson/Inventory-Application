@@ -7,11 +7,11 @@ import axios from 'axios';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
-    CategoryInsights,
-    DashboardUpdatePayload,
-    Prediction,
-    PredictionUpdatePayload,
-    QuickInsights
+  CategoryInsights,
+  DashboardUpdatePayload,
+  Prediction,
+  PredictionUpdatePayload,
+  QuickInsights
 } from '../types/ai-predictions';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -148,80 +148,108 @@ export const useAIPredictions = (options: UseAIPredictionsOptions = {}) => {
   useEffect(() => {
     if (!enableWebSocket) return;
 
-    // Create socket connection
-    const socket = io(WS_URL, {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5
-    });
+    // Skip WebSocket in production if backend doesn't support it
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction && !WS_URL.includes('wss://')) {
+      console.log('WebSocket disabled in production (no secure connection available)');
+      return;
+    }
 
-    socketRef.current = socket;
+    let socket: Socket | null = null;
 
-    // Connection handlers
-    socket.on('connect', () => {
-      console.log('WebSocket connected');
-      setIsConnected(true);
+    try {
+      // Create socket connection with better error handling
+      socket = io(WS_URL, {
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 3, // Reduced from 5 to avoid excessive retries
+        timeout: 10000, // 10 second timeout
+        autoConnect: true,
+      });
 
-      // Subscribe to dashboard updates
-      socket.emit('subscribe:dashboard');
+      socketRef.current = socket;
 
-      // Subscribe to product updates if productId is provided
-      if (productId) {
-        socket.emit('subscribe:product', productId);
-      }
-    });
+      // Connection handlers
+      socket.on('connect', () => {
+        console.log('WebSocket connected');
+        setIsConnected(true);
 
-    socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-      setIsConnected(false);
-    });
+        // Subscribe to dashboard updates
+        socket.emit('subscribe:dashboard');
 
-    socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
-      setIsConnected(false);
-    });
+        // Subscribe to product updates if productId is provided
+        if (productId) {
+          socket.emit('subscribe:product', productId);
+        }
+      });
 
-    // Prediction update handler
-    socket.on('prediction:update', (payload: PredictionUpdatePayload) => {
-      console.log('Received prediction update:', payload);
-      
-      // Update prediction if it matches current productId
-      if (productId && payload.productId === productId) {
-        setPrediction((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            forecast: payload.prediction.forecast,
-            metrics: payload.prediction.metrics,
-            recommendations: payload.prediction.recommendations,
-            warning: payload.prediction.warning,
-            calculatedAt: new Date().toISOString()
-          };
-        });
-      }
-    });
+      socket.on('disconnect', (reason) => {
+        console.log('WebSocket disconnected:', reason);
+        setIsConnected(false);
+      });
 
-    // Dashboard update handler
-    socket.on('dashboard:update', (payload: DashboardUpdatePayload) => {
-      console.log('Received dashboard update:', payload);
-      setQuickInsights(payload.insights);
-    });
+      socket.on('connect_error', (error) => {
+        console.warn('WebSocket connection error (non-critical):', error.message);
+        setIsConnected(false);
+        // Don't set error state - WebSocket is optional
+      });
 
-    // Urgent prediction handler
-    socket.on('prediction:urgent', (payload: PredictionUpdatePayload) => {
-      console.log('Received urgent prediction:', payload);
-      // Refresh quick insights when urgent prediction is received
-      fetchQuickInsights();
-    });
+      socket.on('error', (error) => {
+        console.warn('WebSocket error (non-critical):', error);
+        // Don't set error state - WebSocket is optional
+      });
+
+      // Prediction update handler
+      socket.on('prediction:update', (payload: PredictionUpdatePayload) => {
+        console.log('Received prediction update:', payload);
+        
+        // Update prediction if it matches current productId
+        if (productId && payload.productId === productId) {
+          setPrediction((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              forecast: payload.prediction.forecast,
+              metrics: payload.prediction.metrics,
+              recommendations: payload.prediction.recommendations,
+              warning: payload.prediction.warning,
+              calculatedAt: new Date().toISOString()
+            };
+          });
+        }
+      });
+
+      // Dashboard update handler
+      socket.on('dashboard:update', (payload: DashboardUpdatePayload) => {
+        console.log('Received dashboard update:', payload);
+        setQuickInsights(payload.insights);
+      });
+
+      // Urgent prediction handler
+      socket.on('prediction:urgent', (payload: PredictionUpdatePayload) => {
+        console.log('Received urgent prediction:', payload);
+        // Refresh quick insights when urgent prediction is received
+        fetchQuickInsights();
+      });
+    } catch (err) {
+      console.warn('Failed to initialize WebSocket (non-critical):', err);
+      // Don't set error state - WebSocket is optional
+    }
 
     // Cleanup
     return () => {
-      if (productId) {
-        socket.emit('unsubscribe:product', productId);
+      try {
+        if (socket) {
+          if (productId) {
+            socket.emit('unsubscribe:product', productId);
+          }
+          socket.emit('unsubscribe:dashboard');
+          socket.disconnect();
+        }
+      } catch (err) {
+        console.warn('Error during WebSocket cleanup:', err);
       }
-      socket.emit('unsubscribe:dashboard');
-      socket.disconnect();
     };
   }, [enableWebSocket, productId, fetchQuickInsights]);
 
