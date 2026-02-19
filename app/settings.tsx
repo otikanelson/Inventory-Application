@@ -212,10 +212,6 @@ export default function SettingsScreen() {
           description={hasAdminPin ? "Enter Admin Security PIN to access" : "Set up Admin Security PIN first"}
           onPress={() => setPinModal(true)}
           style={{ 
-            backgroundColor: theme.primary + '10',
-            borderWidth: 2,
-            borderColor: theme.primary + '40',
-            borderRadius: 16,
             marginBottom: 16
           }}
         >
@@ -225,10 +221,8 @@ export default function SettingsScreen() {
                 <Text style={[styles.badgeText, { color: '#FF9500' }]}>SETUP REQUIRED</Text>
               </View>
             )}
-            <View style={[styles.adminBadge, { backgroundColor: theme.primary }]}>
-              <Ionicons name="shield-checkmark" size={16} color="#FFF" />
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.primary} />
+
+            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </View>
         </SettingRow>
       </View>

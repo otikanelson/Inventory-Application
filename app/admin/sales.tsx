@@ -4,17 +4,17 @@ import { useAudioPlayer } from "expo-audio";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -316,13 +316,20 @@ export default function AdminSales() {
           />
         </View>
 
-        <Pressable
-          onPress={() => router.push("/admin/scan")}
-          style={[styles.scanButton, { backgroundColor: theme.primary }]}
-        >
-          <Ionicons name="scan" size={20} color="#FFF" />
-          <Text style={styles.scanButtonText}>SCAN</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: "flex-end" }}>
+          <Pressable
+            onPress={() => router.push("/admin/settings")}
+            style={[styles.settingsButton, { backgroundColor: theme.surface, borderColor: theme.primary }]}
+          >
+            <Ionicons name="settings-outline" size={18} color={theme.primary} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/admin/scan")}
+            style={[styles.scanButton, { backgroundColor: theme.primary }]}
+          >
+            <Ionicons name="scan" size={18} color="#FFF" />
+          </Pressable>
+        </View>
       </View>
 
       {/* Tab Switcher */}
@@ -881,18 +888,18 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   scanButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    width: 40,
+    height: 40,
     borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  scanButtonText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.5,
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   tabContainer: {

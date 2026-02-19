@@ -838,17 +838,8 @@ export default function AdminStats() {
             />
           </View>
           
-          {/* Export Buttons and Settings */}
+          {/* Export Buttons */}
           <View style={styles.exportButtons}>
-            <Pressable
-              onPress={() => router.push('/admin/settings')}
-              style={[
-                styles.exportBtn,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <Ionicons name="settings-outline" size={16} color={theme.primary} />
-            </Pressable>
             <Pressable
               onPress={handleExportCSV}
               disabled={exportingCSV || exportingPDF}

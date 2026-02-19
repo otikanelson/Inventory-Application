@@ -378,7 +378,24 @@ export default function AdminProductDetails() {
       router.back();
     } catch (error: any) {
       console.error('Delete error:', error);
-      showErrorToast(error, "Delete Failed");
+      
+      // Check for specific validation error about active inventory
+      const errorMessage = error?.response?.data?.message || error?.message || "An error occurred";
+      const errorDetails = error?.response?.data?.details;
+      
+      if (errorMessage.includes("active inventory")) {
+        // Show detailed error about which stores have stock
+        Toast.show({
+          type: "error",
+          text1: "Cannot Delete Product",
+          text2: errorDetails?.storeNames 
+            ? `Stock exists in: ${errorDetails.storeNames}` 
+            : "This product has active inventory in other stores. Remove all stock first.",
+          visibilityTime: 5000,
+        });
+      } else {
+        showErrorToast(error, "Delete Failed");
+      }
     }
   };
 

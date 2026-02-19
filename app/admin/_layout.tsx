@@ -4,14 +4,14 @@ import axios from "axios";
 import { Tabs, useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import { Path, Svg } from "react-native-svg";
 import Toast from "react-native-toast-message";
@@ -131,14 +131,22 @@ export default function AdminLayout() {
       const userRole = await AsyncStorage.getItem("auth_user_role");
       const storeId = await AsyncStorage.getItem("auth_store_id");
 
+      console.log('PIN Submit - Role:', userRole, 'Store ID:', storeId);
+
       // For staff, we need to verify against their admin's Security PIN from the backend
       if (userRole === 'staff' && storeId) {
         try {
+          console.log('Staff user - verifying admin Security PIN via API...');
+          console.log('API URL:', `${process.env.EXPO_PUBLIC_API_URL}/auth/verify-admin-security-pin`);
+          console.log('Sending PIN:', pin, 'Store ID:', storeId);
+          
           // Call backend to verify admin Security PIN for this store
-          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/verify-admin-security-pin`, {
+          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL}/auth/verify-admin-security-pin`, {
             pin,
             storeId
           });
+
+          console.log('API Response:', response.data);
 
           if (response.data.success) {
             await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
@@ -152,6 +160,7 @@ export default function AdminLayout() {
               text2: "You now have temporary admin access",
             });
           } else {
+            console.log('API returned success=false');
             Toast.show({
               type: "error",
               text1: "Access Denied",
@@ -160,31 +169,22 @@ export default function AdminLayout() {
             setPin("");
           }
         } catch (error: any) {
-          // If API fails, fall back to local storage (offline mode)
-          const storedPin = await AsyncStorage.getItem("admin_security_pin");
-          if (pin === storedPin) {
-            await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
-            setIsAuthenticated(true);
-            setShowPinModal(false);
-            setPin("");
-            
-            Toast.show({
-              type: "success",
-              text1: "Admin Access Granted",
-              text2: "You now have temporary admin access (offline)",
-            });
-          } else {
-            Toast.show({
-              type: "error",
-              text1: "Access Denied",
-              text2: "Incorrect admin Security PIN",
-            });
-            setPin("");
-          }
+          console.error('API Error:', error);
+          console.error('Error response:', error.response?.data);
+          
+          // Show specific error message
+          Toast.show({
+            type: "error",
+            text1: "Verification Failed",
+            text2: error.response?.data?.error || "Could not verify admin Security PIN",
+          });
+          setPin("");
         }
       } else {
         // For admin users, check local Security PIN
         const storedPin = await AsyncStorage.getItem("admin_security_pin");
+        console.log('Admin user - checking local Security PIN');
+        
         if (pin === storedPin) {
           await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
           setIsAuthenticated(true);
@@ -200,6 +200,7 @@ export default function AdminLayout() {
         }
       }
     } catch (error) {
+      console.error('PIN Submit Error:', error);
       Toast.show({
         type: "error",
         text1: "Authentication Error",

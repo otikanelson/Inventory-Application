@@ -196,13 +196,24 @@ exports.deleteGlobalProduct = async (req, res) => {
     const inventoryItems = await Product.find({ barcode: globalProduct.barcode });
     console.log('Found inventory items with this barcode:', inventoryItems.length);
     
-    const hasStock = inventoryItems.some(item => item.totalQuantity > 0);
+    const itemsWithStock = inventoryItems.filter(item => item.totalQuantity > 0);
     
-    if (hasStock) {
-      console.log('Cannot delete - product has active stock');
+    if (itemsWithStock.length > 0) {
+      console.log('Cannot delete - product has active stock in', itemsWithStock.length, 'store(s)');
+      
+      // Get store names for better error message
+      const Store = require('../models/Store');
+      const storeIds = itemsWithStock.map(item => item.storeId);
+      const stores = await Store.find({ _id: { $in: storeIds } });
+      const storeNames = stores.map(s => s.name).join(', ');
+      
       return res.status(400).json({
         success: false,
-        message: `Cannot delete: Product has active inventory stock. Remove stock first.`
+        message: `Cannot delete: Product has active inventory in ${itemsWithStock.length} store(s): ${storeNames}. Remove all stock first or contact those stores.`,
+        details: {
+          storesWithStock: itemsWithStock.length,
+          storeNames: storeNames
+        }
       });
     }
     
