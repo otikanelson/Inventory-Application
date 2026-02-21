@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -32,21 +32,40 @@ interface Batch {
   price?: number;
 }
 
-// Helper functions for toast notifications
+// Helper functions for toast notifications with graceful error handling
 const showSuccessToast = (title: string, message: string) => {
   Toast.show({
     type: "success",
     text1: title,
     text2: message,
+    visibilityTime: 4000,
   });
 };
 
-const showErrorToast = (error: any, title: string) => {
-  const errorMessage = error?.response?.data?.message || error?.message || "An error occurred";
+const showErrorToast = (error: any, title: string, customMessage?: string) => {
+  const status = error?.response?.status;
+  const data = error?.response?.data;
+  let errorMessage = customMessage || data?.message || error?.message || "An unexpected error occurred";
+  
+  // Make server errors more user-friendly
+  if (status === 500) {
+    errorMessage = "Something went wrong on our end. Please try again in a moment.";
+  } else if (status === 503) {
+    errorMessage = "Service temporarily unavailable. Please try again shortly.";
+  } else if (status === 504) {
+    errorMessage = "Request timed out. Please check your connection and try again.";
+  } else if (status === 400 && data?.details?.storeNames) {
+    // Product has inventory in other stores
+    errorMessage = `Cannot delete: Active inventory in ${data.details.storeNames}. Remove stock or contact these stores.`;
+  } else if (!status) {
+    errorMessage = "Cannot connect to server. Please check your internet connection.";
+  }
+  
   Toast.show({
     type: "error",
     text1: title,
     text2: errorMessage,
+    visibilityTime: 6000,
   });
 };
 
@@ -93,19 +112,22 @@ export default function AdminProductDetails() {
     loadProduct();
   }, [id]);
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/categories`);
-        if (response.data.success) {
-          setAdminCategories(response.data.data.map((cat: any) => cat.name).sort());
+  // Fetch categories - refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchCategories = async () => {
+        try {
+          const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/categories`);
+          if (response.data.success) {
+            setAdminCategories(response.data.data.map((cat: any) => cat.name).sort());
+          }
+        } catch (error) {
+          console.error('Error fetching categories:', error);
         }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-      }
-    };
-    fetchCategories();
-  }, []);
+      };
+      fetchCategories();
+    }, [])
+  );
 
   const loadProduct = async () => {
     if (!id) return;
@@ -378,24 +400,10 @@ export default function AdminProductDetails() {
       router.back();
     } catch (error: any) {
       console.error('Delete error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error data:', error.response?.data);
       
-      // Check for specific validation error about active inventory
-      const errorMessage = error?.response?.data?.message || error?.message || "An error occurred";
-      const errorDetails = error?.response?.data?.details;
-      
-      if (errorMessage.includes("active inventory")) {
-        // Show detailed error about which stores have stock
-        Toast.show({
-          type: "error",
-          text1: "Cannot Delete Product",
-          text2: errorDetails?.storeNames 
-            ? `Stock exists in: ${errorDetails.storeNames}` 
-            : "This product has active inventory in other stores. Remove all stock first.",
-          visibilityTime: 5000,
-        });
-      } else {
-        showErrorToast(error, "Delete Failed");
-      }
+      showErrorToast(error, "Delete Failed");
     }
   };
 

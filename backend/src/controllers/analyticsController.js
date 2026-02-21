@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { 
   getPredictiveAnalytics, 
   getDashboardAnalytics 
@@ -285,13 +286,23 @@ exports.getRecentlySold = async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     
-    // Build initial match stage with tenant filter
-    const matchStage = req.tenantFilter ? { $match: req.tenantFilter } : null;
+    console.log('getRecentlySold - tenantFilter:', req.tenantFilter);
+    console.log('getRecentlySold - user:', { storeId: req.user?.storeId, role: req.user?.role });
     
-    // Build aggregation pipeline
+    // Build aggregation pipeline with tenant filter
     const pipeline = [];
-    if (matchStage) {
-      pipeline.push(matchStage);
+    
+    // Apply tenant filter if it exists (for admin/staff, filter by storeId)
+    if (req.tenantFilter && req.tenantFilter.storeId) {
+      // Ensure storeId is an ObjectId for aggregation
+      const storeIdFilter = mongoose.Types.ObjectId.isValid(req.tenantFilter.storeId)
+        ? new mongoose.Types.ObjectId(req.tenantFilter.storeId)
+        : req.tenantFilter.storeId;
+      
+      pipeline.push({ $match: { storeId: storeIdFilter } });
+      console.log('getRecentlySold - Applying storeId filter:', storeIdFilter);
+    } else {
+      console.log('getRecentlySold - No tenant filter applied (author mode or missing storeId)');
     }
     
     pipeline.push(
@@ -333,6 +344,8 @@ exports.getRecentlySold = async (req, res) => {
     // Get recent sales with product details
     const recentSales = await Sale.aggregate(pipeline);
     
+    console.log('getRecentlySold - Found', recentSales.length, 'sales');
+    
     res.status(200).json({
       success: true,
       data: recentSales
@@ -369,10 +382,23 @@ exports.getRecentlySoldBatches = async (req, res) => {
   try {
     const { limit = 20 } = req.query;
     
+    console.log('getRecentlySoldBatches - tenantFilter:', req.tenantFilter);
+    console.log('getRecentlySoldBatches - user:', { storeId: req.user?.storeId, role: req.user?.role });
+    
     // Build aggregation pipeline with tenant filter
     const pipeline = [];
-    if (req.tenantFilter) {
-      pipeline.push({ $match: req.tenantFilter });
+    
+    // Apply tenant filter if it exists (for admin/staff, filter by storeId)
+    if (req.tenantFilter && req.tenantFilter.storeId) {
+      // Ensure storeId is an ObjectId for aggregation
+      const storeIdFilter = mongoose.Types.ObjectId.isValid(req.tenantFilter.storeId)
+        ? new mongoose.Types.ObjectId(req.tenantFilter.storeId)
+        : req.tenantFilter.storeId;
+      
+      pipeline.push({ $match: { storeId: storeIdFilter } });
+      console.log('getRecentlySoldBatches - Applying storeId filter:', storeIdFilter);
+    } else {
+      console.log('getRecentlySoldBatches - No tenant filter applied (author mode or missing storeId)');
     }
     
     pipeline.push(
@@ -400,6 +426,8 @@ exports.getRecentlySoldBatches = async (req, res) => {
     
     // Get recent sales with batch details
     const recentSales = await Sale.aggregate(pipeline);
+    
+    console.log('getRecentlySoldBatches - Found', recentSales.length, 'sales');
     
     // Filter out deleted products and map to batch-level data
     const batchSales = recentSales
@@ -487,10 +515,22 @@ const cacheService = require('../services/cacheService');
  */
 exports.getQuickInsightsEndpoint = async (req, res) => {
   try {
+    // Get storeId from authenticated user
+    const storeId = req.user?.storeId;
+    
+    if (!storeId && !req.user?.isAuthor) {
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+    
     // Try to get from cache first (30 second TTL)
+    const cacheKey = storeId ? `${cacheService.CACHE_KEYS.quickInsights}_${storeId}` : cacheService.CACHE_KEYS.quickInsights;
+    
     const insights = await cacheService.getOrSet(
-      cacheService.CACHE_KEYS.quickInsights,
-      async () => await getQuickInsights(),
+      cacheKey,
+      async () => await getQuickInsights(storeId),
       30 // 30 seconds TTL
     );
     
@@ -564,10 +604,24 @@ exports.getCategoryInsightsEndpoint = async (req, res) => {
   try {
     const { category } = req.params;
     
+    // Get storeId from authenticated user
+    const storeId = req.user?.storeId;
+    
+    if (!storeId && !req.user?.isAuthor) {
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+    
     // Try to get from cache first (60 second TTL)
+    const cacheKey = storeId 
+      ? `${cacheService.CACHE_KEYS.categoryInsights(category)}_${storeId}`
+      : cacheService.CACHE_KEYS.categoryInsights(category);
+    
     const insights = await cacheService.getOrSet(
-      cacheService.CACHE_KEYS.categoryInsights(category),
-      async () => await getCategoryInsights(category),
+      cacheKey,
+      async () => await getCategoryInsights(category, storeId),
       60 // 60 seconds TTL
     );
     
@@ -654,8 +708,18 @@ exports.getNotifications = async (req, res) => {
   try {
     const { userId = 'admin' } = req.query;
     
-    const notifications = await Notification.getUnread(userId);
-    const unreadCount = await Notification.getUnreadCount(userId);
+    // Get storeId from authenticated user
+    const storeId = req.user?.storeId;
+    
+    if (!storeId && !req.user?.isAuthor) {
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+    
+    const notifications = await Notification.getUnread(userId, storeId);
+    const unreadCount = await Notification.getUnreadCount(userId, storeId);
     
     res.status(200).json({
       success: true,

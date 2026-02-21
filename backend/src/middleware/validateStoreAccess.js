@@ -34,8 +34,8 @@ function validateStoreAccess(req, res, next) {
     // If storeId is in request, verify it matches user's store
     if (requestedStoreId) {
       // Normalize both IDs to strings for comparison
-      const userStoreId = req.user.storeId.toString();
-      const reqStoreId = requestedStoreId.toString();
+      const userStoreId = String(req.user.storeId);
+      const reqStoreId = String(requestedStoreId);
       
       // Trim to 24 characters if longer (handle malformed IDs)
       const normalizedUserStoreId = userStoreId.substring(0, 24);
@@ -53,9 +53,13 @@ function validateStoreAccess(req, res, next) {
     next();
   } catch (error) {
     console.error('Store access validation error:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('req.user:', req.user);
     return res.status(500).json({ 
       success: false,
-      error: 'Authorization failed' 
+      error: 'Authorization failed',
+      details: error.message // Add error details for debugging
     });
   }
 }

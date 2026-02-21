@@ -208,27 +208,43 @@ exports.updateProduct = async (req, res) => {
     console.error("UpdateProduct Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update product. Please try again.",
     });
   }
 };
 
 // @desc    Delete entire product
 // @route   DELETE /api/products/:id
+// @desc    Delete product
+// @route   DELETE /api/products/:id
 // @access  Admin
 exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log('Delete product request - ID:', id);
+    console.log('Tenant filter:', req.tenantFilter);
+
+    // Validate ID format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID format",
+      });
+    }
+
     // Find and delete with store filter
     const product = await Product.findOneAndDelete({ _id: id, ...req.tenantFilter });
 
     if (!product) {
+      console.log('Product not found with ID:', id, 'and tenant filter:', req.tenantFilter);
       return res.status(404).json({
         success: false,
-        message: "Product not found",
+        message: "Product not found or you don't have permission to delete it",
       });
     }
+
+    console.log('Product deleted successfully:', product.name);
 
     res.status(200).json({
       success: true,
@@ -237,9 +253,10 @@ exports.deleteProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("DeleteProduct Error:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to delete product. Please try again.",
     });
   }
 };
@@ -469,7 +486,7 @@ exports.updateGenericPrice = async (req, res) => {
       .json({ success: true, message: "Generic price updated", data: product });
   } catch (error) {
     console.error("UpdateGenericPrice Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Failed to update price. Please try again." });
   }
 };
 

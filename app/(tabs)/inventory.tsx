@@ -4,17 +4,17 @@ import { useTheme } from "@/context/ThemeContext";
 import { Product, useProducts } from "@/hooks/useProducts";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { Href, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { Href, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    FlatList,
+    Image,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 
 export default function InventoryScreen() {
@@ -26,6 +26,13 @@ export default function InventoryScreen() {
   const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
   const [displayMode, setDisplayMode] = useState<"card" | "list" | "rect">("card");
   const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
+
+  // Refresh inventory when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   // Fetch analytics for all products
   useEffect(() => {

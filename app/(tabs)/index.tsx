@@ -1,16 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
+import { AuthDebugger } from "../../components/AuthDebugger";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View} from "react-native";
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
+} from "react-native";
 import Toast from "react-native-toast-message";
 import { AIInsightsBadge } from "../../components/AIInsightsBadge";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -174,9 +176,14 @@ export default function Dashboard() {
           if (response.data.success) {
             setRecentlySoldBatches(response.data.data || []);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching batch sales:", error);
           setRecentlySoldBatches([]);
+          Toast.show({
+            type: 'error',
+            text1: 'Network Error',
+            text2: 'Could not load sales data'
+          });
         }
       }
     };
@@ -239,24 +246,6 @@ export default function Dashboard() {
     };
     fetchPredictionsForVisible();
   }, [visibleData, activeTab, loading, fetchBatchPredictions]);
-  useEffect(() => {
-    const fetchBatchSales = async () => {
-      if (!viewByProduct && activeTab === "sold") {
-        try {
-          const response = await axios.get(
-            `${process.env.EXPO_PUBLIC_API_URL}/analytics/recently-sold-batches?limit=20`
-          );
-          if (response.data.success) {
-            setRecentlySoldBatches(response.data.data || []);
-          }
-        } catch (error) {
-          console.error("Error fetching batch sales:", error);
-          setRecentlySoldBatches([]);
-        }
-      }
-    };
-    fetchBatchSales();
-  }, [viewByProduct, activeTab]);
 
   const handleLoadMore = () => {
     let maxLength;
@@ -273,7 +262,8 @@ export default function Dashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      
+      {/* Auth Debugger - Only visible in development */}
+      <AuthDebugger />
 
         <FlatList
         data={loading ? Array(6).fill({}) : visibleData}
@@ -652,6 +642,19 @@ export default function Dashboard() {
             <ProductCard item={item} prediction={predictions[item._id] || null} />
           )
         }
+        ListEmptyComponent={
+          !loading && activeTab === "sold" ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="cart-outline" size={64} color={theme.subtext + "40"} />
+              <Text style={[styles.emptyText, { color: theme.subtext }]}>
+                No Sales Yet
+              </Text>
+              <Text style={[styles.emptyHint, { color: theme.subtext }]}>
+                Sales will appear here once you complete transactions
+              </Text>
+            </View>
+          ) : null
+        }
         ListFooterComponent={
           (() => {
             let maxLength;
@@ -867,5 +870,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     marginTop: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyHint: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

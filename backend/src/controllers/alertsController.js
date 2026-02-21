@@ -137,11 +137,27 @@ exports.getAlerts = async (req, res) => {
   try {
     const { level, category, sortBy = 'urgency' } = req.query;
     
-    // Get or create default settings
-    let settings = await AlertSettings.findOne({ userId: 'default' });
+    console.log('getAlerts - tenantFilter:', req.tenantFilter);
+    console.log('getAlerts - user:', { storeId: req.user?.storeId, role: req.user?.role });
+    
+    // Get storeId from authenticated user
+    const storeId = req.user.storeId;
+    
+    if (!storeId) {
+      console.log('getAlerts - No storeId found for user');
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+    
+    // Get or create store-specific settings
+    let settings = await AlertSettings.findOne({ storeId });
     if (!settings) {
+      console.log('getAlerts - Creating new alert settings for store:', storeId);
       settings = await AlertSettings.create({
-        userId: 'default',
+        storeId,
+        userId: 'admin',
         thresholds: { critical: 7, highUrgency: 14, earlyWarning: 30 }
       });
     }
@@ -155,7 +171,12 @@ exports.getAlerts = async (req, res) => {
       'batches.0': { $exists: true },
       ...req.tenantFilter
     };
+    
+    console.log('getAlerts - Query:', JSON.stringify(query));
+    
     const products = await Product.find(query);
+    
+    console.log('getAlerts - Found', products.length, 'perishable products');
     
     const alerts = [];
     
@@ -346,11 +367,15 @@ exports.getAlerts = async (req, res) => {
  */
 exports.getSettings = async (req, res) => {
   try {
-    let settings = await AlertSettings.findOne({ userId: 'default' });
+    // Get storeId from authenticated user
+    const storeId = req.user.storeId;
+    
+    let settings = await AlertSettings.findOne({ storeId });
     
     if (!settings) {
       settings = await AlertSettings.create({
-        userId: 'default',
+        storeId,
+        userId: 'admin',
         thresholds: { critical: 7, highUrgency: 14, earlyWarning: 30 }
       });
     }
@@ -376,10 +401,16 @@ exports.updateSettings = async (req, res) => {
   try {
     const { thresholds, notificationSettings } = req.body;
     
-    let settings = await AlertSettings.findOne({ userId: 'default' });
+    // Get storeId from authenticated user
+    const storeId = req.user.storeId;
+    
+    let settings = await AlertSettings.findOne({ storeId });
     
     if (!settings) {
-      settings = new AlertSettings({ userId: 'default' });
+      settings = new AlertSettings({ 
+        storeId,
+        userId: 'admin'
+      });
     }
     
     if (thresholds) {

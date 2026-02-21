@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../../context/AuthContext';
@@ -54,6 +54,15 @@ export default function AdminProfileScreen() {
     checkAdminSession();
     fetchAdminInfo();
   }, [role]);
+
+  // Refresh staff list when screen comes into focus (e.g., after adding a new staff member)
+  useFocusEffect(
+    useCallback(() => {
+      if (role === 'admin' || role === 'staff') {
+        fetchStaffMembers();
+      }
+    }, [role])
+  );
 
   const checkAdminSession = async () => {
     try {
@@ -309,7 +318,16 @@ export default function AdminProfileScreen() {
 
         {/* Staff Management Section - Always show in admin dashboard */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>STAFF MEMBERS</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>STAFF MEMBERS</Text>
+            <Pressable
+              onPress={() => router.push('/auth/staff-register')}
+              style={[styles.addStaffBtn, { backgroundColor: theme.primary }]}
+            >
+              <Ionicons name="person-add" size={18} color="#FFF" />
+              <Text style={styles.addStaffBtnText}>Add Staff</Text>
+            </Pressable>
+          </View>
 
           {loadingStaff ? (
             <View style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -596,11 +614,29 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 30,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.5,
-    marginBottom: 15,
+  },
+  addStaffBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  addStaffBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   settingRow: {
     flexDirection: 'row',

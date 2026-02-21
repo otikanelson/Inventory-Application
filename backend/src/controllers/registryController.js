@@ -167,7 +167,7 @@ exports.updateGlobalProduct = async (req, res) => {
     console.error('Update Global Product Error:', error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update global product. Please try again.",
       error: error.message
     });
   }
@@ -179,6 +179,14 @@ exports.deleteGlobalProduct = async (req, res) => {
     const { id } = req.params;
     
     console.log('Attempting to delete global product with ID:', id);
+    
+    // Validate ID format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID format",
+      });
+    }
     
     const globalProduct = await GlobalProduct.findById(id);
     
@@ -201,18 +209,41 @@ exports.deleteGlobalProduct = async (req, res) => {
     if (itemsWithStock.length > 0) {
       console.log('Cannot delete - product has active stock in', itemsWithStock.length, 'store(s)');
       
-      // Get store names for better error message
-      const Store = require('../models/Store');
-      const storeIds = itemsWithStock.map(item => item.storeId);
-      const stores = await Store.find({ _id: { $in: storeIds } });
-      const storeNames = stores.map(s => s.name).join(', ');
+      let storeNames = "other stores";
+      let storeDetails = [];
+      
+      try {
+        // Get store names for better error message
+        const Store = require('../models/Store');
+        const storeIds = itemsWithStock.map(item => item.storeId);
+        const stores = await Store.find({ _id: { $in: storeIds } });
+        
+        // Build detailed store information
+        storeDetails = itemsWithStock.map(item => {
+          const store = stores.find(s => s._id.toString() === item.storeId.toString());
+          return {
+            storeName: store ? store.name : 'Unknown Store',
+            quantity: item.totalQuantity
+          };
+        });
+        
+        storeNames = storeDetails
+          .map(s => `${s.storeName} (${s.quantity} units)`)
+          .join(', ');
+        
+      } catch (storeError) {
+        console.error('Error fetching store names:', storeError);
+        // Fallback error message if store lookup fails
+        storeNames = `${itemsWithStock.length} store(s)`;
+      }
       
       return res.status(400).json({
         success: false,
-        message: `Cannot delete: Product has active inventory in ${itemsWithStock.length} store(s): ${storeNames}. Remove all stock first or contact those stores.`,
+        message: `Cannot delete: Product has active inventory in ${itemsWithStock.length} store(s). Remove all stock first.`,
         details: {
           storesWithStock: itemsWithStock.length,
-          storeNames: storeNames
+          storeNames: storeNames,
+          storeDetails: storeDetails
         }
       });
     }
@@ -232,9 +263,10 @@ exports.deleteGlobalProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Delete Global Product Error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: error.message
+      message: "Failed to delete global product. Please try again.",
     });
   }
 };

@@ -1,8 +1,8 @@
 import { ProductCard } from "@/components/ProductCard";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     FlatList,
     Image,
@@ -30,6 +30,17 @@ export default function AdminInventory() {
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
+
+  // Refresh inventory when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === "inventory") {
+        refresh();
+      } else {
+        fetchGlobalProducts();
+      }
+    }, [refresh, activeTab])
+  );
 
   // Fetch analytics for inventory products
   useEffect(() => {

@@ -4,10 +4,16 @@
 const mongoose = require('mongoose');
 
 const AlertSettingsSchema = new mongoose.Schema({
+  storeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Store',
+    required: true,
+    unique: true,
+    index: true
+  },
   userId: { 
     type: String, 
-    default: 'default', 
-    unique: true 
+    default: 'admin'
   },
   
   thresholds: {
@@ -39,5 +45,8 @@ const AlertSettingsSchema = new mongoose.Schema({
   },
   
 }, { timestamps: true });
+
+// Index for multi-tenant queries
+AlertSettingsSchema.index({ storeId: 1, userId: 1 });
 
 module.exports = mongoose.model('AlertSettings', AlertSettingsSchema);

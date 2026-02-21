@@ -92,29 +92,31 @@ export default function AddProducts() {
     checkSecurityPIN();
   }, []);
 
-  // Fetch admin-created categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const token = await AsyncStorage.getItem('auth_session_token');
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+  // Fetch admin-created categories - refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchCategories = async () => {
+        try {
+          const token = await AsyncStorage.getItem('auth_session_token');
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          const data = await response.json();
+          if (data.success) {
+            setAdminCategories(data.data.map((cat: any) => cat.name).sort());
+          } else {
+            console.error('Failed to fetch categories:', data.error);
           }
-        });
-        const data = await response.json();
-        if (data.success) {
-          setAdminCategories(data.data.map((cat: any) => cat.name).sort());
-        } else {
-          console.error('Failed to fetch categories:', data.error);
+        } catch (error) {
+          console.error('Error fetching categories:', error);
         }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-      }
-    };
-    fetchCategories();
-  }, []);
+      };
+      fetchCategories();
+    }, [])
+  );
 
   useEffect(() => {
     const loadProductData = async () => {
@@ -595,8 +597,8 @@ export default function AddProducts() {
         quality: 0.5, // Balanced quality for iOS
         allowsEditing: true, 
         aspect: [1, 1],
-        base64: false,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        base64: true, // Get base64 data directly
+        mediaTypes: ['images'],
         // iOS-specific options
         exif: false, // Don't include EXIF data to reduce size
       };
@@ -606,7 +608,8 @@ export default function AddProducts() {
         : await ImagePicker.launchImageLibraryAsync(options);
         
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const imageUri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const imageUri = asset.uri;
         
         // Validate image URI
         if (!imageUri) {
@@ -618,7 +621,12 @@ export default function AddProducts() {
           return;
         }
         
+        // Store both URI (for display) and base64 (for upload)
         setImage(imageUri);
+        if (asset.base64) {
+          // Store base64 in a ref or state for later use
+          (window as any).__imageBase64 = asset.base64;
+        }
         setFormModified(true);
         
         Toast.show({
@@ -682,42 +690,60 @@ export default function AddProducts() {
           console.log('Starting image upload process...');
           console.log('Image URI:', image);
 
-          // Convert to base64 for upload
-          const response = await fetch(image);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.status}`);
-          }
-
-          const blob = await response.blob();
-          console.log('Original blob size:', blob.size, 'type:', blob.type);
-
-          // Check if image is too large (> 5MB original)
-          if (blob.size > 5 * 1024 * 1024) {
-            throw new Error('Image is too large. Please choose a smaller image or take a new photo with lower quality.');
-          }
-
-          const reader = new FileReader();
+          // Use base64 data from ImagePicker if available
+          let base64Data;
           
-          const base64Promise = new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => {
-              console.log('FileReader completed');
-              const result = reader.result;
-              if (typeof result === 'string') {
-                resolve(result);
-              } else {
-                reject(new Error('Failed to read file as data URL'));
+          // Check if we have base64 from ImagePicker
+          const storedBase64 = (window as any).__imageBase64;
+          if (storedBase64) {
+            console.log('Using base64 from ImagePicker');
+            // Construct data URL from base64
+            base64Data = `data:image/jpeg;base64,${storedBase64}`;
+            // Clean up
+            delete (window as any).__imageBase64;
+          } else {
+            // Fallback to fetch/FileReader for web or if base64 not available
+            console.log('Fetching image file for base64 conversion');
+            try {
+              const response = await fetch(image);
+              if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.status}`);
               }
-            };
-            reader.onerror = (error) => {
-              console.error('FileReader error:', error);
-              reject(error);
-            };
-            reader.readAsDataURL(blob);
-          });
 
-          const base64Data = await base64Promise;
-          console.log('Base64 data length:', base64Data.length);
-          console.log('Base64 prefix:', base64Data.substring(0, 50));
+              const blob = await response.blob();
+              console.log('Original blob size:', blob.size, 'type:', blob.type);
+
+              // Check if image is too large (> 5MB original)
+              if (blob.size > 5 * 1024 * 1024) {
+                throw new Error('Image is too large. Please choose a smaller image or take a new photo with lower quality.');
+              }
+
+              const reader = new FileReader();
+              
+              const base64Promise = new Promise<string>((resolve, reject) => {
+                reader.onloadend = () => {
+                  console.log('FileReader completed');
+                  const result = reader.result;
+                  if (typeof result === 'string') {
+                    resolve(result);
+                  } else {
+                    reject(new Error('Failed to read file as data URL'));
+                  }
+                };
+                reader.onerror = (error) => {
+                  console.error('FileReader error:', error);
+                  reject(error);
+                };
+                reader.readAsDataURL(blob);
+              });
+
+              base64Data = await base64Promise;
+              console.log('Base64 data length:', base64Data.length);
+            } catch (error) {
+              console.error('Image processing error:', error);
+              throw error;
+            }
+          }
 
           // Check final size (base64 is ~33% larger than binary)
           const estimatedSize = (base64Data.length * 3) / 4;
@@ -859,7 +885,34 @@ export default function AddProducts() {
       }
     } catch (err: any) {
       console.error("Save Error:", err);
-      Toast.show({ type: "error", text1: "Save Failed", text2: "Please try again" });
+      
+      let errorMessage = "Please try again";
+      
+      // Handle specific error types
+      if (err.response?.data?.error) {
+        const errorText = err.response.data.error;
+        
+        // Duplicate key error (E11000)
+        if (errorText.includes('E11000') || errorText.includes('duplicate key')) {
+          if (errorText.includes('barcode')) {
+            errorMessage = "A product with this barcode already exists in your inventory";
+          } else if (errorText.includes('internalCode')) {
+            errorMessage = "Database error. Please contact support or try again later";
+          } else {
+            errorMessage = "This product already exists in your inventory";
+          }
+        } else {
+          errorMessage = errorText;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      Toast.show({ 
+        type: "error", 
+        text1: "Save Failed", 
+        text2: errorMessage 
+      });
     } finally {
       setIsSubmitting(false);
     }

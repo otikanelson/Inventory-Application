@@ -18,21 +18,19 @@ axios.interceptors.request.use(
       const token = await AsyncStorage.getItem('auth_session_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log(`🔐 [REQUEST] Adding auth token to ${config.url}`);
+        console.log(`🔐 [AUTH] Token added to ${config.method?.toUpperCase()} ${config.url}`);
       } else {
-        console.log(`📭 [REQUEST] No auth token for ${config.url}`);
+        console.warn(`⚠️ [AUTH] No token found for ${config.method?.toUpperCase()} ${config.url}`);
+        console.warn(`   This request will likely return 401 Unauthorized`);
       }
       
       // Add request timestamp for debugging slow requests
       config.metadata = { startTime: new Date().getTime() };
       
-      // Log full request details
+      // Log request details (simplified for production)
       console.log(`📤 [REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
-      if (config.data) {
-        console.log(`📦 [REQUEST BODY]`, JSON.stringify(config.data, null, 2));
-      }
     } catch (error) {
-      console.error('❌ [REQUEST ERROR] Error getting auth token:', error);
+      console.error('❌ [AUTH ERROR] Error getting auth token:', error);
       // Don't fail the request if we can't get the token
     }
     return config;
@@ -51,15 +49,12 @@ axios.interceptors.response.use(
       ? new Date().getTime() - response.config.metadata.startTime 
       : 0;
     
-    console.log(`✅ [RESPONSE] ${response.config.url} - Status: ${response.status} - Duration: ${duration}ms`);
-    
-    if (response.data) {
-      console.log(`📥 [RESPONSE DATA]`, JSON.stringify(response.data, null, 2));
-    }
+    const url = response.config.url || 'unknown';
+    console.log(`✅ [${response.status}] ${url} (${duration}ms)`);
     
     // Log slow requests (over 3 seconds)
     if (duration > 3000) {
-      console.warn(`⚠️ [SLOW REQUEST] ${response.config.url} took ${duration}ms`);
+      console.warn(`⚠️ [SLOW] ${url} took ${duration}ms`);
     }
     
     return response;
@@ -75,48 +70,31 @@ axios.interceptors.response.use(
         const status = error.response.status;
         const data = error.response.data;
         
-        console.error(`❌ [${status}] ${method} ${url}`);
-        console.error(`📥 [ERROR RESPONSE]`, JSON.stringify(data, null, 2));
-        
-        // Don't log 400 errors (validation errors like duplicate PIN, invalid input)
-        // These are expected user errors, not system errors
-        if (status === 400) {
-          console.log(`⚠️ [VALIDATION ERROR] ${url} - ${data?.error || data?.message || 'Bad request'}`);
-        } else if (status === 401) {
-          console.log(`🔒 [AUTH ERROR] ${url} - Authentication failed, token may be invalid`);
+        if (status === 401) {
+          console.error(`🔒 [401 UNAUTHORIZED] ${method} ${url}`);
+          console.error(`   Authentication failed - token may be missing or invalid`);
+          console.error(`   Error: ${data?.error || data?.message || 'Unauthorized'}`);
         } else if (status === 403) {
-          console.log(`🚫 [FORBIDDEN] ${url} - Access denied, insufficient permissions`);
+          console.error(`🚫 [403 FORBIDDEN] ${method} ${url}`);
+          console.error(`   Access denied - insufficient permissions`);
         } else if (status === 404) {
-          console.log(`🔍 [NOT FOUND] ${url} - Resource not found`);
+          console.log(`🔍 [404 NOT FOUND] ${method} ${url}`);
+        } else if (status === 400) {
+          console.log(`⚠️ [400 BAD REQUEST] ${method} ${url} - ${data?.error || data?.message || 'Bad request'}`);
         } else if (status >= 500) {
-          console.error(`💥 [SERVER ERROR] ${status} for ${url}`);
+          console.error(`💥 [${status} SERVER ERROR] ${method} ${url}`);
         } else {
-          console.log(`⚠️ [HTTP ${status}] ${url}`);
+          console.log(`⚠️ [${status}] ${method} ${url}`);
         }
       } else if (error.code === 'ECONNABORTED') {
-        console.error(`⏱️ [TIMEOUT] ${url} - Server took too long to respond (>15s)`);
+        console.error(`⏱️ [TIMEOUT] ${method} ${url} - Server took too long to respond`);
       } else if (error.code === 'ERR_NETWORK') {
-        console.error(`🌐 [NETWORK ERROR] ${url} - Check internet connection or server availability`);
-        console.error(`🔍 [DEBUG] Error details:`, {
-          code: error.code,
-          message: error.message,
-          url: url,
-        });
-        console.error(`🔍 [NETWORK DEBUG] Possible causes:`);
-        console.error(`   1. Emulator network configuration issue`);
-        console.error(`   2. SSL certificate validation failure`);
-        console.error(`   3. Firewall/proxy blocking the request`);
-        console.error(`   4. DNS resolution failure`);
-        console.error(`💡 [TIP] Try testing on a real device or different network`);
+        console.error(`🌐 [NETWORK ERROR] ${method} ${url}`);
+        console.error(`   Check internet connection or server availability`);
       } else if (!error.response) {
-        console.error(`📡 [NO RESPONSE] ${url} - Server didn't respond`);
-        console.error(`🔍 [DEBUG] Error details:`, {
-          code: error.code,
-          message: error.message,
-          url: url,
-        });
+        console.error(`📡 [NO RESPONSE] ${method} ${url} - Server didn't respond`);
       } else {
-        console.error(`❓ [UNEXPECTED ERROR] ${url}:`, error.message);
+        console.error(`❓ [UNEXPECTED ERROR] ${method} ${url}:`, error.message);
       }
     } catch (loggingError) {
       // Even error logging shouldn't crash the app

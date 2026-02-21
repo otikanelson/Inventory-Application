@@ -8,12 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Animated,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAIPredictions } from '../hooks/useAIPredictions';
@@ -102,8 +102,10 @@ export const AIInsightsBadge = () => {
               AI Insights
             </Text>
             <Text style={[styles.badgeSubtitle, { color: theme.subtext }]}>
-              {urgentCount === 0
-                ? 'All clear'
+              {loading
+                ? 'Analyzing inventory...'
+                : urgentCount === 0
+                ? 'Monitoring inventory - will alert when action needed'
                 : `${urgentCount} urgent ${urgentCount === 1 ? 'item' : 'items'}`}
             </Text>
           </View>
