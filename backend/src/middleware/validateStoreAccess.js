@@ -48,7 +48,8 @@ function validateStoreAccess(req, res, next) {
     }
 
     // Extract storeId from request (body, params, or query)
-    const requestedStoreId = req.body.storeId || req.params.storeId || req.query.storeId;
+    // Safely access req.body in case it's undefined
+    const requestedStoreId = (req.body && req.body.storeId) || (req.params && req.params.storeId) || (req.query && req.query.storeId);
     console.log('🔒 Requested storeId:', requestedStoreId);
     console.log('🔒 User storeId:', req.user.storeId);
 
