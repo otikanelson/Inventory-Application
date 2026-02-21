@@ -10,6 +10,7 @@ import {
   BackHandler,
   FlatList,
   Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -31,6 +32,10 @@ import { hasSecurityPIN } from "../../utils/securityPINCheck";
 
 export default function AddProducts() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const navigation: any = useNavigation();
   const params = useLocalSearchParams();
@@ -929,7 +934,8 @@ export default function AddProducts() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -1817,6 +1823,7 @@ export default function AddProducts() {
         }}
       />
     </View>
+    </ImageBackground>
   );
 }
 

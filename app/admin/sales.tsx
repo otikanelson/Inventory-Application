@@ -4,17 +4,18 @@ import { useAudioPlayer } from "expo-audio";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    ImageBackground,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -44,6 +45,10 @@ interface RevenueStats {
 
 export default function AdminSales() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const { products, refresh } = useProducts();
   const { cartData } = useLocalSearchParams();
@@ -296,7 +301,8 @@ export default function AdminSales() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       {/* Technical Header */}
@@ -951,6 +957,7 @@ export default function AdminSales() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

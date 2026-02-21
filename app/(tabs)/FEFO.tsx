@@ -2,15 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    FlatList,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
@@ -20,6 +19,10 @@ import { Prediction } from "../../types/ai-predictions";
 
 export default function FEFOScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const { products, loading, refresh } = useProducts();
   const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
   const router = useRouter();
@@ -135,7 +138,8 @@ export default function FEFOScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <FlatList
@@ -362,6 +366,7 @@ export default function FEFOScreen() {
         }
       />
     </View>
+    </ImageBackground>
   );
 }
 

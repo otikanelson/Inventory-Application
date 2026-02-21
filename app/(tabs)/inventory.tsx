@@ -14,6 +14,7 @@ import {
     StyleSheet,
     Text,
     TextInput,
+    ImageBackground,
     View
 } from "react-native";
 
@@ -21,6 +22,10 @@ export default function InventoryScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
@@ -112,7 +117,8 @@ export default function InventoryScreen() {
   }, [filteredProducts, sortField, analytics]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>STOCK_MANAGEMENT</Text>
@@ -450,7 +456,8 @@ export default function InventoryScreen() {
           }}
         />
       </View>
-    </View>
+      </View>
+    </ImageBackground>
   );
 }
 

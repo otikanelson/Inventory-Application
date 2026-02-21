@@ -9,19 +9,17 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View} from "react-native";
+  Animated,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
 import { hasSecurityPIN } from "../../utils/securityPINCheck";
-
-const { height } = Dimensions.get("window");
 
 export default function ScanScreen() {
   const router = useRouter();

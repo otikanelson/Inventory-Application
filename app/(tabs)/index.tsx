@@ -3,14 +3,15 @@ import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIInsightsBadge } from "../../components/AIInsightsBadge";
@@ -260,8 +261,11 @@ export default function Dashboard() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-
+    <ImageBackground
+      source={isDark ? require('../../assets/images/Background7.png') : require('../../assets/images/Background9.png')}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
         <FlatList
         data={loading ? Array(6).fill({}) : visibleData}
         numColumns={2}
@@ -483,7 +487,7 @@ export default function Dashboard() {
                   />
                 </View>
                 <Text style={[styles.actionText, { color: theme.text }]}>
-                  Statistics
+                  Queue
                 </Text>
               </Pressable>
             </View>
@@ -669,7 +673,7 @@ export default function Dashboard() {
           })()
         }
       />
-    </View>
+    </ImageBackground>
   );
 }
 

@@ -3,17 +3,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View} from 'react-native';
+    Image,
+    ImageBackground,
+    Pressable,
+    StyleSheet,
+    Text,
+    View
+} from "react-native";
 import { PinInput } from '../../components/PinInput';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function LoginScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const { login, isAuthenticated, role: userRole } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -77,10 +83,9 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      
-
-      {/* Header */}
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={[styles.container, { backgroundColor: "transparent" }]}>
+        {/* Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>
         <Text style={styles.headerTitle}>StockQ</Text>
       </View>
@@ -207,6 +212,7 @@ export default function LoginScreen() {
       {/* Author Login Modal */}
       <AuthorLogin visible={showAuthorLogin} onClose={() => setShowAuthorLogin(false)} />
     </View>
+    </ImageBackground>
   );
 }
 

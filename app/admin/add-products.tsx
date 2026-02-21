@@ -6,20 +6,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  BackHandler,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    BackHandler,
+    FlatList,
+    Image,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
@@ -30,6 +31,10 @@ import { hasSecurityPIN } from "../../utils/securityPINCheck";
 
 export default function AddProducts() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const navigation: any = useNavigation();
   const params = useLocalSearchParams();
@@ -932,7 +937,8 @@ export default function AddProducts() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -1821,6 +1827,7 @@ export default function AddProducts() {
         }}
       />
     </View>
+    </ImageBackground>
   );
 }
 

@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    ImageBackground,
     Modal,
     Pressable,
     ScrollView,
@@ -12,7 +13,7 @@ import {
     Text,
     TextInput,
     View
-} from 'react-native';
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -29,6 +30,10 @@ interface StaffMember {
 
 export default function AdminProfileScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
   const { user, role, logout } = useAuth();
 
@@ -257,7 +262,8 @@ export default function AdminProfileScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -554,6 +560,7 @@ export default function AdminProfileScreen() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

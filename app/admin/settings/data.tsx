@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  ImageBackground,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default function DataSettingsScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
 
   // Data Management State
@@ -315,7 +320,8 @@ export default function DataSettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -391,7 +397,8 @@ export default function DataSettingsScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
-    </View>
+      </View>
+    </ImageBackground>
   );
 }
 

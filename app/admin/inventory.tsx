@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     FlatList,
     Image,
+    ImageBackground,
     Pressable,
     RefreshControl,
     StyleSheet,
@@ -21,6 +22,10 @@ import { useProducts } from "../../hooks/useProducts";
 export default function AdminInventory() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const { products, loading, refresh } = useProducts();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -194,8 +199,9 @@ export default function AdminInventory() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <View style={styles.container}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
+        <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>
             ADMIN_PANEL
@@ -705,6 +711,7 @@ export default function AdminInventory() {
         />
       </View>
     </View>
+    </ImageBackground>
   );
 }
 

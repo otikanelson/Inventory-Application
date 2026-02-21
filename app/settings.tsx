@@ -4,14 +4,15 @@ import axios from "axios";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
@@ -22,6 +23,9 @@ import { useTour } from "../context/TourContext";
 
 export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
+  const backgroundImage = isDark
+    ? require("../assets/images/Background7.png")
+    : require("../assets/images/Background9.png");
   const router = useRouter();
   const { resetTour, startTour } = useTour();
   const { logout: authLogout } = useAuth();
@@ -159,7 +163,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView
@@ -350,6 +355,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

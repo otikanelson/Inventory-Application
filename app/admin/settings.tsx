@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
+    ImageBackground,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -19,6 +20,10 @@ export default function AdminSettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const router = useRouter();
   const { resetTour, startTour } = useAdminTour();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
 
 
 
@@ -56,7 +61,8 @@ export default function AdminSettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -206,6 +212,7 @@ export default function AdminSettingsScreen() {
 
       </ScrollView>
     </View>
+    </ImageBackground>
   );
 }
 

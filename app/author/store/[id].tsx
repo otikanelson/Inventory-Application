@@ -5,12 +5,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    ImageBackground,
     Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
-    View} from 'react-native';
+    View
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -46,6 +48,10 @@ interface StoreDetails {
 
 export default function StoreDetailScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [details, setDetails] = useState<StoreDetails | null>(null);
@@ -126,24 +132,25 @@ export default function StoreDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.text }]}>Loading store details...</Text>
+      <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+        <View style={[styles.container, { backgroundColor: "transparent" }]}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.text }]}>Loading store details...</Text>
+          </View>
         </View>
-      </View>
+      </ImageBackground>
     );
   }
 
   if (!details) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        
-        <View style={styles.loadingContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color={theme.subtext} />
-          <Text style={[styles.loadingText, { color: theme.text }]}>Store not found</Text>
-          <Pressable
+      <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+        <View style={[styles.container, { backgroundColor: "transparent" }]}>
+          <View style={styles.loadingContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color={theme.subtext} />
+            <Text style={[styles.loadingText, { color: theme.text }]}>Store not found</Text>
+            <Pressable
             style={[styles.backButton, { backgroundColor: theme.primary }]}
             onPress={() => router.back()}
           >
@@ -151,14 +158,14 @@ export default function StoreDetailScreen() {
           </Pressable>
         </View>
       </View>
+      </ImageBackground>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      
-
-      <ScrollView
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={[styles.container, { backgroundColor: "transparent" }]}>
+        <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -347,6 +354,7 @@ export default function StoreDetailScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
+    </ImageBackground>
   );
 }
 

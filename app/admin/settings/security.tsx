@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -19,6 +20,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default function SecuritySettingsScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
 
   // Login PIN Update State
@@ -376,7 +381,8 @@ export default function SecuritySettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -757,6 +763,7 @@ export default function SecuritySettingsScreen() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

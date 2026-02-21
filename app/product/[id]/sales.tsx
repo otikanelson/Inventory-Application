@@ -3,14 +3,16 @@ import axios from "axios";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View} from "react-native";
+  ActivityIndicator,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
 import { useTheme } from "../../../context/ThemeContext";
 
 interface SaleRecord {
@@ -35,6 +37,10 @@ interface Product {
 
 export default function ProductSalesDetails() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
   const { id } = useLocalSearchParams();
   
@@ -102,23 +108,23 @@ export default function ProductSalesDetails() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        
-        <View style={styles.loadingContainer}>
+      <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+        <View style={[styles.container, { backgroundColor: "transparent" }]}>
+          <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>
             Loading sales data...
           </Text>
         </View>
       </View>
+      </ImageBackground>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      
-      
-      <ScrollView
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={[styles.container, { backgroundColor: "transparent" }]}>
+        <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
@@ -294,6 +300,7 @@ export default function ProductSalesDetails() {
         </View>
       </ScrollView>
     </View>
+    </ImageBackground>
   );
 }
 

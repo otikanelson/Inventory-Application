@@ -2,10 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import Toast from 'react-native-toast-message';
+import { toastConfig } from '../components/CustomToast';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { TourOverlay } from '../components/TourOverlay';
 import { AuthProvider, useAuth } from '../context/AuthContext';
-import { ThemeProvider } from '../context/ThemeContext';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { TourProvider } from '../context/TourContext';
 // Import axios configuration to set up interceptors
 import '../utils/axiosConfig';
@@ -157,9 +158,15 @@ function RootLayoutNav() {
         <Stack.Screen name="author" options={{ headerShown: false }} />
       </Stack>
       <TourOverlay />
-      <Toast />
+      <ThemedToast />
     </>
   );
+}
+
+// Separate component to access theme context
+function ThemedToast() {
+  const { isDark } = useTheme();
+  return <Toast config={toastConfig(isDark)} />;
 }
 
 export default function RootLayout() {

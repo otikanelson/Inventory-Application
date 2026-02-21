@@ -3,19 +3,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View} from 'react-native';
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 export default function ProfileScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../assets/images/Background7.png")
+    : require("../assets/images/Background9.png");
   const router = useRouter();
   const { user, role, logout } = useAuth();
 
@@ -110,7 +116,8 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -290,6 +297,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

@@ -5,14 +5,16 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View} from 'react-native';
+  Image,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
 import { useTheme } from '../../context/ThemeContext';
@@ -23,6 +25,10 @@ type SetupStep = 'welcome' | 'store-name' | 'admin-name' | 'admin-pin' | 'comple
 
 export default function SetupScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const [step, setStep] = useState<SetupStep>('welcome');
   const [storeName, setStoreName] = useState('');
@@ -215,8 +221,9 @@ export default function SetupScreen() {
   };
 
   return (
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
     <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: theme.background }]}
+      style={[styles.container, { backgroundColor: "transparent" }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
@@ -480,6 +487,7 @@ export default function SetupScreen() {
       {/* Author Login Modal */}
       <AuthorLogin visible={showAuthorLogin} onClose={() => setShowAuthorLogin(false)} />
     </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
