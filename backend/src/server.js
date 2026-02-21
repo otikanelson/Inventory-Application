@@ -59,7 +59,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Request logging middleware for debugging
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.path}`);
-  if (req.method === 'POST' || req.method === 'PUT') {
+  if ((req.method === 'POST' || req.method === 'PUT') && req.body) {
     console.log('Request body keys:', Object.keys(req.body));
   }
   next();
