@@ -2,10 +2,15 @@ const mongoose = require("mongoose");
 
 const GlobalProductSchema = new mongoose.Schema(
   {
+    storeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Store",
+      required: false, // Optional for backward compatibility, but should be set for new entries
+      index: true,
+    },
     barcode: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     name: {
@@ -27,11 +32,13 @@ const GlobalProductSchema = new mongoose.Schema(
     },
     internalId: {
       type: String,
-      unique: true,
       sparse: true,
     },
   },
   { timestamps: true },
 );
+
+// Compound index: barcode must be unique per store (not globally unique)
+GlobalProductSchema.index({ barcode: 1, storeId: 1 }, { unique: true });
 
 module.exports = mongoose.model("GlobalProduct", GlobalProductSchema);

@@ -4,11 +4,19 @@ const Product = require('../models/Product');
 exports.lookupBarcode = async (req, res) => {
   try {
     const { barcode } = req.params;
+    const storeId = req.user.storeId; // Get storeId from authenticated user
 
-    const globalData = await GlobalProduct.findOne({ barcode });
-    const existingStock = await Product.findOne({ barcode });
+    console.log('🔍 Looking up barcode:', barcode, 'for store:', storeId);
+
+    // Look for global product in this store's registry
+    const query = storeId ? { barcode, storeId } : { barcode };
+    const globalData = await GlobalProduct.findOne(query);
+    
+    // Look for existing stock in this store
+    const existingStock = await Product.findOne({ barcode, ...req.tenantFilter });
 
     if (!globalData) {
+      console.log('❌ Product not found in store registry');
       return res.status(200).json({
         success: true,
         found: false,
@@ -17,6 +25,7 @@ exports.lookupBarcode = async (req, res) => {
       });
     }
 
+    console.log('✅ Found in registry:', globalData.name);
     res.status(200).json({
       success: true,
       found: true,
@@ -28,6 +37,7 @@ exports.lookupBarcode = async (req, res) => {
     });
 
   } catch (error) {
+    console.error('❌ Lookup barcode error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -35,13 +45,24 @@ exports.lookupBarcode = async (req, res) => {
 exports.addToRegistry = async (req, res) => {
   try {
     const { barcode, name, category, isPerishable, imageUrl } = req.body;
+    const storeId = req.user.storeId; // Get storeId from authenticated user
 
-    const existing = await GlobalProduct.findOne({ barcode });
+    console.log('➕ Adding to registry:', { barcode, name, storeId });
+
+    // Check if product already exists in this store's registry
+    const query = storeId ? { barcode, storeId } : { barcode };
+    const existing = await GlobalProduct.findOne(query);
+    
     if (existing) {
-      return res.status(400).json({ message: "Product already in registry" });
+      console.log('❌ Product already exists in store registry');
+      return res.status(400).json({ 
+        success: false,
+        message: "Product already in your store's registry" 
+      });
     }
 
     const newGlobalProduct = new GlobalProduct({
+      storeId, // Add storeId to global product
       barcode,
       name,
       category,
@@ -50,23 +71,41 @@ exports.addToRegistry = async (req, res) => {
     });
 
     await newGlobalProduct.save();
-    res.status(201).json({ success: true, message: "Added to Global Registry" });
+    console.log('✅ Added to registry successfully');
+    
+    res.status(201).json({ 
+      success: true, 
+      message: "Added to Global Registry",
+      data: newGlobalProduct
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Add to registry error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 };
 
 // NEW: Get all global products
 exports.getAllGlobalProducts = async (req, res) => {
   try {
-    const globalProducts = await GlobalProduct.find().sort({ createdAt: -1 });
+    const storeId = req.user.storeId; // Get storeId from authenticated user
+    
+    console.log('📋 Getting all global products for store:', storeId);
+    
+    // Filter by store if user is not author
+    const query = req.user.isAuthor ? {} : { storeId };
+    const globalProducts = await GlobalProduct.find(query).sort({ createdAt: -1 });
+    
+    console.log('✅ Found', globalProducts.length, 'global products');
     
     res.status(200).json({
       success: true,
       data: globalProducts
     });
   } catch (error) {
-    console.error('Get All Global Products Error:', error);
+    console.error('❌ Get All Global Products Error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -78,22 +117,34 @@ exports.getAllGlobalProducts = async (req, res) => {
 exports.getGlobalProductById = async (req, res) => {
   try {
     const { id } = req.params;
+    const storeId = req.user.storeId;
     
-    const globalProduct = await GlobalProduct.findById(id);
+    console.log('🔍 Getting global product by ID:', id, 'for store:', storeId);
+    
+    // Build query with store filter if not author
+    const query = { _id: id };
+    if (!req.user.isAuthor && storeId) {
+      query.storeId = storeId;
+    }
+    
+    const globalProduct = await GlobalProduct.findOne(query);
     
     if (!globalProduct) {
+      console.log('❌ Global product not found');
       return res.status(404).json({
         success: false,
         message: "Global product not found"
       });
     }
     
+    console.log('✅ Found global product:', globalProduct.name);
+    
     res.status(200).json({
       success: true,
       data: globalProduct
     });
   } catch (error) {
-    console.error('Get Global Product By ID Error:', error);
+    console.error('❌ Get Global Product By ID Error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -106,21 +157,29 @@ exports.updateGlobalProduct = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, category, imageUrl, isPerishable, genericPrice } = req.body;
+    const storeId = req.user.storeId;
     
-    console.log('Attempting to update global product with ID:', id);
+    console.log('✏️ Attempting to update global product with ID:', id);
     console.log('Update data:', { name, category, imageUrl, isPerishable, genericPrice });
+    console.log('User store:', storeId);
     
-    const globalProduct = await GlobalProduct.findById(id);
+    // Build query with store filter if not author
+    const query = { _id: id };
+    if (!req.user.isAuthor && storeId) {
+      query.storeId = storeId;
+    }
+    
+    const globalProduct = await GlobalProduct.findOne(query);
     
     if (!globalProduct) {
-      console.log('Global product not found with ID:', id);
+      console.log('❌ Global product not found with ID:', id);
       return res.status(404).json({
         success: false,
-        message: "Global product not found"
+        message: "Global product not found or you don't have permission to update it"
       });
     }
     
-    console.log('Found global product:', globalProduct.name);
+    console.log('✅ Found global product:', globalProduct.name);
     
     // Build update object with only provided fields
     const updateFields = {};
@@ -145,26 +204,27 @@ exports.updateGlobalProduct = async (req, res) => {
       updateFields.genericPrice = genericPrice;
     }
     
-    console.log('Saving global product with fields:', updateFields);
+    console.log('💾 Saving global product with fields:', updateFields);
     await globalProduct.save();
     
-    // Also update all inventory products with the same barcode (only if there are fields to update)
+    // Also update all inventory products with the same barcode in this store
     if (Object.keys(updateFields).length > 0) {
-      const updateResult = await Product.updateMany(
-        { barcode: globalProduct.barcode },
-        { $set: updateFields }
-      );
-      console.log('Updated inventory items:', updateResult.modifiedCount);
+      const inventoryQuery = { 
+        barcode: globalProduct.barcode,
+        storeId: globalProduct.storeId 
+      };
+      const updateResult = await Product.updateMany(inventoryQuery, { $set: updateFields });
+      console.log('✅ Updated inventory items:', updateResult.modifiedCount);
     }
     
-    console.log('Global product updated successfully');
+    console.log('✅ Global product updated successfully');
     res.status(200).json({
       success: true,
       message: "Global product updated successfully",
       data: globalProduct
     });
   } catch (error) {
-    console.error('Update Global Product Error:', error);
+    console.error('❌ Update Global Product Error:', error);
     res.status(500).json({
       success: false,
       message: "Failed to update global product. Please try again.",
@@ -177,8 +237,10 @@ exports.updateGlobalProduct = async (req, res) => {
 exports.deleteGlobalProduct = async (req, res) => {
   try {
     const { id } = req.params;
+    const storeId = req.user.storeId;
     
-    console.log('Attempting to delete global product with ID:', id);
+    console.log('🗑️ Attempting to delete global product with ID:', id);
+    console.log('User store:', storeId);
     
     // Validate ID format
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -188,81 +250,68 @@ exports.deleteGlobalProduct = async (req, res) => {
       });
     }
     
-    const globalProduct = await GlobalProduct.findById(id);
+    // Build query with store filter if not author
+    const query = { _id: id };
+    if (!req.user.isAuthor && storeId) {
+      query.storeId = storeId;
+    }
+    
+    const globalProduct = await GlobalProduct.findOne(query);
     
     if (!globalProduct) {
-      console.log('Global product not found with ID:', id);
+      console.log('❌ Global product not found with ID:', id);
       return res.status(404).json({
         success: false,
-        message: "Global product not found"
+        message: "Global product not found or you don't have permission to delete it"
       });
     }
     
-    console.log('Found global product:', globalProduct.name, 'Barcode:', globalProduct.barcode);
+    console.log('✅ Found global product:', globalProduct.name, 'Barcode:', globalProduct.barcode);
     
-    // Check if there are any inventory items with this barcode that have stock
-    const inventoryItems = await Product.find({ barcode: globalProduct.barcode });
-    console.log('Found inventory items with this barcode:', inventoryItems.length);
+    // Check if there are any inventory items with this barcode in this store that have stock
+    const inventoryQuery = { 
+      barcode: globalProduct.barcode,
+      storeId: globalProduct.storeId 
+    };
+    const inventoryItems = await Product.find(inventoryQuery);
+    console.log('📦 Found inventory items with this barcode:', inventoryItems.length);
     
     const itemsWithStock = inventoryItems.filter(item => item.totalQuantity > 0);
     
     if (itemsWithStock.length > 0) {
-      console.log('Cannot delete - product has active stock in', itemsWithStock.length, 'store(s)');
+      console.log('❌ Cannot delete - product has active stock');
       
-      let storeNames = "other stores";
-      let storeDetails = [];
-      
-      try {
-        // Get store names for better error message
-        const Store = require('../models/Store');
-        const storeIds = itemsWithStock.map(item => item.storeId);
-        const stores = await Store.find({ _id: { $in: storeIds } });
-        
-        // Build detailed store information
-        storeDetails = itemsWithStock.map(item => {
-          const store = stores.find(s => s._id.toString() === item.storeId.toString());
-          return {
-            storeName: store ? store.name : 'Unknown Store',
-            quantity: item.totalQuantity
-          };
-        });
-        
-        storeNames = storeDetails
-          .map(s => `${s.storeName} (${s.quantity} units)`)
-          .join(', ');
-        
-      } catch (storeError) {
-        console.error('Error fetching store names:', storeError);
-        // Fallback error message if store lookup fails
-        storeNames = `${itemsWithStock.length} store(s)`;
-      }
+      const totalStock = itemsWithStock.reduce((sum, item) => sum + item.totalQuantity, 0);
       
       return res.status(400).json({
         success: false,
-        message: `Cannot delete: Product has active inventory in ${itemsWithStock.length} store(s). Remove all stock first.`,
+        message: `Cannot delete: Product has ${totalStock} units in active inventory. Remove all stock first.`,
         details: {
-          storesWithStock: itemsWithStock.length,
-          storeNames: storeNames,
-          storeDetails: storeDetails
+          itemsWithStock: itemsWithStock.length,
+          totalStock
         }
       });
     }
     
     // Delete the global product
-    console.log('Deleting global product from database...');
-    await GlobalProduct.findByIdAndDelete(id);
+    console.log('🗑️ Deleting global product from database...');
+    await GlobalProduct.findOneAndDelete(query);
     
-    // Also delete any inventory items with 0 stock that reference this barcode
-    const deleteResult = await Product.deleteMany({ barcode: globalProduct.barcode, totalQuantity: 0 });
-    console.log('Deleted inventory items with 0 stock:', deleteResult.deletedCount);
+    // Also delete any inventory items with 0 stock that reference this barcode in this store
+    const deleteResult = await Product.deleteMany({ 
+      barcode: globalProduct.barcode, 
+      storeId: globalProduct.storeId,
+      totalQuantity: 0 
+    });
+    console.log('✅ Deleted inventory items with 0 stock:', deleteResult.deletedCount);
     
-    console.log('Global product deleted successfully');
+    console.log('✅ Global product deleted successfully');
     res.status(200).json({
       success: true,
       message: "Global product deleted successfully"
     });
   } catch (error) {
-    console.error('Delete Global Product Error:', error);
+    console.error('❌ Delete Global Product Error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,

@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { AuthDebugger } from "../../components/AuthDebugger";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -262,8 +261,6 @@ export default function Dashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* Auth Debugger - Only visible in development */}
-      <AuthDebugger />
 
         <FlatList
         data={loading ? Array(6).fill({}) : visibleData}
