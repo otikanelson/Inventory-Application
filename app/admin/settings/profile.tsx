@@ -144,6 +144,34 @@ export default function AdminProfileScreen() {
     }
   };
 
+  const handleImpersonateStaff = async (staff: StaffMember) => {
+    try {
+      console.log('🎭 Impersonating staff:', staff.name);
+      
+      const response = await axios.post(
+        `${process.env.EXPO_PUBLIC_API_URL}/auth/staff/${staff._id}/impersonate`
+      );
+
+      if (response.data.success) {
+        const { user: staffUser, sessionToken } = response.data.data;
+        
+        // Save the new session
+        await AsyncStorage.setItem('sessionToken', sessionToken);
+        await AsyncStorage.setItem('user', JSON.stringify(staffUser));
+        
+        showSuccessToast("Logged in as Staff", `Now viewing as ${staff.name}`);
+        
+        // Navigate to staff dashboard (tabs)
+        router.replace('/(tabs)');
+      } else {
+        throw new Error(response.data.error || 'Failed to impersonate staff');
+      }
+    } catch (error: any) {
+      console.error('Error impersonating staff:', error);
+      showErrorToast(error, "Impersonation Failed");
+    }
+  };
+
   const handleUpdatePin = async () => {
     try {
       // Validate new PIN format
@@ -338,8 +366,9 @@ export default function AdminProfileScreen() {
             </View>
           ) : staffMembers.length > 0 ? (
             staffMembers.map((staff) => (
-              <View
+              <Pressable
                 key={staff._id}
+                onPress={() => handleImpersonateStaff(staff)}
                 style={[styles.staffCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
               >
                 <View style={[styles.staffAvatar, { backgroundColor: '#007AFF' + '20' }]}>
@@ -358,18 +387,24 @@ export default function AdminProfileScreen() {
                       </Text>
                     )}
                   </View>
+                  <Text style={[styles.tapToLogin, { color: theme.primary }]}>
+                    Tap to login as {staff.name}
+                  </Text>
                 </View>
 
                 <View style={styles.staffActions}>
                   <View style={[styles.staffStatusDot, { backgroundColor: staff.isActive ? '#34C759' : '#FF3B30' }]} />
                   <Pressable
-                    onPress={() => handleDeleteStaff(staff)}
+                    onPress={(e) => {
+                      e.stopPropagation(); // Prevent triggering impersonation
+                      handleDeleteStaff(staff);
+                    }}
                     style={[styles.deleteStaffBtn, { backgroundColor: '#FF3B30' + '15' }]}
                   >
                     <Ionicons name="trash-outline" size={16} color="#FF3B30" />
                   </Pressable>
                 </View>
-              </View>
+              </Pressable>
             ))
           ) : (
             <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -713,6 +748,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
+  },
+  tapToLogin: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
   },
   staffLastLogin: {
     fontSize: 11,

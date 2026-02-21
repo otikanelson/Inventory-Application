@@ -33,6 +33,9 @@ router.get('/staff', authenticate, tenantFilter, authController.getStaff);
 router.put('/staff/:id', authenticate, tenantFilter, authController.updateStaff);
 router.delete('/staff/:id', authenticate, tenantFilter, authController.deleteStaff);
 
+// Admin impersonate staff
+router.post('/staff/:staffId/impersonate', authenticate, tenantFilter, authController.impersonateStaff);
+
 // Update admin PIN
 router.put('/admin/pin', authenticate, authController.updateAdminPin);
 

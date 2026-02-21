@@ -754,3 +754,71 @@ exports.getAdminInfo = async (req, res) => {
     });
   }
 };
+
+// Admin impersonate staff (login as staff)
+exports.impersonateStaff = async (req, res) => {
+  try {
+    const { staffId } = req.params;
+
+    console.log('🎭 Impersonate staff request:', { adminId: req.user.id, staffId });
+
+    // Validate admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can impersonate staff members'
+      });
+    }
+
+    // Find the staff member
+    const staff = await User.findOne({ _id: staffId, role: 'staff' });
+
+    if (!staff) {
+      return res.status(404).json({
+        success: false,
+        error: 'Staff member not found'
+      });
+    }
+
+    // Verify staff belongs to admin's store
+    if (staff.storeId.toString() !== req.user.storeId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this store'
+      });
+    }
+
+    // Generate JWT session token for the staff member
+    const sessionToken = jwt.sign(
+      { 
+        userId: staff._id.toString(),
+        role: staff.role,
+        storeId: staff.storeId ? staff.storeId.toString() : null
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    console.log('✅ Admin impersonating staff:', staff.name);
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: staff._id,
+          name: staff.name,
+          role: staff.role,
+          storeId: staff.storeId,
+          storeName: staff.storeName
+        },
+        sessionToken
+      }
+    });
+  } catch (error) {
+    console.error('❌ Impersonate staff error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to impersonate staff member'
+    });
+  }
+};
