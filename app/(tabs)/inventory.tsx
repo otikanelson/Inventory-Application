@@ -4,11 +4,11 @@ import { useTheme } from "@/context/ThemeContext";
 import { Product, useProducts } from "@/hooks/useProducts";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { Href, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { Href, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     FlatList,
-    ImageBackground,
+    Image,
     Pressable,
     RefreshControl,
     StyleSheet,
@@ -26,6 +26,13 @@ export default function InventoryScreen() {
   const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
   const [displayMode, setDisplayMode] = useState<"card" | "list" | "rect">("card");
   const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
+
+  // Refresh inventory when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   // Fetch analytics for all products
   useEffect(() => {
@@ -106,15 +113,6 @@ export default function InventoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={
-          isDark
-            ? require("../../assets/images/Background7.png")
-            : require("../../assets/images/Background9.png")
-        }
-        style={StyleSheet.absoluteFill}
-      />
-
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>STOCK_MANAGEMENT</Text>
@@ -357,10 +355,10 @@ export default function InventoryScreen() {
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
                     {item.imageUrl && item.imageUrl !== "cube" && item.imageUrl !== "" ? (
-                      <ImageBackground
+                      <Image
                         source={{ uri: item.imageUrl }}
                         style={styles.image}
-                        imageStyle={{ borderRadius: 12 }}
+                        resizeMode="contain"
                       />
                     ) : (
                       <Ionicons

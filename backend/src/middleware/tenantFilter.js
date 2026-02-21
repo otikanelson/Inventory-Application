@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 /**
  * Tenant Filter Middleware
  * Automatically injects storeId filter for admin/staff users
@@ -20,8 +22,13 @@ function tenantFilter(req, res, next) {
       });
     }
 
+    // Convert storeId string to ObjectId for MongoDB queries
+    const storeIdObjectId = mongoose.Types.ObjectId.isValid(req.user.storeId)
+      ? new mongoose.Types.ObjectId(req.user.storeId)
+      : req.user.storeId;
+
     // Inject storeId filter for queries
-    req.tenantFilter = { storeId: req.user.storeId };
+    req.tenantFilter = { storeId: storeIdObjectId };
 
     // Validate route params don't reference other stores
     if (req.params.storeId && req.params.storeId !== req.user.storeId) {

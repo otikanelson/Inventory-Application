@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { lineHeight } from '../constants/spacing';
 import { useTheme } from '../context/ThemeContext';
 
 // Define glossary of terms with their definitions
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
   },
   content: {
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: lineHeight.body * 15,
     textAlign: 'left',
     fontWeight: '500',
   },
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
   },
   glossaryDefinition: {
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: lineHeight.body * 15,
     fontWeight: '500',
   },
   glossaryBackButton: {

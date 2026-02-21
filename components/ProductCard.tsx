@@ -2,14 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    Animated,
+    Dimensions,
+    Image,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
+import { padding } from "../constants/spacing";
 import { useTheme } from "../context/ThemeContext";
 import { Product } from "../hooks/useProducts";
 import { Prediction } from "../types/ai-predictions";
@@ -274,7 +275,7 @@ const styles = StyleSheet.create({
     width: width / 2 - 27,
     borderRadius: 28,
     borderWidth: 1,
-    padding: 10,
+    padding: padding.form,
     marginBottom: 16,
     position: 'relative',
   },

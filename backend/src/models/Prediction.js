@@ -29,6 +29,12 @@ const RecommendationSchema = new mongoose.Schema({
 }, { _id: false });
 
 const PredictionSchema = new mongoose.Schema({
+  storeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Store',
+    required: true,
+    index: true
+  },
   productId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
@@ -82,14 +88,17 @@ const PredictionSchema = new mongoose.Schema({
 });
 
 // Indexes for performance
-PredictionSchema.index({ productId: 1 });
-PredictionSchema.index({ 'metrics.riskScore': -1 });
-PredictionSchema.index({ calculatedAt: -1 });
-PredictionSchema.index({ 'metrics.velocity': -1 });
+PredictionSchema.index({ storeId: 1, productId: 1 });
+PredictionSchema.index({ storeId: 1, 'metrics.riskScore': -1 });
+PredictionSchema.index({ storeId: 1, calculatedAt: -1 });
+PredictionSchema.index({ storeId: 1, 'metrics.velocity': -1 });
 
 // Static method to get urgent predictions
-PredictionSchema.statics.getUrgentPredictions = async function() {
+PredictionSchema.statics.getUrgentPredictions = async function(storeId) {
+  const query = storeId ? { storeId } : {};
+  
   return this.find({
+    ...query,
     $or: [
       { 'metrics.riskScore': { $gte: 70 } },
       { 'metrics.daysUntilStockout': { $lte: 7 } }
@@ -101,15 +110,25 @@ PredictionSchema.statics.getUrgentPredictions = async function() {
 };
 
 // Static method to get predictions by category
-PredictionSchema.statics.getByCategoryWithProducts = async function(category) {
+PredictionSchema.statics.getByCategoryWithProducts = async function(category, storeId) {
   const Product = mongoose.model('Product');
   
-  // Get products in category
-  const products = await Product.find({ category }).select('_id');
+  // Get products in category for this store
+  const query = { category };
+  if (storeId) {
+    query.storeId = storeId;
+  }
+  
+  const products = await Product.find(query).select('_id');
   const productIds = products.map(p => p._id);
   
   // Get predictions for those products
-  return this.find({ productId: { $in: productIds } })
+  const predictionQuery = { productId: { $in: productIds } };
+  if (storeId) {
+    predictionQuery.storeId = storeId;
+  }
+  
+  return this.find(predictionQuery)
     .populate('productId', 'name category imageUrl totalQuantity')
     .sort({ 'metrics.riskScore': -1 });
 };

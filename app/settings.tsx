@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ImageBackground,
     Modal,
     Pressable,
     ScrollView,
@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
+import { lineHeight, margin, padding, touchTarget } from "../constants/spacing";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useTour } from "../context/TourContext";
@@ -24,10 +25,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { resetTour, startTour } = useTour();
   const { logout: authLogout } = useAuth();
-
-  const backgroundImage = isDark
-    ? require("../assets/images/Background7.png")
-    : require("../assets/images/Background9.png");
 
   // Admin Login State
   const [pinModal, setPinModal] = useState(false);
@@ -41,8 +38,8 @@ export default function SettingsScreen() {
 
   const checkAdminPinStatus = async () => {
     try {
-      const adminPin = await AsyncStorage.getItem('admin_pin');
-      setHasAdminPin(!!adminPin);
+      const adminSecurityPin = await AsyncStorage.getItem('admin_security_pin');
+      setHasAdminPin(!!adminSecurityPin);
     } catch (error) {
       console.error('Error checking admin PIN:', error);
     }
@@ -50,27 +47,61 @@ export default function SettingsScreen() {
 
   const handleAdminAuth = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem('admin_pin');
+      const storedPin = await AsyncStorage.getItem('admin_security_pin');
+      const userRole = await AsyncStorage.getItem('auth_user_role');
+      const storeId = await AsyncStorage.getItem('auth_store_id');
       
-      // If no PIN is set, allow entry but prompt them to set one
+      // If no Security PIN is set, prevent access
       if (!storedPin) {
         setPinModal(false);
         setPin("");
         
         Toast.show({
-          type: 'info',
-          text1: 'No PIN Set',
-          text2: 'Please set up your admin PIN in Security settings'
+          type: 'error',
+          text1: 'No Admin Security PIN Set',
+          text2: 'Please set up your Admin Security PIN first'
         });
-        
-        router.push("../admin");
         return;
       }
 
-      // Validate PIN if it exists
+      // Validate Security PIN
       if (pin === storedPin) {
         // Update last auth time
         await AsyncStorage.setItem('admin_last_auth', Date.now().toString());
+        
+        let adminName = 'Admin';
+        let adminStoreId = storeId || '';
+        let adminStoreName = '';
+        
+        // If staff is logging in, fetch admin details from backend
+        if (userRole === 'staff' && storeId) {
+          try {
+            const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/auth/admin-info/${storeId}`);
+            if (response.data.success) {
+              adminName = response.data.data.name;
+              adminStoreId = response.data.data.storeId;
+              adminStoreName = response.data.data.storeName;
+            }
+          } catch (error) {
+            console.error('Error fetching admin info:', error);
+            // Fallback to local storage
+            adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
+            adminStoreName = await AsyncStorage.getItem('auth_store_name') || '';
+          }
+        } else {
+          // Admin is logging in - use their own info
+          adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
+          adminStoreName = await AsyncStorage.getItem('auth_store_name') || '';
+        }
+        
+        // Store admin session data
+        await AsyncStorage.multiSet([
+          ['admin_session', 'active'],
+          ['admin_session_time', Date.now().toString()],
+          ['admin_session_name', adminName],
+          ['admin_session_store_id', adminStoreId],
+          ['admin_session_store_name', adminStoreName],
+        ]);
         
         setPinModal(false);
         setPin("");
@@ -79,22 +110,22 @@ export default function SettingsScreen() {
         Toast.show({
           type: 'error',
           text1: 'Access Denied',
-          text2: 'Incorrect PIN'
+          text2: 'Incorrect Security PIN'
         });
         setPin("");
       }
     } catch (error) {
       Toast.show({
         type: 'error',
-        text1: 'Authentication Error',
+        text1: 'Login Error',
         text2: 'Could not verify credentials'
       });
     }
   };
 
-  const SettingRow = ({ icon, label, children, description, onPress }: any) => {
+  const SettingRow = ({ icon, label, children, description, onPress, style }: any) => {
     const row = (
-      <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
+      <View style={[styles.settingRow, { borderBottomColor: theme.border }, style]}>
         <View style={styles.settingMain}>
           <View
             style={[styles.iconBox, { backgroundColor: theme.primary + "15" }]}
@@ -129,7 +160,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView
         style={styles.container}
@@ -152,7 +183,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="moon-outline"
           label="Dark Mode"
-          description="Switch between light and dark themes"
+          description="Toggle light/dark theme"
         >
           <Switch
             value={isDark}
@@ -170,7 +201,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="person-circle-outline"
           label="My Profile"
-          description="View your account details and permissions"
+          description="View account details"
           onPress={() => router.push('/profile' as any)}
         >
           <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
@@ -178,8 +209,11 @@ export default function SettingsScreen() {
         <SettingRow
           icon="shield"
           label="Admin Dashboard"
-          description={hasAdminPin ? "Manage inventory, sales, and security" : "Set up admin PIN to secure your dashboard"}
+          description={hasAdminPin ? "Enter Admin Security PIN to access" : "Set up Admin Security PIN first"}
           onPress={() => setPinModal(true)}
+          style={{ 
+            marginBottom: 16
+          }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {!hasAdminPin && (
@@ -187,6 +221,7 @@ export default function SettingsScreen() {
                 <Text style={[styles.badgeText, { color: '#FF9500' }]}>SETUP REQUIRED</Text>
               </View>
             )}
+
             <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
           </View>
         </SettingRow>
@@ -201,66 +236,12 @@ export default function SettingsScreen() {
         {/* AI Status Indicator */}
         <AIStatusIndicator onPress={() => router.push("/ai-info" as any)} />
         
-        <SettingRow
-          icon="pulse-outline"
-          label="API Diagnostics"
-          description="Test backend connectivity and view network status"
-          onPress={() => router.push("/test-api" as any)}
-        >
-          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-        </SettingRow>
-        
-        <SettingRow
-          icon="log-out-outline"
-          label="Logout from Store"
-          description="Clear store data and return to setup page"
-          onPress={async () => {
-            try {
-              // CRITICAL: Clear token FIRST to prevent API calls with invalid token
-              await AsyncStorage.multiRemove([
-                'auth_session_token',
-                'auth_last_login',
-                'auth_user_role',
-                'auth_user_id',
-                'auth_user_name',
-                'auth_store_id',
-                'auth_store_name',
-                'admin_pin',
-                'admin_first_setup',
-                'admin_last_auth',
-                'auth_is_author',
-              ]);
-              
-              // Update auth context state
-              await authLogout();
-              
-              // Navigate after clearing data
-              router.replace('/auth/setup' as any);
-              
-              // Show toast after navigation
-              setTimeout(() => {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Logged Out',
-                  text2: 'Returning to setup...'
-                });
-              }, 100);
-            } catch (error) {
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: 'Could not logout'
-              });
-            }
-          }}
-        >
-          <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-        </SettingRow>
+
         
         <SettingRow
           icon="help-circle-outline"
           label="Restart App Tour"
-          description="See the onboarding tour again to learn about all features"
+          description="View onboarding tour again"
           onPress={async () => {
             try {
               resetTour();
@@ -305,12 +286,12 @@ export default function SettingsScreen() {
             </View>
             
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {hasAdminPin ? "Admin Access" : "First Time Access"}
+              {hasAdminPin ? "Admin Security PIN" : "Setup Required"}
             </Text>
             <Text style={[styles.modalDesc, { color: theme.subtext }]}>
               {hasAdminPin 
-                ? "Enter your admin PIN to continue"
-                : "No PIN set yet. You'll be prompted to create one inside."
+                ? "Enter your Admin Security PIN to access admin dashboard"
+                : "Please set up your Admin Security PIN in admin settings first"
               }
             </Text>
 
@@ -321,7 +302,7 @@ export default function SettingsScreen() {
                     styles.pinInput,
                     { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
                   ]}
-                  placeholder="Enter PIN"
+                  placeholder="Enter Admin Security PIN"
                   placeholderTextColor={theme.subtext}
                   secureTextEntry={!showPin}
                   keyboardType="numeric"
@@ -361,7 +342,7 @@ export default function SettingsScreen() {
                 onPress={handleAdminAuth}
               >
                 <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  {hasAdminPin ? "VERIFY" : "CONTINUE"}
+                  {hasAdminPin ? "VERIFY PIN" : "OK"}
                 </Text>
               </Pressable>
             </View>
@@ -374,15 +355,15 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
-  header: { marginTop: 70, marginBottom: 30 },
+  header: { marginTop: 70, marginBottom: margin.section },
   headerSub: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
   headerTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
-  section: { marginBottom: 35 },
+  section: { marginBottom: margin.section },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 1.5,
-    marginBottom: 15,
+    marginBottom: margin.formField,
   },
   settingRow: {
     flexDirection: "row",
@@ -393,8 +374,8 @@ const styles = StyleSheet.create({
   },
   settingMain: { flexDirection: "row", alignItems: "center", flex: 1 },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: touchTarget.minWidth,
+    height: touchTarget.minHeight,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
@@ -413,17 +394,24 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.5,
   },
+  adminBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: padding.container,
   },
   modalContent: {
     width: "100%",
     maxWidth: 400,
-    padding: 30,
+    padding: padding.modal,
     borderRadius: 30,
     alignItems: "center",
   },
@@ -452,7 +440,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginBottom: 25,
-    lineHeight: 20,
+    lineHeight: lineHeight.description * 14,
   },
   inputContainer: {
     width: "100%",

@@ -1,18 +1,17 @@
 import { ProductCard } from "@/components/ProductCard";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     FlatList,
     Image,
-    ImageBackground,
     Pressable,
     RefreshControl,
     StyleSheet,
     Text,
     TextInput,
-    View,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -31,6 +30,17 @@ export default function AdminInventory() {
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [analytics, setAnalytics] = useState<Record<string, { velocity: number; riskScore: number }>>({});
+
+  // Refresh inventory when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === "inventory") {
+        refresh();
+      } else {
+        fetchGlobalProducts();
+      }
+    }, [refresh, activeTab])
+  );
 
   // Fetch analytics for inventory products
   useEffect(() => {
@@ -185,15 +195,6 @@ export default function AdminInventory() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={
-          isDark
-            ? require("../../assets/images/Background7.png")
-            : require("../../assets/images/Background9.png")
-        }
-        style={StyleSheet.absoluteFill}
-      />
-
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>

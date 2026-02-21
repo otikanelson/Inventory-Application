@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  ImageBackground,
   Modal,
   Pressable,
   RefreshControl,
@@ -30,11 +29,6 @@ export default function FEFOScreen() {
   const [sortByAI, setSortByAI] = useState(false);
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
   const [loadingPredictions, setLoadingPredictions] = useState(false);
-
-  const backgroundImage =
-    isDark ?
-      require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
 
   // Fetch predictions for all perishable products
   useEffect(() => {
@@ -142,10 +136,7 @@ export default function FEFOScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
       <FlatList
         data={priorityQueue}

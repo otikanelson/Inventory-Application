@@ -26,7 +26,6 @@ const storeSchema = new mongoose.Schema(
 );
 
 // Indexes
-storeSchema.index({ name: 1 }, { unique: true });
 storeSchema.index({ ownerId: 1 });
 
 // Case-insensitive unique validation for store name

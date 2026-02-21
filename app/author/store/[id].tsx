@@ -5,14 +5,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    ImageBackground,
     Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
-    View,
-} from 'react-native';
+    View} from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -53,10 +51,6 @@ export default function StoreDetailScreen() {
   const [details, setDetails] = useState<StoreDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const backgroundImage = isDark
-    ? require('../../../assets/images/Background7.png')
-    : require('../../../assets/images/Background9.png');
 
   useEffect(() => {
     console.log('Store detail page - ID from params:', id);
@@ -133,7 +127,7 @@ export default function StoreDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>Loading store details...</Text>
@@ -145,7 +139,7 @@ export default function StoreDetailScreen() {
   if (!details) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        
         <View style={styles.loadingContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={theme.subtext} />
           <Text style={[styles.loadingText, { color: theme.text }]}>Store not found</Text>
@@ -162,7 +156,7 @@ export default function StoreDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView
         style={styles.scrollView}

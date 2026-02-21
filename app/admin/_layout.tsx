@@ -4,14 +4,14 @@ import axios from "axios";
 import { Tabs, useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import { Path, Svg } from "react-native-svg";
 import Toast from "react-native-toast-message";
@@ -67,20 +67,34 @@ export default function AdminLayout() {
 
   const checkAuth = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem("admin_pin");
+      const storedPin = await AsyncStorage.getItem("admin_security_pin");
       const lastAuth = await AsyncStorage.getItem("admin_last_auth");
       const logoutEnabled = await AsyncStorage.getItem("admin_auto_logout");
       const logoutTime = await AsyncStorage.getItem("admin_auto_logout_time");
+      const userRole = await AsyncStorage.getItem("auth_user_role");
 
       // Load settings
       setAutoLogoutEnabled(logoutEnabled !== "false");
       setAutoLogoutTime(logoutTime ? parseInt(logoutTime) : 30);
 
-      // If no PIN exists at all, allow entry but show setup prompt
+      // If no Security PIN exists at all, allow entry but show setup prompt
       if (!storedPin) {
         setHasPin(false);
         setIsAuthenticated(true);
-        setShowSetupModal(true);
+        
+        // Different message for staff vs admin
+        if (userRole === 'staff') {
+          // Show message that admin must set Security PIN first
+          Toast.show({
+            type: "info",
+            text1: "Admin Setup Required",
+            text2: "Your admin must set up the Security PIN first",
+            visibilityTime: 5000,
+          });
+        } else {
+          setShowSetupModal(true);
+        }
+        
         setLoading(false);
         return;
       }
@@ -117,14 +131,22 @@ export default function AdminLayout() {
       const userRole = await AsyncStorage.getItem("auth_user_role");
       const storeId = await AsyncStorage.getItem("auth_store_id");
 
-      // For staff, we need to verify against their admin's PIN from the backend
+      console.log('PIN Submit - Role:', userRole, 'Store ID:', storeId);
+
+      // For staff, we need to verify against their admin's Security PIN from the backend
       if (userRole === 'staff' && storeId) {
         try {
-          // Call backend to verify admin PIN for this store
-          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/verify-admin-pin`, {
+          console.log('Staff user - verifying admin Security PIN via API...');
+          console.log('API URL:', `${process.env.EXPO_PUBLIC_API_URL}/auth/verify-admin-security-pin`);
+          console.log('Sending PIN:', pin, 'Store ID:', storeId);
+          
+          // Call backend to verify admin Security PIN for this store
+          const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL}/auth/verify-admin-security-pin`, {
             pin,
             storeId
           });
+
+          console.log('API Response:', response.data);
 
           if (response.data.success) {
             await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
@@ -138,39 +160,31 @@ export default function AdminLayout() {
               text2: "You now have temporary admin access",
             });
           } else {
+            console.log('API returned success=false');
             Toast.show({
               type: "error",
               text1: "Access Denied",
-              text2: "Incorrect admin PIN",
+              text2: "Incorrect admin Security PIN",
             });
             setPin("");
           }
         } catch (error: any) {
-          // If API fails, fall back to local storage (offline mode)
-          const storedPin = await AsyncStorage.getItem("admin_pin");
-          if (pin === storedPin) {
-            await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
-            setIsAuthenticated(true);
-            setShowPinModal(false);
-            setPin("");
-            
-            Toast.show({
-              type: "success",
-              text1: "Admin Access Granted",
-              text2: "You now have temporary admin access (offline)",
-            });
-          } else {
-            Toast.show({
-              type: "error",
-              text1: "Access Denied",
-              text2: "Incorrect admin PIN",
-            });
-            setPin("");
-          }
+          console.error('API Error:', error);
+          console.error('Error response:', error.response?.data);
+          
+          // Show specific error message
+          Toast.show({
+            type: "error",
+            text1: "Verification Failed",
+            text2: error.response?.data?.error || "Could not verify admin Security PIN",
+          });
+          setPin("");
         }
       } else {
-        // For admin users, check local storage
-        const storedPin = await AsyncStorage.getItem("admin_pin");
+        // For admin users, check local Security PIN
+        const storedPin = await AsyncStorage.getItem("admin_security_pin");
+        console.log('Admin user - checking local Security PIN');
+        
         if (pin === storedPin) {
           await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
           setIsAuthenticated(true);
@@ -180,12 +194,13 @@ export default function AdminLayout() {
           Toast.show({
             type: "error",
             text1: "Access Denied",
-            text2: "Incorrect PIN",
+            text2: "Incorrect Security PIN",
           });
           setPin("");
         }
       }
     } catch (error) {
+      console.error('PIN Submit Error:', error);
       Toast.show({
         type: "error",
         text1: "Authentication Error",
@@ -216,8 +231,8 @@ export default function AdminLayout() {
         return;
       }
 
-      // Store new PIN
-      await AsyncStorage.setItem("admin_pin", newPin);
+      // Store new Security PIN
+      await AsyncStorage.setItem("admin_security_pin", newPin);
       await AsyncStorage.setItem("admin_first_setup", "completed");
       await AsyncStorage.setItem("admin_last_auth", Date.now().toString());
 
@@ -228,14 +243,14 @@ export default function AdminLayout() {
 
       Toast.show({
         type: "success",
-        text1: "PIN Created",
-        text2: "Admin access is now secured",
+        text1: "Security PIN Created",
+        text2: "Admin dashboard is now secured",
       });
     } catch (error) {
       Toast.show({
         type: "error",
         text1: "Setup Failed",
-        text2: "Could not save PIN",
+        text2: "Could not save Security PIN",
       });
     }
   };
@@ -275,7 +290,7 @@ export default function AdminLayout() {
               Admin Access Required
             </Text>
             <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
-              Enter the admin PIN to continue
+              Enter the admin Security PIN to continue
             </Text>
             <TextInput
               style={[
@@ -287,7 +302,7 @@ export default function AdminLayout() {
               maxLength={4}
               value={pin}
               onChangeText={setPin}
-              placeholder="Admin PIN"
+              placeholder="Admin Security PIN"
               placeholderTextColor={theme.subtext}
               autoFocus
             />
@@ -302,7 +317,7 @@ export default function AdminLayout() {
                 style={[styles.modalBtn, { backgroundColor: theme.primary }]}
                 onPress={handlePinSubmit}
               >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>Verify</Text>
+                <Text style={{ color: "#FFF", fontWeight: "700" }}>Verify PIN</Text>
               </Pressable>
             </View>
           </View>
@@ -382,6 +397,20 @@ export default function AdminLayout() {
         />
 
         <Tabs.Screen
+          name="add-products"
+          options={{
+            title: "ADD",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? "add-circle" : "add-circle-outline"}
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
           name="stats"
           options={{
             title: "STATS",
@@ -395,22 +424,49 @@ export default function AdminLayout() {
           }}
         />
 
+      {/* Settings hidden from Tab Bar but accessible via button */}
         <Tabs.Screen
           name="settings"
           options={{
-            title: "SETTINGS",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "settings" : "settings-outline"}
-                size={22}
-                color={color}
-              />
-            ),
+            href: null,
           }}
         />
+
       {/* Detail page hidden from Tab Bar */}
         <Tabs.Screen
           name="product/[id]"
+          options={{
+            href: null,
+          }}
+        />
+        
+        {/* Settings sub-pages hidden from Tab Bar */}
+        <Tabs.Screen
+          name="settings/profile"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/security"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/alerts"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/store"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings/data"
           options={{
             href: null,
           }}
@@ -427,10 +483,10 @@ export default function AdminLayout() {
               <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
             </View>
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Secure Your Admin Panel
+              Set Security PIN
             </Text>
             <Text style={[styles.modalSubtext, { color: theme.subtext }]}>
-              Create a 4-digit PIN to protect your admin dashboard
+              Create a 4-digit Security PIN for sensitive admin operations
             </Text>
 
             <TextInput

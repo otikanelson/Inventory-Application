@@ -6,15 +6,13 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
     Image,
-    ImageBackground,
     KeyboardAvoidingView,
     Platform,
     Pressable,
     StyleSheet,
     Text,
     TextInput,
-    View,
-} from 'react-native';
+    View} from 'react-native';
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
 import { useTheme } from '../../context/ThemeContext';
@@ -34,10 +32,6 @@ export default function SetupScreen() {
   const [isFirstPin, setIsFirstPin] = useState(true);
   const [pinKey, setPinKey] = useState(0); // Key to force PinInput reset
   const [showAuthorLogin, setShowAuthorLogin] = useState(false);
-
-  const backgroundImage = isDark
-    ? require('../../assets/images/Background7.png')
-    : require('../../assets/images/Background9.png');
 
   const handlePinComplete = async (pin: string) => {
     if (isFirstPin) {
@@ -75,7 +69,8 @@ export default function SetupScreen() {
 
             // Also save to local storage
             await AsyncStorage.multiSet([
-              ['admin_pin', pin],
+              ['admin_login_pin', pin],
+              ['admin_security_pin', pin],
               ['admin_first_setup', 'completed'],
               ['auth_user_name', adminName || 'Admin'],
               ['auth_user_id', adminId],
@@ -137,7 +132,8 @@ export default function SetupScreen() {
           if (shouldFallbackToLocal) {
             try {
               await AsyncStorage.multiSet([
-                ['admin_pin', pin],
+                ['admin_login_pin', pin],
+                ['admin_security_pin', pin],
                 ['admin_first_setup', 'completed'],
                 ['auth_user_name', adminName || 'Admin'],
               ]);
@@ -224,11 +220,7 @@ export default function SetupScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      
 
       {/* Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>

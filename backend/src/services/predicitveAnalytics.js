@@ -457,6 +457,19 @@ const savePredictionToDatabase = async (productId) => {
   try {
     const analyticsData = await getPredictiveAnalytics(productId);
     
+    // Get product to retrieve storeId
+    const product = await Product.findById(productId);
+    if (!product) {
+      console.error(`Product not found: ${productId}`);
+      return null;
+    }
+    
+    const storeId = product.storeId;
+    if (!storeId) {
+      console.error(`Product ${productId} has no storeId`);
+      return null;
+    }
+    
     // Check if prediction already exists
     let prediction = await Prediction.findOne({ productId });
     
@@ -471,8 +484,7 @@ const savePredictionToDatabase = async (productId) => {
       console.log(`Low confidence for product ${productId}: only ${dataPoints} data points`);
       
       // Try to use category averages as fallback
-      const product = await Product.findById(productId);
-      if (product && product.category) {
+      if (product.category) {
         const categoryFallback = await getCategoryAverageFallback(product.category, productId);
         
         if (categoryFallback) {
@@ -496,9 +508,21 @@ const savePredictionToDatabase = async (productId) => {
     }
     
     if (prediction) {
-      // Update existing
-      prediction.forecast = analyticsData.forecast;
-      prediction.metrics = analyticsData.metrics;
+      // Update existing - sanitize NaN values
+      prediction.forecast = {
+        next7Days: isNaN(analyticsData.forecast.next7Days) ? 0 : analyticsData.forecast.next7Days,
+        next14Days: isNaN(analyticsData.forecast.next14Days) ? 0 : analyticsData.forecast.next14Days,
+        next30Days: isNaN(analyticsData.forecast.next30Days) ? 0 : analyticsData.forecast.next30Days,
+        confidence: analyticsData.forecast.confidence
+      };
+      prediction.metrics = {
+        velocity: isNaN(analyticsData.metrics.velocity) ? 0 : analyticsData.metrics.velocity,
+        movingAverage: isNaN(analyticsData.metrics.movingAverage) ? 0 : analyticsData.metrics.movingAverage,
+        trend: analyticsData.metrics.trend,
+        riskScore: isNaN(analyticsData.metrics.riskScore) ? 0 : analyticsData.metrics.riskScore,
+        daysUntilStockout: isNaN(analyticsData.metrics.daysUntilStockout) ? 999 : analyticsData.metrics.daysUntilStockout,
+        salesLast30Days: isNaN(analyticsData.metrics.salesLast30Days) ? 0 : analyticsData.metrics.salesLast30Days
+      };
       prediction.recommendations = analyticsData.recommendations;
       prediction.calculatedAt = new Date();
       prediction.dataPoints = dataPoints;
@@ -514,9 +538,22 @@ const savePredictionToDatabase = async (productId) => {
     } else {
       // Create new
       prediction = new Prediction({
+        storeId, // Add storeId
         productId,
-        forecast: analyticsData.forecast,
-        metrics: analyticsData.metrics,
+        forecast: {
+          next7Days: isNaN(analyticsData.forecast.next7Days) ? 0 : analyticsData.forecast.next7Days,
+          next14Days: isNaN(analyticsData.forecast.next14Days) ? 0 : analyticsData.forecast.next14Days,
+          next30Days: isNaN(analyticsData.forecast.next30Days) ? 0 : analyticsData.forecast.next30Days,
+          confidence: analyticsData.forecast.confidence
+        },
+        metrics: {
+          velocity: isNaN(analyticsData.metrics.velocity) ? 0 : analyticsData.metrics.velocity,
+          movingAverage: isNaN(analyticsData.metrics.movingAverage) ? 0 : analyticsData.metrics.movingAverage,
+          trend: analyticsData.metrics.trend,
+          riskScore: isNaN(analyticsData.metrics.riskScore) ? 0 : analyticsData.metrics.riskScore,
+          daysUntilStockout: isNaN(analyticsData.metrics.daysUntilStockout) ? 999 : analyticsData.metrics.daysUntilStockout,
+          salesLast30Days: isNaN(analyticsData.metrics.salesLast30Days) ? 0 : analyticsData.metrics.salesLast30Days
+        },
         recommendations: analyticsData.recommendations,
         dataPoints,
         warning,
@@ -527,11 +564,28 @@ const savePredictionToDatabase = async (productId) => {
       });
     }
     
+    // Validate before saving to catch any remaining NaN values
+    const predictionObj = prediction.toObject ? prediction.toObject() : prediction;
+    const hasNaN = Object.values(predictionObj.metrics || {}).some(v => typeof v === 'number' && isNaN(v)) ||
+                   Object.values(predictionObj.forecast || {}).some(v => typeof v === 'number' && isNaN(v));
+    
+    if (hasNaN) {
+      console.error(`NaN detected in prediction for ${productId}, skipping save:`, {
+        metrics: predictionObj.metrics,
+        forecast: predictionObj.forecast
+      });
+      return null;
+    }
+    
     await prediction.save();
+    console.log(`Prediction saved successfully for product ${productId}`);
     return prediction;
     
   } catch (error) {
-    console.error(`Error saving prediction for ${productId}:`, error);
+    console.error(`Error saving prediction for ${productId}:`, error.message);
+    if (error.name === 'ValidationError') {
+      console.error('Validation details:', error.errors);
+    }
     return null;
   }
 };
@@ -582,19 +636,30 @@ const getCategoryAverageFallback = async (category, excludeProductId) => {
 /**
  * Get quick insights for dashboard badge
  * Returns only urgent items (risk > 70 or stockout < 7 days)
+ * @param {String} storeId - Store ID to filter predictions
  */
-const getQuickInsights = async () => {
+const getQuickInsights = async (storeId = null) => {
   try {
-    const urgentPredictions = await Prediction.find({
+    const query = {
       $or: [
         { 'metrics.riskScore': { $gte: 70 } },
         { 'metrics.daysUntilStockout': { $lte: 7 } }
       ]
-    })
+    };
+    
+    // Add storeId filter if provided
+    if (storeId) {
+      query.storeId = storeId;
+      console.log('getQuickInsights - Filtering by storeId:', storeId);
+    }
+    
+    const urgentPredictions = await Prediction.find(query)
     .populate('productId', 'name category imageUrl')
     .sort({ 'metrics.riskScore': -1 })
     .limit(10)
     .lean();
+    
+    console.log('getQuickInsights - Found', urgentPredictions.length, 'urgent predictions');
     
     // Format for lightweight response
     const criticalItems = urgentPredictions.map(p => ({
@@ -624,17 +689,32 @@ const getQuickInsights = async () => {
 /**
  * Get category-level insights
  * @param {String} category - Category name
+ * @param {String} storeId - Store ID to filter products and predictions
  */
-const getCategoryInsights = async (category) => {
+const getCategoryInsights = async (category, storeId = null) => {
   try {
-    // Get all products in category
-    const products = await Product.find({ category });
+    // Get all products in category with optional storeId filter
+    const productQuery = { category };
+    if (storeId) {
+      productQuery.storeId = storeId;
+      console.log('getCategoryInsights - Filtering products by storeId:', storeId);
+    }
+    
+    const products = await Product.find(productQuery);
     const productIds = products.map(p => p._id);
     
-    // Get predictions for these products
-    const predictions = await Prediction.find({
-      productId: { $in: productIds }
-    }).populate('productId', 'name totalQuantity imageUrl');
+    console.log('getCategoryInsights - Found', products.length, 'products in category', category);
+    
+    // Get predictions for these products with optional storeId filter
+    const predictionQuery = { productId: { $in: productIds } };
+    if (storeId) {
+      predictionQuery.storeId = storeId;
+    }
+    
+    const predictions = await Prediction.find(predictionQuery)
+      .populate('productId', 'name totalQuantity imageUrl');
+    
+    console.log('getCategoryInsights - Found', predictions.length, 'predictions');
     
     // Calculate category metrics
     const totalProducts = predictions.length;
@@ -711,10 +791,17 @@ const checkAndSendNotification = async (product, prediction) => {
   try {
     const { metrics, recommendations } = prediction;
     
+    // Verify product has storeId
+    if (!product.storeId) {
+      console.error(`Product ${product._id} has no storeId, cannot create notification`);
+      return;
+    }
+    
     // Check if similar notification was sent recently (prevent spam)
     const recentNotification = await Notification.existsSimilar(
       product._id,
       'critical_risk',
+      product.storeId,
       24 // Last 24 hours
     );
     
@@ -725,6 +812,7 @@ const checkAndSendNotification = async (product, prediction) => {
     // Critical risk notification
     if (metrics.riskScore >= 70) {
       await Notification.create({
+        storeId: product.storeId,  // CRITICAL: Add storeId
         type: 'critical_risk',
         productId: product._id,
         title: 'Urgent: Product Expiring Soon',
@@ -752,11 +840,13 @@ const checkAndSendNotification = async (product, prediction) => {
       const recentStockoutNotif = await Notification.existsSimilar(
         product._id,
         'stockout_warning',
+        product.storeId,
         24
       );
       
       if (!recentStockoutNotif) {
         await Notification.create({
+          storeId: product.storeId,  // CRITICAL: Add storeId
           type: 'stockout_warning',
           productId: product._id,
           title: 'Low Stock Alert',

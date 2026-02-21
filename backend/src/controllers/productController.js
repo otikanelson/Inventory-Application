@@ -208,27 +208,55 @@ exports.updateProduct = async (req, res) => {
     console.error("UpdateProduct Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update product. Please try again.",
     });
   }
 };
 
-// @desc    Delete entire product
+// @desc    Delete product
 // @route   DELETE /api/products/:id
 // @access  Admin
 exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log('🗑️ ========== DELETE PRODUCT REQUEST ==========');
+    console.log('Product ID:', id);
+    console.log('User:', req.user ? {
+      id: req.user.id,
+      role: req.user.role,
+      storeId: req.user.storeId,
+      isAuthor: req.user.isAuthor
+    } : 'UNDEFINED');
+    console.log('Tenant filter:', req.tenantFilter);
+    console.log('Request headers:', {
+      authorization: req.headers.authorization ? 'Bearer ***' : 'MISSING',
+      contentType: req.headers['content-type']
+    });
+
+    // Validate ID format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      console.log('❌ Invalid product ID format');
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID format",
+      });
+    }
+
     // Find and delete with store filter
+    console.log('🔍 Searching for product with query:', { _id: id, ...req.tenantFilter });
     const product = await Product.findOneAndDelete({ _id: id, ...req.tenantFilter });
 
     if (!product) {
+      console.log('❌ Product not found with ID:', id, 'and tenant filter:', req.tenantFilter);
       return res.status(404).json({
         success: false,
-        message: "Product not found",
+        message: "Product not found or you don't have permission to delete it",
       });
     }
+
+    console.log('✅ Product deleted successfully:', product.name);
+    console.log('🗑️ ========== DELETE COMPLETE ==========\n');
 
     res.status(200).json({
       success: true,
@@ -236,10 +264,20 @@ exports.deleteProduct = async (req, res) => {
       data: product,
     });
   } catch (error) {
-    console.error("DeleteProduct Error:", error);
+    console.error('❌ ========== DELETE PRODUCT ERROR ==========');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('User at error:', req.user ? {
+      id: req.user.id,
+      role: req.user.role,
+      storeId: req.user.storeId
+    } : 'UNDEFINED');
+    console.error('Tenant filter at error:', req.tenantFilter);
+    console.error('========================================\n');
+    
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to delete product. Please try again.",
     });
   }
 };
@@ -469,7 +507,7 @@ exports.updateGenericPrice = async (req, res) => {
       .json({ success: true, message: "Generic price updated", data: product });
   } catch (error) {
     console.error("UpdateGenericPrice Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Failed to update price. Please try again." });
   }
 };
 

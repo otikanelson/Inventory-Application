@@ -5,14 +5,12 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    ImageBackground,
     Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
-    View,
-} from 'react-native';
+    View} from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -42,10 +40,6 @@ export default function AuthorDashboard() {
     totalProducts: 0,
   });
   const [hasLoaded, setHasLoaded] = useState(false);
-
-  const backgroundImage = isDark
-    ? require('../../assets/images/Background7.png')
-    : require('../../assets/images/Background9.png');
 
   useEffect(() => {
     if (!hasLoaded) {
@@ -140,7 +134,7 @@ export default function AuthorDashboard() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+        
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>Loading stores...</Text>
@@ -151,7 +145,7 @@ export default function AuthorDashboard() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground source={backgroundImage} style={StyleSheet.absoluteFill} />
+      
 
       <ScrollView
         style={styles.scrollView}

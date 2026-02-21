@@ -14,17 +14,18 @@ const connectDB = async () => {
     console.log('🔄 Attempting to connect to MongoDB...');
     console.log('Using MONGO_URI:', process.env.MONGO_URI ? 'Set (hidden)' : 'NOT SET');
     
-    // Optimize for serverless with connection pooling
+    // Optimize for serverless - CRITICAL: bufferCommands must be TRUE for Vercel
     const conn = await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 30000, // 30 seconds for Vercel cold starts
-      connectTimeoutMS: 30000, // 30 seconds to establish connection
+      serverSelectionTimeoutMS: 10000, // 10 seconds for faster failure detection
+      connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,
-      maxPoolSize: 10, // Limit connection pool for serverless
+      maxPoolSize: 10,
       minPoolSize: 1,
       family: 4, // Use IPv4, skip trying IPv6
-      // Serverless-specific optimizations
-      bufferCommands: false, // Disable mongoose buffering
+      bufferCommands: true, // CHANGED: Enable buffering for serverless (Vercel needs this)
       autoIndex: false, // Don't build indexes in production
+      retryWrites: true,
+      retryReads: true,
     });
     
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
@@ -45,12 +46,16 @@ const connectDB = async () => {
     console.error(`❌ MongoDB Error: ${error.message}`);
     console.error('Error code:', error.code);
     console.error('Error name:', error.name);
-    console.error('Please check:');
-    console.error('1. MongoDB Atlas IP whitelist (add 0.0.0.0/0 for Vercel)');
-    console.error('2. Network/firewall settings');
-    console.error('3. Connection string format');
-    console.error('4. Vercel environment variables are set');
-    console.error('5. MongoDB Atlas cluster is running (not paused)');
+    
+    // More specific error messages
+    if (error.name === 'MongooseServerSelectionError') {
+      console.error('💡 Connection timeout - possible causes:');
+      console.error('   1. Network latency or firewall blocking connection');
+      console.error('   2. MongoDB Atlas IP whitelist (add 0.0.0.0/0 for Vercel)');
+      console.error('   3. MongoDB Atlas cluster is paused or unavailable');
+      console.error('   4. DNS resolution issues with connection string');
+    }
+    
     throw error; // Let caller handle the error
   }
 };

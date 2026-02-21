@@ -59,7 +59,11 @@ ProductSchema.pre("save", async function () {
 
 // Indexes for multi-tenant queries
 ProductSchema.index({ storeId: 1, barcode: 1 }, { unique: true, sparse: true });
-ProductSchema.index({ storeId: 1, internalCode: 1 }, { unique: true, sparse: true });
+ProductSchema.index({ storeId: 1, internalCode: 1 }, { 
+  unique: true, 
+  sparse: true,
+  partialFilterExpression: { internalCode: { $type: "string" } }
+});
 ProductSchema.index({ storeId: 1, category: 1 });
 ProductSchema.index({ storeId: 1, totalQuantity: 1 });
 

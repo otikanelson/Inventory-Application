@@ -11,11 +11,10 @@ async function authenticate(req, res, next) {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     
-    console.log('=== AUTHENTICATE MIDDLEWARE ===');
-    console.log('Auth header present:', !!authHeader);
+    console.log('🔐 Authenticate middleware - Method:', req.method, 'Path:', req.path);
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('❌ No valid auth header');
+      console.log('❌ No auth header or invalid format');
       return res.status(401).json({ 
         success: false,
         error: 'Authentication required' 
@@ -23,13 +22,12 @@ async function authenticate(req, res, next) {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    console.log('Token extracted (first 20 chars):', token.substring(0, 20) + '...');
 
     // Decode and verify JWT token
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      console.log('✅ Token verified, decoded role:', decoded.role);
+      console.log('✅ Token decoded:', { userId: decoded.userId, role: decoded.role, storeId: decoded.storeId });
     } catch (error) {
       console.log('❌ Token verification failed:', error.message);
       return res.status(401).json({ 
@@ -40,7 +38,6 @@ async function authenticate(req, res, next) {
 
     // Handle author role (no database lookup needed)
     if (decoded.role === 'author') {
-      console.log('✅ Author authenticated');
       req.user = {
         id: 'author',
         role: 'author',
@@ -48,6 +45,7 @@ async function authenticate(req, res, next) {
         storeId: null,
         storeName: null
       };
+      console.log('✅ Author user set');
       return next();
     }
 
@@ -55,14 +53,12 @@ async function authenticate(req, res, next) {
     const user = await User.findById(decoded.userId);
 
     if (!user || !user.isActive) {
-      console.log('❌ User not found or inactive');
+      console.log('❌ User not found or inactive:', decoded.userId);
       return res.status(401).json({ 
         success: false,
         error: 'User not found or inactive' 
       });
     }
-
-    console.log('✅ User authenticated:', user.role);
 
     // Set user information in request
     req.user = {
@@ -74,12 +70,15 @@ async function authenticate(req, res, next) {
       name: user.name
     };
 
-    next();
+    console.log('✅ User authenticated:', { id: req.user.id, role: req.user.role, storeId: req.user.storeId });
+    return next();
   } catch (error) {
     console.error('❌ Authentication error:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({ 
       success: false,
-      error: 'Authentication failed' 
+      error: 'Authentication failed',
+      details: error.message
     });
   }
 }

@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const NotificationSchema = new mongoose.Schema({
+  storeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Store',
+    required: true,
+    index: true
+  },
   type: {
     type: String,
     enum: ['critical_risk', 'stockout_warning', 'bulk_alert', 'restock_reminder'],
@@ -76,47 +82,68 @@ const NotificationSchema = new mongoose.Schema({
 });
 
 // Compound indexes for common queries
-NotificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
-NotificationSchema.index({ productId: 1, type: 1 });
+NotificationSchema.index({ storeId: 1, userId: 1, read: 1, createdAt: -1 });
+NotificationSchema.index({ storeId: 1, productId: 1, type: 1 });
 
 // Static method to get unread notifications
-NotificationSchema.statics.getUnread = async function(userId = 'admin') {
-  return this.find({
+NotificationSchema.statics.getUnread = async function(userId = 'admin', storeId = null) {
+  const query = {
     userId,
     read: false,
     dismissed: false
-  })
+  };
+  
+  if (storeId) {
+    query.storeId = storeId;
+  }
+  
+  return this.find(query)
   .populate('productId', 'name category imageUrl')
   .sort({ priority: 1, createdAt: -1 }) // Critical first, then by date
   .limit(50);
 };
 
 // Static method to get unread count
-NotificationSchema.statics.getUnreadCount = async function(userId = 'admin') {
-  return this.countDocuments({
+NotificationSchema.statics.getUnreadCount = async function(userId = 'admin', storeId = null) {
+  const query = {
     userId,
     read: false,
     dismissed: false
-  });
+  };
+  
+  if (storeId) {
+    query.storeId = storeId;
+  }
+  
+  return this.countDocuments(query);
 };
 
 // Static method to mark all as read
-NotificationSchema.statics.markAllAsRead = async function(userId = 'admin') {
-  return this.updateMany(
-    { userId, read: false },
-    { $set: { read: true } }
-  );
+NotificationSchema.statics.markAllAsRead = async function(userId = 'admin', storeId = null) {
+  const query = { userId, read: false };
+  
+  if (storeId) {
+    query.storeId = storeId;
+  }
+  
+  return this.updateMany(query, { $set: { read: true } });
 };
 
 // Static method to check if similar notification exists (prevent duplicates)
-NotificationSchema.statics.existsSimilar = async function(productId, type, hoursAgo = 24) {
+NotificationSchema.statics.existsSimilar = async function(productId, type, storeId = null, hoursAgo = 24) {
   const cutoff = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
   
-  return this.findOne({
+  const query = {
     productId,
     type,
     createdAt: { $gte: cutoff }
-  });
+  };
+  
+  if (storeId) {
+    query.storeId = storeId;
+  }
+  
+  return this.findOne(query);
 };
 
 // Instance method to mark as read

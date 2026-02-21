@@ -4,18 +4,17 @@ import { useAudioPlayer } from "expo-audio";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    ImageBackground,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -53,6 +52,7 @@ export default function AdminSales() {
   const [cart, setCart] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showFefoModal, setShowFefoModal] = useState(false);
+  const [showProductPicker, setShowProductPicker] = useState(false);
   const [activeTab, setActiveTab] = useState<"checkout" | "history">("checkout");
   
   // Sales History State
@@ -97,25 +97,25 @@ export default function AdminSales() {
   const fetchSalesHistory = async () => {
     setLoadingHistory(true);
     try {
-      // Use the recently-sold-batches endpoint which has batch information
       const response = await axios.get(
-        `${process.env.EXPO_PUBLIC_API_URL}/analytics/recently-sold-batches?limit=100`
+        `${process.env.EXPO_PUBLIC_API_URL}/analytics/all-sales?limit=100&days=365`
       );
       
       if (response.data.success) {
-        const batchSales = response.data.data || [];
+        // Handle both response formats
+        const salesData = response.data.data?.sales || response.data.data || [];
         
         // Transform to match our SaleRecord interface
-        const sales: SaleRecord[] = batchSales.map((sale: any) => ({
-          _id: sale._id || `${sale.productId}-${sale.saleDate}`,
+        const sales: SaleRecord[] = salesData.map((sale: any) => ({
+          _id: sale._id,
           productId: sale.productId,
-          productName: sale.name || sale.productName,
+          productName: sale.productName,
           batchNumber: sale.batchNumber || 'N/A',
           quantitySold: sale.quantitySold || 0,
-          price: sale.totalAmount && sale.quantitySold ? sale.totalAmount / sale.quantitySold : 0,
+          price: sale.priceAtSale || 0,
           totalAmount: sale.totalAmount || 0,
           saleDate: sale.saleDate,
-          paymentMethod: 'cash'
+          paymentMethod: sale.paymentMethod || 'cash'
         }));
         
         setSalesHistory(sales);
@@ -140,22 +140,26 @@ export default function AdminSales() {
         };
         
         setRevenueStats(stats);
+        
+        if (sales.length === 0) {
+          Toast.show({
+            type: 'info',
+            text1: 'No Sales Yet',
+            text2: 'Complete a sale to see history here'
+          });
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching sales history:', error);
       Toast.show({
         type: 'error',
-        text1: 'Load Failed',
-        text2: 'Could not fetch sales history'
+        text1: 'Network Error',
+        text2: 'Could not connect to server. Please check your connection.'
       });
     } finally {
       setLoadingHistory(false);
     }
   };
-
-  const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
 
   // Process FEFO Sale
   const finalizeSale = async () => {
@@ -293,10 +297,7 @@ export default function AdminSales() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
       {/* Technical Header */}
       <View style={styles.header}>
@@ -324,13 +325,20 @@ export default function AdminSales() {
           />
         </View>
 
-        <Pressable
-          onPress={() => router.push("/admin/scan")}
-          style={[styles.scanButton, { backgroundColor: theme.primary }]}
-        >
-          <Ionicons name="scan" size={20} color="#FFF" />
-          <Text style={styles.scanButtonText}>SCAN</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: "flex-end" }}>
+          <Pressable
+            onPress={() => router.push("/admin/settings")}
+            style={[styles.settingsButton, { backgroundColor: theme.surface, borderColor: theme.primary }]}
+          >
+            <Ionicons name="settings-outline" size={18} color={theme.primary} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/admin/scan")}
+            style={[styles.scanButton, { backgroundColor: theme.primary }]}
+          >
+            <Ionicons name="scan" size={18} color="#FFF" />
+          </Pressable>
+        </View>
       </View>
 
       {/* Tab Switcher */}
@@ -416,8 +424,25 @@ export default function AdminSales() {
                   NO ITEMS IN SESSION
                 </Text>
                 <Text style={[styles.emptyHint, { color: theme.subtext }]}>
-                  Scan products to begin transaction
+                  Scan products or add manually to begin transaction
                 </Text>
+                <Pressable
+                  style={[styles.addManualButton, { backgroundColor: theme.primary }]}
+                  onPress={() => {
+                    if (products.length > 0) {
+                      setShowProductPicker(true);
+                    } else {
+                      Toast.show({
+                        type: 'error',
+                        text1: 'No Products',
+                        text2: 'Add products to inventory first'
+                      });
+                    }
+                  }}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color="#FFF" />
+                  <Text style={styles.addManualButtonText}>Add Product Manually</Text>
+                </Pressable>
               </View>
             ) : (
               <View style={styles.productList}>
@@ -793,11 +818,72 @@ export default function AdminSales() {
                   <Text
                     style={[styles.modalButtonText, { color: "#FFF" }]}
                   >
-                    Confirm
+                    Complete Sale
                   </Text>
                 </Pressable>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Product Picker Modal */}
+      <Modal visible={showProductPicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.pickerModalContent, { backgroundColor: theme.surface }]}>
+            <View style={styles.pickerHeader}>
+              <Text style={[styles.pickerTitle, { color: theme.text }]}>
+                Select Product
+              </Text>
+              <Pressable onPress={() => setShowProductPicker(false)}>
+                <Ionicons name="close" size={28} color={theme.text} />
+              </Pressable>
+            </View>
+            
+            <FlatList
+              data={products.filter(p => p.totalQuantity > 0)}
+              keyExtractor={(item) => item._id}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={[styles.productPickerItem, { borderBottomColor: theme.border }]}
+                  onPress={() => {
+                    const existingItem = cart.find(c => c._id === item._id);
+                    if (existingItem) {
+                      Toast.show({
+                        type: 'info',
+                        text1: 'Already in Cart',
+                        text2: 'Adjust quantity in cart'
+                      });
+                    } else {
+                      setCart([...cart, { ...item, quantity: 1 }]);
+                      Toast.show({
+                        type: 'success',
+                        text1: 'Product Added',
+                        text2: item.name
+                      });
+                    }
+                    setShowProductPicker(false);
+                  }}
+                >
+                  <View style={styles.productPickerInfo}>
+                    <Text style={[styles.productPickerName, { color: theme.text }]}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.productPickerDetails, { color: theme.subtext }]}>
+                      {item.category} • Stock: {item.totalQuantity}
+                    </Text>
+                  </View>
+                  <Ionicons name="add-circle" size={24} color={theme.primary} />
+                </Pressable>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyPickerState}>
+                  <Text style={[styles.emptyPickerText, { color: theme.subtext }]}>
+                    No products available
+                  </Text>
+                </View>
+              }
+            />
           </View>
         </View>
       </Modal>
@@ -889,18 +975,18 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   scanButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    width: 40,
+    height: 40,
     borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  scanButtonText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.5,
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   tabContainer: {
@@ -980,6 +1066,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     marginTop: 6,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  addManualButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  addManualButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
 
   productList: {},
@@ -1275,5 +1377,49 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
     marginLeft: 16,
+  },
+  pickerModalContent: {
+    width: "90%",
+    maxHeight: "70%",
+    borderRadius: 16,
+    padding: 0,
+    overflow: "hidden",
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,150,0.1)",
+  },
+  pickerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  productPickerItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  productPickerInfo: {
+    flex: 1,
+  },
+  productPickerName: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  productPickerDetails: {
+    fontSize: 14,
+  },
+  emptyPickerState: {
+    padding: 40,
+    alignItems: "center",
+  },
+  emptyPickerText: {
+    fontSize: 16,
   },
 });

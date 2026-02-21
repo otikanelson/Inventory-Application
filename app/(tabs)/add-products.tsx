@@ -1,30 +1,33 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    BackHandler,
-    FlatList,
-    Image,
-    ImageBackground,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  BackHandler,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
 import { HelpTooltip } from "../../components/HelpTooltip";
+import { lineHeight, margin, padding, touchTarget } from "../../constants/spacing";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
+import { hasSecurityPIN } from "../../utils/securityPINCheck";
 
 export default function AddProducts() {
   const { theme, isDark } = useTheme();
@@ -44,6 +47,7 @@ export default function AddProducts() {
   const [pendingNavAction, setPendingNavAction] = useState<any>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [existingProduct, setExistingProduct] = useState<any>(null);
+  const [showSecurityPINWarning, setShowSecurityPINWarning] = useState(false);
   
   // Enhanced UX states
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -77,21 +81,42 @@ export default function AddProducts() {
   // Admin-created categories - fetched from API
   const [adminCategories, setAdminCategories] = useState<string[]>([]);
 
-  // Fetch admin-created categories
+  // Check for Admin Security PIN on mount
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`);
-        const data = await response.json();
-        if (data.success) {
-          setAdminCategories(data.data.map((cat: any) => cat.name).sort());
-        }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
+    const checkSecurityPIN = async () => {
+      const hasPIN = await hasSecurityPIN();
+      if (!hasPIN) {
+        setShowSecurityPINWarning(true);
       }
     };
-    fetchCategories();
+    checkSecurityPIN();
   }, []);
+
+  // Fetch admin-created categories - refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchCategories = async () => {
+        try {
+          const token = await AsyncStorage.getItem('auth_session_token');
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/categories`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          const data = await response.json();
+          if (data.success) {
+            setAdminCategories(data.data.map((cat: any) => cat.name).sort());
+          } else {
+            console.error('Failed to fetch categories:', data.error);
+          }
+        } catch (error) {
+          console.error('Error fetching categories:', error);
+        }
+      };
+      fetchCategories();
+    }, [])
+  );
 
   useEffect(() => {
     const loadProductData = async () => {
@@ -425,6 +450,38 @@ export default function AddProducts() {
       highlightFields.push("category");
     }
 
+    // CRITICAL: Category validation - must exist in admin-created categories
+    // Users cannot create custom categories - admin must create them first
+    if (adminCategories.length === 0) {
+      newErrors.push("category");
+      highlightFields.push("category");
+      setHighlightErrors(highlightFields);
+      setTimeout(() => setHighlightErrors([]), 2000);
+      return { 
+        isValid: false, 
+        error: "No categories available. Please ask admin to create categories first.", 
+        field: "Category" 
+      };
+    }
+    
+    if (cleanCategory) {
+      const categoryExists = adminCategories.some(
+        cat => cat.toLowerCase() === cleanCategory.toLowerCase()
+      );
+      
+      if (!categoryExists) {
+        newErrors.push("category");
+        highlightFields.push("category");
+        setHighlightErrors(highlightFields);
+        setTimeout(() => setHighlightErrors([]), 2000);
+        return { 
+          isValid: false, 
+          error: `Category "${cleanCategory}" does not exist. Please select from available categories.`, 
+          field: "Category" 
+        };
+      }
+    }
+
     // Image validation - Image is now optional
     // No validation needed for image field
 
@@ -520,24 +577,71 @@ export default function AddProducts() {
 
   const pickImage = async (useCamera: boolean) => {
     setShowPicker(false);
-    const perm = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Toast.show({ type: "error", text1: "Permission Denied", text2: "Access required" });
-      return;
-    }
     
-    // Improved image picker options with better compression
-    const options: ImagePicker.ImagePickerOptions = { 
-      quality: 0.3, // Reduced quality for smaller file size
-      allowsEditing: true, 
-      aspect: [1, 1],
-      base64: false, // Don't get base64 immediately to save memory
-    };
-    
-    let result = useCamera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-      setFormModified(true);
+    try {
+      const perm = useCamera 
+        ? await ImagePicker.requestCameraPermissionsAsync() 
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        
+      if (!perm.granted) {
+        Toast.show({ 
+          type: "error", 
+          text1: "Permission Denied", 
+          text2: "Camera or photo access needed" 
+        });
+        return;
+      }
+      
+      // Improved image picker options with better compression for iOS
+      const options: ImagePicker.ImagePickerOptions = { 
+        quality: 0.5, // Balanced quality for iOS
+        allowsEditing: true, 
+        aspect: [1, 1],
+        base64: true, // Get base64 data directly
+        mediaTypes: ['images'],
+        // iOS-specific options
+        exif: false, // Don't include EXIF data to reduce size
+      };
+      
+      let result = useCamera 
+        ? await ImagePicker.launchCameraAsync(options) 
+        : await ImagePicker.launchImageLibraryAsync(options);
+        
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const imageUri = asset.uri;
+        
+        // Validate image URI
+        if (!imageUri) {
+          Toast.show({
+            type: "error",
+            text1: "Image Error",
+            text2: "Could not load image. Please try again."
+          });
+          return;
+        }
+        
+        // Store both URI (for display) and base64 (for upload)
+        setImage(imageUri);
+        if (asset.base64) {
+          // Store base64 in a ref or state for later use
+          (window as any).__imageBase64 = asset.base64;
+        }
+        setFormModified(true);
+        
+        Toast.show({
+          type: "success",
+          text1: "Image Selected",
+          text2: "Image will be uploaded when you save the product"
+        });
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Toast.show({
+        type: "error",
+        text1: "Image Selection Failed",
+        text2: "Please try again or choose a different image"
+      });
     }
   };
 
@@ -586,42 +690,60 @@ export default function AddProducts() {
           console.log('Starting image upload process...');
           console.log('Image URI:', image);
 
-          // Convert to base64 for upload
-          const response = await fetch(image);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.status}`);
-          }
-
-          const blob = await response.blob();
-          console.log('Original blob size:', blob.size, 'type:', blob.type);
-
-          // Check if image is too large (> 5MB original)
-          if (blob.size > 5 * 1024 * 1024) {
-            throw new Error('Image is too large. Please choose a smaller image or take a new photo with lower quality.');
-          }
-
-          const reader = new FileReader();
+          // Use base64 data from ImagePicker if available
+          let base64Data;
           
-          const base64Promise = new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => {
-              console.log('FileReader completed');
-              const result = reader.result;
-              if (typeof result === 'string') {
-                resolve(result);
-              } else {
-                reject(new Error('Failed to read file as data URL'));
+          // Check if we have base64 from ImagePicker
+          const storedBase64 = (window as any).__imageBase64;
+          if (storedBase64) {
+            console.log('Using base64 from ImagePicker');
+            // Construct data URL from base64
+            base64Data = `data:image/jpeg;base64,${storedBase64}`;
+            // Clean up
+            delete (window as any).__imageBase64;
+          } else {
+            // Fallback to fetch/FileReader for web or if base64 not available
+            console.log('Fetching image file for base64 conversion');
+            try {
+              const response = await fetch(image);
+              if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.status}`);
               }
-            };
-            reader.onerror = (error) => {
-              console.error('FileReader error:', error);
-              reject(error);
-            };
-            reader.readAsDataURL(blob);
-          });
 
-          const base64Data = await base64Promise;
-          console.log('Base64 data length:', base64Data.length);
-          console.log('Base64 prefix:', base64Data.substring(0, 50));
+              const blob = await response.blob();
+              console.log('Original blob size:', blob.size, 'type:', blob.type);
+
+              // Check if image is too large (> 5MB original)
+              if (blob.size > 5 * 1024 * 1024) {
+                throw new Error('Image is too large. Please choose a smaller image or take a new photo with lower quality.');
+              }
+
+              const reader = new FileReader();
+              
+              const base64Promise = new Promise<string>((resolve, reject) => {
+                reader.onloadend = () => {
+                  console.log('FileReader completed');
+                  const result = reader.result;
+                  if (typeof result === 'string') {
+                    resolve(result);
+                  } else {
+                    reject(new Error('Failed to read file as data URL'));
+                  }
+                };
+                reader.onerror = (error) => {
+                  console.error('FileReader error:', error);
+                  reject(error);
+                };
+                reader.readAsDataURL(blob);
+              });
+
+              base64Data = await base64Promise;
+              console.log('Base64 data length:', base64Data.length);
+            } catch (error) {
+              console.error('Image processing error:', error);
+              throw error;
+            }
+          }
 
           // Check final size (base64 is ~33% larger than binary)
           const estimatedSize = (base64Data.length * 3) / 4;
@@ -763,7 +885,34 @@ export default function AddProducts() {
       }
     } catch (err: any) {
       console.error("Save Error:", err);
-      Toast.show({ type: "error", text1: "Save Failed", text2: err.message });
+      
+      let errorMessage = "Please try again";
+      
+      // Handle specific error types
+      if (err.response?.data?.error) {
+        const errorText = err.response.data.error;
+        
+        // Duplicate key error (E11000)
+        if (errorText.includes('E11000') || errorText.includes('duplicate key')) {
+          if (errorText.includes('barcode')) {
+            errorMessage = "A product with this barcode already exists in your inventory";
+          } else if (errorText.includes('internalCode')) {
+            errorMessage = "Database error. Please contact support or try again later";
+          } else {
+            errorMessage = "This product already exists in your inventory";
+          }
+        } else {
+          errorMessage = errorText;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      Toast.show({ 
+        type: "error", 
+        text1: "Save Failed", 
+        text2: errorMessage 
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -780,10 +929,7 @@ export default function AddProducts() {
   };
 
   return (
-    <ImageBackground
-      source={isDark ? require("../../assets/images/Background7.png") : require("../../assets/images/Background9.png")}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -1229,7 +1375,7 @@ export default function AddProducts() {
                 color: formData.category ? theme.text : theme.subtext,
                 flex: 1,
               }}>
-                {formData.category || "Select or enter category"}
+                {formData.category || "Select category"}
               </Text>
               {!(mode === "inventory" && existingProduct && existingProduct.category) && (
                 <Ionicons name="chevron-down" size={20} color={theme.subtext} />
@@ -1582,69 +1728,55 @@ export default function AddProducts() {
               </Pressable>
             </View>
             
-            {/* Search/Filter Input */}
-            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <View style={[styles.searchContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                <Ionicons name="search" size={20} color={theme.subtext} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.text }]}
-                  placeholder="Search categories..."
-                  placeholderTextColor={theme.subtext}
-                  value={formData.category}
-                  onChangeText={(t) => setFormData((prev) => ({ ...prev, category: t }))}
-                />
-                {formData.category && (
-                  <Pressable onPress={() => setFormData((prev) => ({ ...prev, category: "" }))}>
-                    <Ionicons name="close-circle" size={20} color={theme.subtext} />
+            {adminCategories.length === 0 ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Ionicons name="alert-circle-outline" size={64} color={theme.notification} />
+                <Text style={{ color: theme.text, marginTop: 16, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>
+                  No Categories Available
+                </Text>
+                <Text style={{ color: theme.subtext, fontSize: 14, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+                  Please ask your admin to create product categories before adding products.
+                </Text>
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: theme.primary, marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }]}
+                  onPress={() => setShowCategoryPicker(false)}
+                >
+                  <Text style={{ color: "#FFF", fontWeight: "700" }}>Close</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <FlatList
+                data={adminCategories}
+                keyExtractor={(item) => item}
+                style={{ maxHeight: 400 }}
+                renderItem={({ item }) => (
+                  <Pressable 
+                    style={[
+                      styles.categoryItem,
+                      formData.category === item && { backgroundColor: theme.primary + '15' }
+                    ]} 
+                    onPress={() => handleCategorySelect(item)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <Ionicons 
+                        name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
+                        size={20} 
+                        color={formData.category === item ? theme.primary : theme.subtext} 
+                      />
+                      <Text style={{ 
+                        color: formData.category === item ? theme.primary : theme.text, 
+                        fontSize: 16,
+                        marginLeft: 12,
+                        fontWeight: formData.category === item ? '600' : '400'
+                      }}>
+                        {item}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
                   </Pressable>
                 )}
-              </View>
-            </View>
-            
-            <FlatList
-              data={adminCategories.filter(cat => 
-                cat.toLowerCase().includes(formData.category.toLowerCase())
-              )}
-              keyExtractor={(item) => item}
-              style={{ maxHeight: 400 }}
-              ListEmptyComponent={
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                  <Ionicons name="search-outline" size={48} color={theme.subtext} />
-                  <Text style={{ color: theme.subtext, marginTop: 12, textAlign: 'center' }}>
-                    No matching categories found
-                  </Text>
-                  <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-                    Ask admin to create "{formData.category}" category
-                  </Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <Pressable 
-                  style={[
-                    styles.categoryItem,
-                    formData.category === item && { backgroundColor: theme.primary + '15' }
-                  ]} 
-                  onPress={() => handleCategorySelect(item)}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <Ionicons 
-                      name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
-                      size={20} 
-                      color={formData.category === item ? theme.primary : theme.subtext} 
-                    />
-                    <Text style={{ 
-                      color: formData.category === item ? theme.primary : theme.text, 
-                      fontSize: 16,
-                      marginLeft: 12,
-                      fontWeight: formData.category === item ? '600' : '400'
-                    }}>
-                      {item}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-                </Pressable>
-              )}
-            />
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -1674,20 +1806,30 @@ export default function AddProducts() {
           </View>
         </View>
       </Modal>
-    </ImageBackground>
+
+      {/* Admin Security PIN Warning Modal */}
+      <AdminSecurityPINWarning
+        visible={showSecurityPINWarning}
+        onClose={() => setShowSecurityPINWarning(false)}
+        onNavigateToSettings={() => {
+          setShowSecurityPINWarning(false);
+          router.push('/settings');
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 25, paddingTop: 50, paddingBottom: 100 },
+  container: { padding: padding.container, paddingTop: 50, paddingBottom: 100 },
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 5,
   },
   refreshBtn: {
-    width: 44,
-    height: 44,
+    width: touchTarget.minWidth,
+    height: touchTarget.minHeight,
     borderRadius: 22,
     borderWidth: 1,
     justifyContent: "center",
@@ -1695,8 +1837,8 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   backBtn: {
-    width: 44,
-    height: 44,
+    width: touchTarget.minWidth,
+    height: touchTarget.minHeight,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
@@ -1706,13 +1848,13 @@ const styles = StyleSheet.create({
   
   // Enhanced mode selection
   modeSelection: {
-    marginBottom: 25,
+    marginBottom: margin.divider,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: margin.formField,
   },
   modeButtons: {
     flexDirection: "row",
@@ -1720,7 +1862,7 @@ const styles = StyleSheet.create({
   },
   modeBtn: {
     flex: 1,
-    padding: 20,
+    padding: padding.card,
     borderRadius: 15,
     borderWidth: 2,
     alignItems: "center",
@@ -1729,7 +1871,7 @@ const styles = StyleSheet.create({
   
   // Progress indicator
   progressContainer: {
-    marginBottom: 20,
+    marginBottom: margin.divider,
     alignItems: "center",
   },
   progressBar: {
@@ -1751,12 +1893,12 @@ const styles = StyleSheet.create({
   
   // Enhanced input groups
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: margin.divider,
   },
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: margin.element,
     gap: 6,
   },
   required: {
@@ -1771,7 +1913,7 @@ const styles = StyleSheet.create({
   },
   helpText: {
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: lineHeight.help * 12,
   },
   inputFooter: {
     flexDirection: "row",
@@ -1903,7 +2045,7 @@ const styles = StyleSheet.create({
   },
   helpModeDesc: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: lineHeight.description * 14,
   },
   
   // Existing styles
@@ -1916,7 +2058,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 15,
   },
-  infoText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  infoText: { flex: 1, fontSize: 13, lineHeight: lineHeight.body * 13 },
   scanShortcut: {
     flexDirection: "row",
     alignItems: "center",

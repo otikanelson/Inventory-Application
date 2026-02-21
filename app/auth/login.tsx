@@ -3,20 +3,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    Image,
-    ImageBackground,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View} from 'react-native';
 import { PinInput } from '../../components/PinInput';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function LoginScreen() {
   const { theme, isDark } = useTheme();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, role: userRole } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
   const [selectedRole, setSelectedRole] = useState<'admin' | 'staff' | null>(null);
@@ -24,10 +22,6 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAuthorLogin, setShowAuthorLogin] = useState(false);
   const [pinKey, setPinKey] = useState(0); // Key to force PinInput reset
-
-  const backgroundImage = isDark
-    ? require('../../assets/images/Background7.png')
-    : require('../../assets/images/Background9.png');
 
   // Auto-select role if passed as parameter
   useEffect(() => {
@@ -37,10 +31,15 @@ export default function LoginScreen() {
   }, [params.role]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/(tabs)');
+    if (isAuthenticated && userRole) {
+      // Navigate based on role
+      if (userRole === 'admin') {
+        router.replace('/admin/stats' as any);
+      } else {
+        router.replace('/(tabs)');
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userRole]);
 
   const handlePinComplete = async (pin: string) => {
     if (!selectedRole) return;
@@ -51,7 +50,12 @@ export default function LoginScreen() {
     const success = await login(pin, selectedRole);
 
     if (success) {
-      router.replace('/(tabs)');
+      // Role-based navigation
+      if (selectedRole === 'admin') {
+        router.replace('/admin/stats' as any);
+      } else {
+        router.replace('/(tabs)');
+      }
     } else {
       setPinError(true);
       setIsLoading(false);
@@ -74,11 +78,7 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      
 
       {/* Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>

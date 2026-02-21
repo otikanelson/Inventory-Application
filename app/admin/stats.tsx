@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  ImageBackground,
   Platform,
   Pressable,
   RefreshControl,
@@ -36,11 +35,8 @@ export default function AdminStats() {
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [salesTrends, setSalesTrends] = useState<any>(null);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  const backgroundImage = isDark
-    ? require("../../assets/images/Background7.png")
-    : require("../../assets/images/Background9.png");
+  const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const summary = dashboardData?.summary;
   const topRisk = summary?.topRiskProducts || [];
@@ -84,7 +80,7 @@ export default function AdminStats() {
   // Export to CSV
   const handleExportCSV = async () => {
     try {
-      setExporting(true);
+      setExportingCSV(true);
       
       // Fetch all AI insights data
       const [dashboardRes, categoryRes, trendsRes] = await Promise.all([
@@ -211,14 +207,14 @@ export default function AdminStats() {
         text2: 'Could not export CSV'
       });
     } finally {
-      setExporting(false);
+      setExportingCSV(false);
     }
   };
 
   // Export to PDF (simplified - creates a detailed text report)
   const handleExportPDF = async () => {
     try {
-      setExporting(true);
+      setExportingPDF(true);
       
       // Fetch all AI insights data
       const [dashboardRes, categoryRes, trendsRes] = await Promise.all([
@@ -360,7 +356,7 @@ export default function AdminStats() {
         text2: 'Could not export report'
       });
     } finally {
-      setExporting(false);
+      setExportingPDF(false);
     }
   };
 
@@ -802,10 +798,7 @@ export default function AdminStats() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ImageBackground
-        source={backgroundImage}
-        style={StyleSheet.absoluteFill}
-      />
+      
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -849,13 +842,13 @@ export default function AdminStats() {
           <View style={styles.exportButtons}>
             <Pressable
               onPress={handleExportCSV}
-              disabled={exporting}
+              disabled={exportingCSV || exportingPDF}
               style={[
                 styles.exportBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
             >
-              {exporting ? (
+              {exportingCSV ? (
                 <ActivityIndicator size="small" color={theme.primary} />
               ) : (
                 <Ionicons name="document-text-outline" size={16} color={theme.primary} />
@@ -863,13 +856,13 @@ export default function AdminStats() {
             </Pressable>
             <Pressable
               onPress={handleExportPDF}
-              disabled={exporting}
+              disabled={exportingCSV || exportingPDF}
               style={[
                 styles.exportBtn,
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
             >
-              {exporting ? (
+              {exportingPDF ? (
                 <ActivityIndicator size="small" color={theme.primary} />
               ) : (
                 <Ionicons name="document-outline" size={16} color={theme.primary} />

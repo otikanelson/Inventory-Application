@@ -5,6 +5,11 @@ import axios from 'axios';
 axios.defaults.timeout = 15000; // 15 seconds max wait
 axios.defaults.headers.common['Accept'] = 'application/json';
 axios.defaults.headers.common['Content-Type'] = 'application/json';
+axios.defaults.headers.common['User-Agent'] = 'InventiEase-Mobile/1.0';
+
+// Add retry configuration for network errors
+axios.defaults.retry = 2;
+axios.defaults.retryDelay = 1000;
 
 // Configure axios to automatically add auth token to all requests
 axios.interceptors.request.use(
@@ -13,18 +18,25 @@ axios.interceptors.request.use(
       const token = await AsyncStorage.getItem('auth_session_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log(`🔐 [AUTH] Token added to ${config.method?.toUpperCase()} ${config.url}`);
+      } else {
+        console.warn(`⚠️ [AUTH] No token found for ${config.method?.toUpperCase()} ${config.url}`);
+        console.warn(`   This request will likely return 401 Unauthorized`);
       }
       
       // Add request timestamp for debugging slow requests
       config.metadata = { startTime: new Date().getTime() };
+      
+      // Log request details (simplified for production)
+      console.log(`📤 [REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
     } catch (error) {
-      console.error('Error getting auth token:', error);
+      console.error('❌ [AUTH ERROR] Error getting auth token:', error);
       // Don't fail the request if we can't get the token
     }
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+    console.error('❌ [REQUEST INTERCEPTOR ERROR]', error);
     return Promise.reject(error);
   }
 );
@@ -32,50 +44,61 @@ axios.interceptors.request.use(
 // Handle responses and errors globally with comprehensive error handling
 axios.interceptors.response.use(
   (response) => {
+    // Log response details
+    const duration = response.config.metadata 
+      ? new Date().getTime() - response.config.metadata.startTime 
+      : 0;
+    
+    const url = response.config.url || 'unknown';
+    console.log(`✅ [${response.status}] ${url} (${duration}ms)`);
+    
     // Log slow requests (over 3 seconds)
-    if (response.config.metadata) {
-      const duration = new Date().getTime() - response.config.metadata.startTime;
-      if (duration > 3000) {
-        console.warn(`Slow request: ${response.config.url} took ${duration}ms`);
-      }
+    if (duration > 3000) {
+      console.warn(`⚠️ [SLOW] ${url} took ${duration}ms`);
     }
+    
     return response;
   },
   async (error) => {
     // Comprehensive error handling to prevent crashes
     try {
+      const url = error.config?.url || 'unknown';
+      const method = error.config?.method?.toUpperCase() || 'UNKNOWN';
+      
       if (error.response) {
         // Server responded with error status
         const status = error.response.status;
-        const url = error.config?.url || 'unknown';
+        const data = error.response.data;
         
-        // Don't log 400 errors (validation errors like duplicate PIN, invalid input)
-        // These are expected user errors, not system errors
-        if (status === 400) {
-          // Silently pass through - the calling code will handle the error message
-        } else if (status === 401) {
-          console.log(`Authentication failed for ${url} - token may be invalid`);
+        if (status === 401) {
+          console.error(`🔒 [401 UNAUTHORIZED] ${method} ${url}`);
+          console.error(`   Authentication failed - token may be missing or invalid`);
+          console.error(`   Error: ${data?.error || data?.message || 'Unauthorized'}`);
         } else if (status === 403) {
-          console.log(`Access forbidden for ${url} - insufficient permissions`);
+          console.error(`🚫 [403 FORBIDDEN] ${method} ${url}`);
+          console.error(`   Access denied - insufficient permissions`);
         } else if (status === 404) {
-          console.log(`Resource not found: ${url}`);
+          console.log(`🔍 [404 NOT FOUND] ${method} ${url}`);
+        } else if (status === 400) {
+          console.log(`⚠️ [400 BAD REQUEST] ${method} ${url} - ${data?.error || data?.message || 'Bad request'}`);
         } else if (status >= 500) {
-          console.error(`Server error (${status}) for ${url}`);
+          console.error(`💥 [${status} SERVER ERROR] ${method} ${url}`);
         } else {
-          console.log(`Request failed with status ${status} for ${url}`);
+          console.log(`⚠️ [${status}] ${method} ${url}`);
         }
       } else if (error.code === 'ECONNABORTED') {
-        console.error(`Request timeout for ${error.config?.url || 'unknown'} - server took too long to respond`);
+        console.error(`⏱️ [TIMEOUT] ${method} ${url} - Server took too long to respond`);
       } else if (error.code === 'ERR_NETWORK') {
-        console.error(`Network error for ${error.config?.url || 'unknown'} - check internet connection`);
+        console.error(`🌐 [NETWORK ERROR] ${method} ${url}`);
+        console.error(`   Check internet connection or server availability`);
       } else if (!error.response) {
-        console.error(`Network error for ${error.config?.url || 'unknown'} - no response from server`);
+        console.error(`📡 [NO RESPONSE] ${method} ${url} - Server didn't respond`);
       } else {
-        console.error(`Unexpected error for ${error.config?.url || 'unknown'}:`, error.message);
+        console.error(`❓ [UNEXPECTED ERROR] ${method} ${url}:`, error.message);
       }
     } catch (loggingError) {
       // Even error logging shouldn't crash the app
-      console.error('Error in error handler:', loggingError);
+      console.error('💀 [LOGGING ERROR] Error in error handler:', loggingError);
     }
     
     return Promise.reject(error);
