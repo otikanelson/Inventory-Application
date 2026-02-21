@@ -33,6 +33,15 @@ function validateStoreAccess(req, res, next) {
 
     // If storeId is in request, verify it matches user's store
     if (requestedStoreId) {
+      // Double-check req.user exists before accessing properties
+      if (!req.user || !req.user.storeId) {
+        console.error('validateStoreAccess: req.user or req.user.storeId is undefined during storeId comparison');
+        return res.status(401).json({ 
+          success: false,
+          error: 'Authentication required' 
+        });
+      }
+      
       // Normalize both IDs to strings for comparison
       const userStoreId = String(req.user.storeId);
       const reqStoreId = String(requestedStoreId);
@@ -50,7 +59,7 @@ function validateStoreAccess(req, res, next) {
       }
     }
 
-    next();
+    return next();
   } catch (error) {
     console.error('Store access validation error:', error);
     console.error('Error details:', error.message);
