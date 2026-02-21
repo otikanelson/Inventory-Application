@@ -11,7 +11,10 @@ async function authenticate(req, res, next) {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     
+    console.log('🔐 Authenticate middleware - Method:', req.method, 'Path:', req.path);
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No auth header or invalid format');
       return res.status(401).json({ 
         success: false,
         error: 'Authentication required' 
@@ -24,7 +27,9 @@ async function authenticate(req, res, next) {
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      console.log('✅ Token decoded:', { userId: decoded.userId, role: decoded.role, storeId: decoded.storeId });
     } catch (error) {
+      console.log('❌ Token verification failed:', error.message);
       return res.status(401).json({ 
         success: false,
         error: 'Invalid session' 
@@ -40,6 +45,7 @@ async function authenticate(req, res, next) {
         storeId: null,
         storeName: null
       };
+      console.log('✅ Author user set');
       return next();
     }
 
@@ -47,6 +53,7 @@ async function authenticate(req, res, next) {
     const user = await User.findById(decoded.userId);
 
     if (!user || !user.isActive) {
+      console.log('❌ User not found or inactive:', decoded.userId);
       return res.status(401).json({ 
         success: false,
         error: 'User not found or inactive' 
@@ -63,12 +70,15 @@ async function authenticate(req, res, next) {
       name: user.name
     };
 
-    next();
+    console.log('✅ User authenticated:', { id: req.user.id, role: req.user.role, storeId: req.user.storeId });
+    return next();
   } catch (error) {
     console.error('❌ Authentication error:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({ 
       success: false,
-      error: 'Authentication failed' 
+      error: 'Authentication failed',
+      details: error.message
     });
   }
 }
