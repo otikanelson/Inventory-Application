@@ -537,7 +537,7 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**Developed by:** [Your Name]  
+**Developed by:** [Nelson Otika]  
 **Project:** Stockq v1.0.0  
 **Repository:** [github.com/otikanelson/Inventory-Application](https://github.com/otikanelson/Inventory-Application)
 
@@ -549,7 +549,7 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 Need help? We're here for you!
 
-- 📧 **Email**: [your-email@example.com](mailto:your-email@example.com)
+- 📧 **Email**: [somtootika@gmail.com](mailto:somtootika@gmail.com)
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/otikanelson/Inventory-Application/issues)
 - 📖 **Documentation**: [View Docs](PROJECT_DOCUMENTATION.md)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/otikanelson/Inventory-Application/discussions)
