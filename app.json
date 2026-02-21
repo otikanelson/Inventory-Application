@@ -23,6 +23,8 @@
       "package": "com.son_the_nel.Inventory",
       "permissions": [
         "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
       "usesCleartextTraffic": true,
@@ -55,17 +57,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "03857279-1247-4e95-87fc-45c78d70c699"
+        "projectId": "7ccb323f-ce43-4d57-aaae-d99c8139faa3"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "owner": "neil2022",
     "updates": {
-      "url": "https://u.expo.dev/03857279-1247-4e95-87fc-45c78d70c699"
-    },
-    "cli": {
-      "appVersionSource": "remote"
+      "url": "https://u.expo.dev/7ccb323f-ce43-4d57-aaae-d99c8139faa3"
     }
   }
 }
