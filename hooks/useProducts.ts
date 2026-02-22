@@ -43,7 +43,7 @@ export const useProducts = () => {
   const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
 
   /** Fetch & Transform Data **/
-  const fetchProducts = useCallback(async (force = false) => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       
