@@ -350,13 +350,13 @@ export default function AlertSettingsScreen() {
     }
   };
 
-  const handleReassignAllProducts = (targetCategoryId: string) => {
-    console.log('🔄 Reassigning all products to category:', targetCategoryId);
+  const handleReassignAllProducts = (targetCategoryId: string, targetCategoryName: string) => {
+    console.log('🔄 Reassigning all products to category:', targetCategoryName, '(ID:', targetCategoryId, ')');
     console.log('🔄 Products to reassign:', productsToReassign.length);
     
     const newReassignments: { [key: string]: string } = {};
     productsToReassign.forEach((product) => {
-      newReassignments[product._id] = targetCategoryId;
+      newReassignments[product._id] = targetCategoryName;
     });
     
     console.log('🔄 New reassignments:', newReassignments);
@@ -398,12 +398,14 @@ export default function AlertSettingsScreen() {
     setDeletingCategory(true);
 
     try {
-      // Reassign all products
+      // Reassign all products - productReassignments now contains category names
       const reassignPromises = Object.entries(productReassignments).map(
-        ([productId, newCategoryId]) =>
-          axios.put(`${API_URL}/products/${productId}`, {
-            category: newCategoryId
-          })
+        ([productId, newCategoryName]) => {
+          console.log('📦 Updating product', productId, 'to category:', newCategoryName);
+          return axios.patch(`${API_URL}/products/${productId}`, {
+            category: newCategoryName
+          });
+        }
       );
 
       await Promise.all(reassignPromises);
@@ -423,6 +425,8 @@ export default function AlertSettingsScreen() {
         setProductReassignments({});
       }
     } catch (error: any) {
+      console.error('❌ Deletion error:', error);
+      console.error('❌ Error response:', error.response?.data);
       Toast.show({
         type: 'error',
         text1: 'Deletion Failed',
@@ -875,7 +879,7 @@ export default function AlertSettingsScreen() {
                           styles.reassignAllBtn,
                           { backgroundColor: theme.primary + '15', borderColor: theme.primary }
                         ]}
-                        onPress={() => handleReassignAllProducts(category._id)}
+                        onPress={() => handleReassignAllProducts(category._id, category.name)}
                       >
                         <Text style={[styles.reassignAllBtnText, { color: theme.primary }]}>
                           {category.name}
@@ -917,11 +921,11 @@ export default function AlertSettingsScreen() {
                               styles.categoryBtn,
                               {
                                 backgroundColor:
-                                  productReassignments[product._id] === category._id
+                                  productReassignments[product._id] === category.name
                                     ? theme.primary
                                     : theme.surface,
                                 borderColor:
-                                  productReassignments[product._id] === category._id
+                                  productReassignments[product._id] === category.name
                                     ? theme.primary
                                     : theme.border,
                               },
@@ -930,7 +934,7 @@ export default function AlertSettingsScreen() {
                               console.log('📦 Reassigning product:', product.name, 'to category:', category.name);
                               const newReassignments = {
                                 ...productReassignments,
-                                [product._id]: category._id,
+                                [product._id]: category.name,
                               };
                               console.log('📦 Updated reassignments:', newReassignments);
                               setProductReassignments(newReassignments);
@@ -941,7 +945,7 @@ export default function AlertSettingsScreen() {
                                 styles.categoryBtnText,
                                 {
                                   color:
-                                    productReassignments[product._id] === category._id
+                                    productReassignments[product._id] === category.name
                                       ? '#FFF'
                                       : theme.text,
                                 },
@@ -1167,12 +1171,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
   modalContent: {
     width: "100%",
     maxWidth: 400,
-    padding: 30,
+    padding: 10,
     borderRadius: 30,
     alignItems: "center",
   },

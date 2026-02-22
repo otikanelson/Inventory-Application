@@ -210,7 +210,8 @@ export const useProducts = () => {
   useEffect(() => {
     fetchProducts();
     fetchRecentlySold();
-  }, [fetchProducts, fetchRecentlySold]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   /** Refresh function that updates both products and recently sold **/
   const refresh = useCallback(async () => {
