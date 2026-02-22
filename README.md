@@ -48,51 +48,62 @@ Stockq is a cutting-edge mobile inventory management application that combines a
 ## 📸 Demo
 
 ### Dashboard
-> **Add screenshot here:** Dashboard showing inventory overview, AI insights, and recently sold products
+> Dashboard showing inventory overview, AI insights, and recently sold products
 
-![Dashboard Screenshot](path/to/dashboard-screenshot.png)
+![Dashboard](https://github.com/user-attachments/assets/38b2bcf4-82a2-4084-a37a-763c094f0885)
+![Dashboard_1](https://github.com/user-attachments/assets/5bcff7e7-a9e6-461a-86f3-dda9ee17e3cd)
 
 ---
 
 ### Barcode Scanner
-> **Add screenshot here:** Barcode scanner in action with product lookup results
+> Barcode scanner in action with product lookup results
 
-![Scanner Screenshot](path/to/scanner-screenshot.png)
+![Scanner](https://github.com/user-attachments/assets/c94748fe-b343-4139-a8f5-ec8edf49b844)
+![Scanner_1](https://github.com/user-attachments/assets/6aaf029b-96c9-47a6-9197-f7872098fb32)
 
 ---
 
 ### Inventory Management
-> **Add screenshot here:** Product list with search, filter, and category options
+> Product list with search, filter, and category options
 
-![Inventory Screenshot](path/to/inventory-screenshot.png)
+
+![Inventory](https://github.com/user-attachments/assets/ff9d6207-eb3a-4149-94f3-86d33583273a)
+![Inventory_1](https://github.com/user-attachments/assets/1283dfcb-9d3e-4be4-a60c-e35aa6bdd228)
+
 
 ---
 
 ### FEFO (First Expired, First Out)
-> **Add screenshot here:** FEFO page showing products sorted by expiry date with color coding
+> FEFO page showing products sorted by expiry date with color coding
 
-![FEFO Screenshot](path/to/fefo-screenshot.png)
+![FEFO](https://github.com/user-attachments/assets/fd47bfdf-d62d-4169-838f-cee769be3645)
+
 
 ---
 
 ### AI Predictions
-> **Add screenshot here:** AI predictions dashboard with risk scores and forecasts
+> AI predictions dashboard with risk scores and forecasts
 
-![AI Predictions Screenshot](path/to/ai-predictions-screenshot.png)
+![Insights](https://github.com/user-attachments/assets/1abad26e-0a07-4739-a271-16bc649b6499)
+![Insights_1](https://github.com/user-attachments/assets/bd53efb9-8a33-48c8-b22e-c9006941ee12)
+![Insights_2](https://github.com/user-attachments/assets/1c0460d8-c587-4190-933e-c0a07fb48d9b)
 
 ---
 
 ### Admin Dashboard
-> **Add screenshot here:** Admin analytics with charts and performance metrics
+> Admin analytics with charts and performance metrics
 
-![Admin Dashboard Screenshot](path/to/admin-dashboard-screenshot.png)
+![Sales](https://github.com/user-attachments/assets/e2dc456e-e2ae-4efa-9373-54837d629f0e)
+![Author dashboard](https://github.com/user-attachments/assets/3dcf3e92-7fa5-4127-876b-977f856cfaa3)
+![Author dashboard_1](https://github.com/user-attachments/assets/6d552cf9-b055-4fe6-a387-e7aac6d09b48)
 
 ---
 
 ### Alerts System
-> **Add screenshot here:** Alerts page showing critical expiry and low stock warnings
 
-![Alerts Screenshot](path/to/alerts-screenshot.png)
+> Alerts page showing critical expiry and low stock warnings
+![Alerts](https://github.com/user-attachments/assets/28685794-3f94-4b9b-8896-8528a025a734)
+
 
 ---
 
@@ -296,10 +307,10 @@ Create `.env` in root directory:
 
 ```env
 # Backend API URL (use your local IP for mobile testing)
-EXPO_PUBLIC_API_URL=http://192.168.1.100:5000/api
+EXPO_PUBLIC_API_URL=http://123.456.7.800:5000/api
 ```
 
-> **Note**: Replace `192.168.1.100` with your computer's local IP address. Find it using `ipconfig` (Windows) or `ifconfig` (Mac/Linux).
+> **Note**: Replace `123.456.7.800` with your computer's local IP address. Find it using `ipconfig` (Windows) or `ifconfig` (Mac/Linux).
 
 ---
 
