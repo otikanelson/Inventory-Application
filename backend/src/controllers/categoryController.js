@@ -11,13 +11,28 @@ const GlobalProduct = require('../models/GlobalProduct');
  */
 exports.getCategories = async (req, res) => {
   try {
-    // Categories are global, but we could filter by store if needed
-    // For now, return all categories
     const categories = await Category.find().sort({ name: 1 });
+    
+    // Add product count for each category
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        // Count products in this store's inventory
+        const productQuery = {
+          category: category.name,
+          ...req.tenantFilter
+        };
+        const productCount = await Product.countDocuments(productQuery);
+        
+        return {
+          ...category.toObject(),
+          productCount
+        };
+      })
+    );
     
     res.status(200).json({
       success: true,
-      data: categories
+      data: categoriesWithCount
     });
   } catch (error) {
     res.status(500).json({

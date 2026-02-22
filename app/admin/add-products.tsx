@@ -6,21 +6,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    BackHandler,
-    FlatList,
-    Image,
-    ImageBackground,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  BackHandler,
+  FlatList,
+  Image,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
@@ -589,54 +589,44 @@ export default function AddProducts() {
     setShowPicker(false);
     
     try {
-      const perm = useCamera 
-        ? await ImagePicker.requestCameraPermissionsAsync() 
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-        
-      if (!perm.granted) {
-        Toast.show({ 
-          type: "error", 
-          text1: "Permission Denied", 
-          text2: "Camera or photo access needed" 
-        });
-        return;
+      // Request permissions
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Toast.show({ 
+            type: "error", 
+            text1: "Camera Permission Required", 
+            text2: "Please enable camera access in Settings"
+          });
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Toast.show({ 
+            type: "error", 
+            text1: "Photo Library Permission Required", 
+            text2: "Please enable photo library access in Settings"
+          });
+          return;
+        }
       }
       
-      // Improved image picker options with better compression for iOS
+      // Image picker options
       const options: ImagePicker.ImagePickerOptions = { 
-        quality: 0.5, // Balanced quality for iOS
-        allowsEditing: true, 
-        aspect: [1, 1],
-        base64: true, // Get base64 data directly
         mediaTypes: ['images'],
-        // iOS-specific options
-        exif: false, // Don't include EXIF data to reduce size
+        quality: 0.7,
+        allowsEditing: true,
+        aspect: [1, 1] as [number, number],
       };
       
-      let result = useCamera 
+      const result = useCamera 
         ? await ImagePicker.launchCameraAsync(options) 
         : await ImagePicker.launchImageLibraryAsync(options);
         
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const imageUri = asset.uri;
-        
-        // Validate image URI
-        if (!imageUri) {
-          Toast.show({
-            type: "error",
-            text1: "Image Error",
-            text2: "Could not load image. Please try again."
-          });
-          return;
-        }
-        
-        // Store both URI (for display) and base64 (for upload)
+        const imageUri = result.assets[0].uri;
         setImage(imageUri);
-        if (asset.base64) {
-          // Store base64 in a ref or state for later use
-          (window as any).__imageBase64 = asset.base64;
-        }
         setFormModified(true);
         
         Toast.show({
@@ -645,12 +635,12 @@ export default function AddProducts() {
           text2: "Image will be uploaded when you save the product"
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Image picker error:', error);
       Toast.show({
         type: "error",
-        text1: "Image Selection Failed",
-        text2: "Please try again or choose a different image"
+        text1: "Error",
+        text2: error.message || "Could not access camera/photos"
       });
     }
   };

@@ -7,15 +7,15 @@ import axios from "axios";
 import { Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    FlatList,
-    Image,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    ImageBackground,
-    View
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 
 export default function InventoryScreen() {
@@ -35,35 +35,43 @@ export default function InventoryScreen() {
   // Refresh inventory when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      // Always force refresh when screen comes into focus
       refresh();
-    }, [refresh])
+      
+      // Also refresh analytics
+      if (products.length > 0) {
+        fetchAnalytics();
+      }
+    }, [refresh, products.length])
   );
+  
+  // Separate analytics fetch function
+  const fetchAnalytics = async () => {
+    try {
+      console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+      const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+      console.log('Analytics response:', response.data);
+      if (response.data.success) {
+        const analyticsMap: Record<string, { velocity: number; riskScore: number }> = {};
+        response.data.data.productAnalytics.forEach((item: any) => {
+          analyticsMap[item.productId] = {
+            velocity: item.velocity,
+            riskScore: item.riskScore
+          };
+        });
+        console.log('Analytics map:', analyticsMap);
+        setAnalytics(analyticsMap);
+      }
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    }
+  };
 
   // Fetch analytics for all products
   useEffect(() => {
-    const fetchAnalytics = async () => {
-      if (products.length > 0) {
-        try {
-          console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
-          const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
-          console.log('Analytics response:', response.data);
-          if (response.data.success) {
-            const analyticsMap: Record<string, { velocity: number; riskScore: number }> = {};
-            response.data.data.productAnalytics.forEach((item: any) => {
-              analyticsMap[item.productId] = {
-                velocity: item.velocity,
-                riskScore: item.riskScore
-              };
-            });
-            console.log('Analytics map:', analyticsMap);
-            setAnalytics(analyticsMap);
-          }
-        } catch (error) {
-          console.error('Error fetching analytics:', error);
-        }
-      }
-    };
-    fetchAnalytics();
+    if (products.length > 0) {
+      fetchAnalytics();
+    }
   }, [products]);
 
   // Helper functions
@@ -231,7 +239,10 @@ export default function InventoryScreen() {
           refreshControl={
             <RefreshControl
               refreshing={loading}
-              onRefresh={refresh}
+              onRefresh={async () => {
+                await refresh();
+                await fetchAnalytics();
+              }}
               tintColor={theme.primary}
             />
           }

@@ -1,21 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useAudioPlayer } from "expo-audio";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    ImageBackground,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  ImageBackground,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -75,30 +75,7 @@ export default function AdminSales() {
   // Audio
   const scanBeep = useAudioPlayer(require("../../assets/sounds/beep.mp3"));
 
-  // Initialize cart from scanner if data is passed
-  useEffect(() => {
-    if (cartData && typeof cartData === 'string') {
-      try {
-        const parsedCart = JSON.parse(cartData);
-        setCart(parsedCart);
-        Toast.show({
-          type: 'success',
-          text1: 'Cart Loaded',
-          text2: `${parsedCart.length} items ready for checkout`
-        });
-      } catch (error) {
-        console.error('Error parsing cart data:', error);
-      }
-    }
-  }, [cartData]);
-
-  // Fetch sales history and revenue stats
-  useEffect(() => {
-    if (activeTab === "history") {
-      fetchSalesHistory();
-    }
-  }, [activeTab]);
-
+  // Define fetchSalesHistory before using it
   const fetchSalesHistory = async () => {
     setLoadingHistory(true);
     try {
@@ -150,21 +127,49 @@ export default function AdminSales() {
           Toast.show({
             type: 'info',
             text1: 'No Sales Yet',
-            text2: 'Complete a sale to see history here'
+            text2: 'Start selling to see your sales history'
           });
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching sales history:', error);
       Toast.show({
         type: 'error',
-        text1: 'Network Error',
-        text2: 'Could not connect to server. Please check your connection.'
+        text1: 'Failed to Load',
+        text2: 'Could not fetch sales history'
       });
     } finally {
       setLoadingHistory(false);
     }
   };
+  
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === "checkout") {
+        refresh();
+      } else if (activeTab === "history") {
+        fetchSalesHistory();
+      }
+    }, [activeTab])
+  );
+
+  // Initialize cart from scanner if data is passed
+  useEffect(() => {
+    if (cartData && typeof cartData === 'string') {
+      try {
+        const parsedCart = JSON.parse(cartData);
+        setCart(parsedCart);
+        Toast.show({
+          type: 'success',
+          text1: 'Cart Loaded',
+          text2: `${parsedCart.length} items ready for checkout`
+        });
+      } catch (error) {
+        console.error('Error parsing cart data:', error);
+      }
+    }
+  }, [cartData]);
 
   // Process FEFO Sale
   const finalizeSale = async () => {

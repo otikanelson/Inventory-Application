@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from 'axios';
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
     ImageBackground,
     Modal,
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Switch,
@@ -49,12 +50,20 @@ export default function AlertSettingsScreen() {
   });
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [categoriesExpanded, setCategoriesExpanded] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
     loadAlertSettings();
     loadCategories();
   }, []);
+  
+  // Reload categories when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadCategories();
+    }, [])
+  );
 
   const loadAlertSettings = async () => {
     try {
@@ -79,6 +88,12 @@ export default function AlertSettingsScreen() {
     } catch (error) {
       console.error('Error loading categories:', error);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadAlertSettings(), loadCategories()]);
+    setRefreshing(false);
   };
 
   // Update loadAlertSettings when alertSettings changes
@@ -253,7 +268,18 @@ export default function AlertSettingsScreen() {
       <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
+      >
         {/* Header with Back Button */}
         <View style={styles.header}>
           <Pressable 

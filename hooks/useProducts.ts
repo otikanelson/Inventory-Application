@@ -38,13 +38,13 @@ export const useProducts = () => {
   const [recentlySold, setRecentlySold] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchTime, setLastFetchTime] = useState(0);
 
   const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
   const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
   
-  // Cache products for 30 seconds to avoid redundant API calls
-  const CACHE_DURATION = 30000; // 30 seconds
-  const lastFetchTime = useState(0)[0];
+  // Cache products for 5 seconds to avoid redundant API calls
+  const CACHE_DURATION = 5000; // 5 seconds (reduced from 30)
 
   /** Fetch & Transform Data **/
   const fetchProducts = useCallback(async (force = false) => {
@@ -56,6 +56,7 @@ export const useProducts = () => {
     
     try {
       setLoading(true);
+      setLastFetchTime(now); // Update fetch time
       
       // Use shorter timeout for product list (10 seconds)
       const response = await axios.get(API_URL, { timeout: 10000 });
@@ -102,41 +103,24 @@ export const useProducts = () => {
     } finally {
       setLoading(false);
     }
-  }, [API_URL]);
+  }, [API_URL, lastFetchTime, products.length]);
 
   /** Fetch Recently Sold Products **/
   const fetchRecentlySold = useCallback(async () => {
     try {
-      console.log('📊 Fetching recently sold data...');
       // Use shorter timeout and don't block on failure
       const response = await axios.get(`${ANALYTICS_URL}/recently-sold?limit=10`, { 
         timeout: 5000 
       });
       
-      console.log('✅ Recently sold response:', response.data);
-      
       if (response.data.success) {
         const data = response.data.data || [];
         setRecentlySold(data);
-        console.log(`✅ Loaded ${data.length} recently sold products`);
       } else {
-        console.log('⚠️ Recently sold response not successful');
         setRecentlySold([]);
       }
     } catch (err: any) {
-      console.error('❌ Error fetching recently sold:', err.response?.status, err.message);
-      
-      // Check for authentication errors
-      if (err.response?.status === 401) {
-        console.error('🔒 Authentication required - user may not be logged in');
-        console.error('   Token may be missing or expired');
-      } else if (err.response?.status === 403) {
-        console.error('🚫 Access forbidden - insufficient permissions');
-      } else if (!err.response) {
-        console.error('📡 Network error - cannot reach server');
-      }
-      
-      // Set empty array but don't show error to user (not critical)
+      // Silently fail - recently sold is not critical
       setRecentlySold([]);
     }
   }, [ANALYTICS_URL]);
@@ -230,7 +214,8 @@ export const useProducts = () => {
 
   /** Refresh function that updates both products and recently sold **/
   const refresh = useCallback(async () => {
-    await Promise.all([fetchProducts(), fetchRecentlySold()]);
+    // Force refresh by passing true
+    await Promise.all([fetchProducts(true), fetchRecentlySold()]);
   }, [fetchProducts, fetchRecentlySold]);
 
   return {
