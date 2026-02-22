@@ -133,6 +133,8 @@ export default function ScanScreen() {
     setScanned(true);
     setLoading(true);
 
+        // Add delay to allow camera to focus properly
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
     try {
       let response;
       try {

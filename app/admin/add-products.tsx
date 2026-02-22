@@ -6,21 +6,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  BackHandler,
-  FlatList,
-  Image,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    BackHandler,
+    FlatList,
+    Image,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
@@ -50,6 +50,7 @@ export default function AddProducts() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [pendingNavAction, setPendingNavAction] = useState<any>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
   const [existingProduct, setExistingProduct] = useState<any>(null);
   const [showSecurityPINWarning, setShowSecurityPINWarning] = useState(false);
   
@@ -1724,7 +1725,10 @@ export default function AddProducts() {
           <View style={[styles.categoryModal, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.pickerTitle, { color: theme.text }]}>Select Category</Text>
-              <Pressable onPress={() => setShowCategoryPicker(false)}>
+              <Pressable onPress={() => {
+                setShowCategoryPicker(false);
+                setCategorySearchQuery("");
+              }}>
                 <Ionicons name="close" size={24} color={theme.text} />
               </Pressable>
             </View>
@@ -1746,37 +1750,86 @@ export default function AddProducts() {
                 </Pressable>
               </View>
             ) : (
-              <FlatList
-                data={adminCategories}
-                keyExtractor={(item) => item}
-                style={{ maxHeight: 400 }}
-                renderItem={({ item }) => (
-                  <Pressable 
-                    style={[
-                      styles.categoryItem,
-                      formData.category === item && { backgroundColor: theme.primary + '15' }
-                    ]} 
-                    onPress={() => handleCategorySelect(item)}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <Ionicons 
-                        name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
-                        size={20} 
-                        color={formData.category === item ? theme.primary : theme.subtext} 
+              <>
+                {/* Search Bar */}
+                {adminCategories.length > 5 && (
+                  <View style={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.background, borderRadius: 12, paddingHorizontal: 12, height: 44 }}>
+                      <Ionicons name="search" size={20} color={theme.subtext} />
+                      <TextInput
+                        style={{ flex: 1, marginLeft: 8, color: theme.text, fontSize: 15 }}
+                        placeholder="Search categories..."
+                        placeholderTextColor={theme.subtext}
+                        value={categorySearchQuery}
+                        onChangeText={setCategorySearchQuery}
+                        autoCapitalize="none"
                       />
-                      <Text style={{ 
-                        color: formData.category === item ? theme.primary : theme.text, 
-                        fontSize: 16,
-                        marginLeft: 12,
-                        fontWeight: formData.category === item ? '600' : '400'
-                      }}>
-                        {item}
+                      {categorySearchQuery.length > 0 && (
+                        <Pressable onPress={() => setCategorySearchQuery("")}>
+                          <Ionicons name="close-circle" size={20} color={theme.subtext} />
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                )}
+                
+                <FlatList
+                  data={adminCategories.filter(cat => 
+                    cat.toLowerCase().includes(categorySearchQuery.toLowerCase())
+                  )}
+                  keyExtractor={(item) => item}
+                  style={{ maxHeight: 400 }}
+                  initialNumToRender={10}
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                  removeClippedSubviews={true}
+                  getItemLayout={(data, index) => ({
+                    length: 56,
+                    offset: 56 * index,
+                    index,
+                  })}
+                  ListEmptyComponent={
+                    <View style={{ padding: 30, alignItems: 'center' }}>
+                      <Ionicons name="search-outline" size={48} color={theme.subtext} />
+                      <Text style={{ color: theme.text, marginTop: 12, fontSize: 16, fontWeight: '600' }}>
+                        No categories found
+                      </Text>
+                      <Text style={{ color: theme.subtext, fontSize: 14, marginTop: 4 }}>
+                        Try a different search term
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-                  </Pressable>
-                )}
-              />
+                  }
+                  renderItem={({ item }) => (
+                    <Pressable 
+                      style={[
+                        styles.categoryItem,
+                        formData.category === item && { backgroundColor: theme.primary + '15' }
+                      ]} 
+                      onPress={() => {
+                        handleCategorySelect(item);
+                        setCategorySearchQuery("");
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Ionicons 
+                          name={formData.category === item ? "checkmark-circle" : "pricetag-outline"} 
+                          size={20} 
+                          color={formData.category === item ? theme.primary : theme.subtext} 
+                        />
+                        <Text style={{ 
+                          color: formData.category === item ? theme.primary : theme.text, 
+                          fontSize: 16,
+                          marginLeft: 12,
+                          fontWeight: formData.category === item ? '600' : '400'
+                        }}>
+                          {item}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+                    </Pressable>
+                  )}
+                />
+              </>
             )}
           </View>
         </View>

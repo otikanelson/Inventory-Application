@@ -4,7 +4,7 @@ import axios from "axios";
 import { useAudioPlayer } from "expo-audio";
 import { useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
     Animated,
@@ -15,7 +15,8 @@ import {
     Pressable,
     StyleSheet,
     Text,
-    View} from "react-native";
+    View
+} from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
@@ -37,6 +38,7 @@ interface CartItem {
 export default function AdminScanScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const params = useLocalSearchParams();
   const [permission, requestPermission] = useCameraPermissions();
 
   // Scanner Mode: "lookup", "sales", or "register"
@@ -86,18 +88,23 @@ export default function AdminScanScreen() {
     router.push('/admin/settings');
   };
 
-  // Reset on focus
+  // Reset on focus and clear cart if returning from completed sale
   useFocusEffect(
     React.useCallback(() => {
       setScanned(false);
       setLoading(false);
       setTorch(false);
       setCameraKey((prev) => prev + 1);
+      
+      // Clear cart if clearCart param is set
+      if (params.clearCart === 'true') {
+        setCart([]);
+      }
 
       return () => {
         setTorch(false);
       };
-    }, [])
+    }, [params.clearCart])
   );
 
   // Reset when mode changes
@@ -151,6 +158,9 @@ export default function AdminScanScreen() {
     if (scanned || loading) return;
     setScanned(true);
     setLoading(true);
+
+    // Add delay to allow camera to focus properly
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
 
     try {
       let response;
@@ -402,12 +412,13 @@ export default function AdminScanScreen() {
       return;
     }
 
-    // Navigate to sales page with cart data
+    // Navigate to sales page with cart data - ensure we go to checkout tab
     setShowCartModal(false);
     router.push({
       pathname: "/admin/sales",
       params: {
         cartData: JSON.stringify(cart),
+        tab: "checkout", // Explicitly set the tab
       },
     });
   };

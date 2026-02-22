@@ -160,6 +160,8 @@ export default function AdminSales() {
       try {
         const parsedCart = JSON.parse(cartData);
         setCart(parsedCart);
+        // Set active tab to checkout when cart data is passed
+        setActiveTab("checkout");
         Toast.show({
           type: 'success',
           text1: 'Cart Loaded',
@@ -219,6 +221,12 @@ export default function AdminSales() {
         text1: "Transaction Complete",
         text2: "Inventory updated via FEFO logic",
       });
+      
+      // Navigate back to scanner with clear flag
+      router.push({
+        pathname: "/admin/scan",
+        params: { clearCart: "true" }
+      });
     } catch (err) {
       console.error("Sale Error:", err);
       Toast.show({
@@ -259,8 +267,13 @@ export default function AdminSales() {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Reset time to midnight for accurate day comparison
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const diffTime = nowOnly.getTime() - dateOnly.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Yesterday";
@@ -1025,7 +1038,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 130,
   },
 
   sessionPanel: {
@@ -1088,7 +1101,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    marginTop: 10,
   },
   addManualButtonText: {
     color: "#FFF",

@@ -178,7 +178,7 @@ export default function FEFOScreen() {
                     "AI Risk Sorting: Uses machine learning to predict which items are most likely to expire before being sold, considering sales velocity and stock levels."
                   ]}
                   icon="help-circle-outline"
-                  iconSize={18}
+                  iconSize={15}
                   iconColor={theme.primary}
                 />
               </View>
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 5,
-    marginLeft: 10,
+    marginLeft: 1,
   },
   filterToggle: {
     flexDirection: "row",
