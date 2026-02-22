@@ -822,3 +822,45 @@ exports.impersonateStaff = async (req, res) => {
     });
   }
 };
+
+// Check if admin has security PIN set (used by staff to check before registering products)
+exports.checkAdminSecurityPin = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+
+    if (!storeId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Store ID is required'
+      });
+    }
+
+    // Find admin user for this store
+    const admin = await User.findOne({ 
+      role: 'admin', 
+      storeId: storeId,
+      isActive: true 
+    });
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: 'Admin not found for this store'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        hasSecurityPin: !!(admin.securityPin && admin.securityPin.length === 4),
+        securityPin: admin.securityPin // Return PIN so staff can cache it
+      }
+    });
+  } catch (error) {
+    console.error('Check admin security PIN error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check security PIN'
+    });
+  }
+};

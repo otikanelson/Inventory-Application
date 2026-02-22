@@ -26,6 +26,32 @@ router.use(tenantFilter);
 // Route for /api/products
 router.route("/").post(addProduct).get(getProducts);
 
+// Get products by category
+router.get("/category/:categoryId", async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    console.log('🔍 Fetching products for category:', categoryId);
+    console.log('🔍 Tenant filter:', req.tenantFilter);
+
+    // Apply tenant filter
+    const query = { category: categoryId, ...req.tenantFilter };
+    const products = await Product.find(query).select('_id name barcode category imageUrl');
+
+    console.log('✅ Found products:', products.length);
+
+    res.status(200).json({
+      success: true,
+      data: products,
+    });
+  } catch (error) {
+    console.error("❌ Get products by category error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // Process sale (must come before /:id to avoid conflict)
 router.post("/process-sale", processSale);
 

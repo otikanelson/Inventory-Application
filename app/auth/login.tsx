@@ -5,7 +5,10 @@ import { useEffect, useState } from 'react';
 import {
     Image,
     ImageBackground,
+    KeyboardAvoidingView,
+    Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     View
@@ -84,11 +87,21 @@ export default function LoginScreen() {
 
   return (
     <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
-      <View style={[styles.container, { backgroundColor: "transparent" }]}>
-        {/* Header */}
-      <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>
-        <Text style={styles.headerTitle}>StockQ</Text>
-      </View>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.container, { backgroundColor: "transparent" }]}>
+            {/* Header */}
+            <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>
+              <Text style={styles.headerTitle}>StockQ</Text>
+            </View>
 
       {/* Content */}
       <View style={styles.content}>
@@ -211,7 +224,9 @@ export default function LoginScreen() {
 
       {/* Author Login Modal */}
       <AuthorLogin visible={showAuthorLogin} onClose={() => setShowAuthorLogin(false)} />
-    </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ImageBackground>
   );
 }
@@ -242,6 +257,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 30,
     paddingBottom: 40,
+    minHeight: 500,
   },
   logo: {
     width: 120,

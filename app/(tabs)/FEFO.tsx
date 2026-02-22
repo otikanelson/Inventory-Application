@@ -33,6 +33,36 @@ export default function FEFOScreen() {
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
   const [loadingPredictions, setLoadingPredictions] = useState(false);
 
+  // Helper function to format time remaining in a readable way
+  const formatTimeRemaining = (days: number): string => {
+    if (days < 0) return 'EXPIRED';
+    
+    // Less than 14 days: show in days
+    if (days < 14) {
+      return `${days}d_REMAINING`;
+    }
+    
+    // Less than 60 days: show in weeks
+    if (days < 60) {
+      const weeks = Math.floor(days / 7);
+      return `${weeks}w_REMAINING`;
+    }
+    
+    // Less than 365 days: show in months
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return `${months}mo_REMAINING`;
+    }
+    
+    // 365 days or more: show in years
+    const years = Math.floor(days / 365);
+    const remainingMonths = Math.floor((days % 365) / 30);
+    if (remainingMonths > 0) {
+      return `${years}y ${remainingMonths}mo_REMAINING`;
+    }
+    return `${years}y_REMAINING`;
+  };
+
   // Fetch predictions for all perishable products
   useEffect(() => {
     const fetchPredictions = async () => {
@@ -283,14 +313,12 @@ export default function FEFOScreen() {
                           RISK_{item.riskScore}/100
                         </Text>
                         <Text style={[styles.priorityScore, { color: theme.subtext }]}>
-                          {item.daysLeft < 0 ? 'EXPIRED' : `${item.daysLeft}d left`}
+                          {formatTimeRemaining(item.daysLeft)}
                         </Text>
                       </>
                     ) : (
                       <Text style={[styles.daysCounter, { color: statusColor }]}>
-                        {item.daysLeft < 0 ?
-                          "EXPIRED"
-                        : `${item.daysLeft}d_REMAINING`}
+                        {formatTimeRemaining(item.daysLeft)}
                       </Text>
                     )}
                   </View>

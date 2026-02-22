@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ImageBackground,
     Modal,
@@ -29,6 +29,22 @@ export default function ProfileScreen() {
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [adminName, setAdminName] = useState('');
+
+  // Check if admin is impersonating on mount
+  useEffect(() => {
+    const checkImpersonation = async () => {
+      const impersonationActive = await AsyncStorage.getItem('impersonation_active');
+      const impersonationAdminName = await AsyncStorage.getItem('impersonation_admin_name');
+      
+      if (impersonationActive === 'true') {
+        setIsImpersonating(true);
+        setAdminName(impersonationAdminName || 'Admin');
+      }
+    };
+    checkImpersonation();
+  }, []);
 
   const handleUpdatePin = async () => {
     try {
@@ -93,6 +109,62 @@ export default function ProfileScreen() {
     router.replace('/auth/setup' as any);
   };
 
+  const handleBackToAdmin = async () => {
+    try {
+      // Restore admin session
+      const adminId = await AsyncStorage.getItem('impersonation_admin_id');
+      const adminName = await AsyncStorage.getItem('impersonation_admin_name');
+      const adminStoreId = await AsyncStorage.getItem('impersonation_admin_store_id');
+      const adminStoreName = await AsyncStorage.getItem('impersonation_admin_store_name');
+      const adminToken = await AsyncStorage.getItem('impersonation_admin_token');
+
+      if (!adminId || !adminToken) {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Could not restore admin session',
+        });
+        return;
+      }
+
+      // Restore admin session
+      await AsyncStorage.multiSet([
+        ['auth_session_token', adminToken],
+        ['auth_user_role', 'admin'],
+        ['auth_user_id', adminId],
+        ['auth_user_name', adminName || 'Admin'],
+        ['auth_store_id', adminStoreId || ''],
+        ['auth_store_name', adminStoreName || ''],
+      ]);
+
+      // Clear impersonation flags
+      await AsyncStorage.multiRemove([
+        'impersonation_active',
+        'impersonation_admin_id',
+        'impersonation_admin_name',
+        'impersonation_admin_store_id',
+        'impersonation_admin_store_name',
+        'impersonation_admin_token',
+      ]);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Returned to Admin',
+        text2: `Welcome back, ${adminName}`,
+      });
+
+      // Navigate back to admin dashboard
+      router.replace('/admin/stats' as any);
+    } catch (error) {
+      console.error('Error returning to admin:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Could not return to admin session',
+      });
+    }
+  };
+
   const getRoleDisplay = () => {
     switch (role) {
       case 'admin':
@@ -145,6 +217,21 @@ export default function ProfileScreen() {
 
           <Text style={[styles.userId, { color: theme.subtext }]}>ID: {user?.id || 'N/A'}</Text>
         </View>
+
+        {/* Back to Admin Button (shown when impersonating) */}
+        {isImpersonating && (
+          <Pressable
+            style={[styles.backToAdminBtn, { backgroundColor: theme.primary, borderColor: theme.primary }]}
+            onPress={handleBackToAdmin}
+          >
+            <Ionicons name="arrow-back-circle" size={22} color="#FFF" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.backToAdminText}>Return to Admin Account</Text>
+              <Text style={styles.backToAdminSubtext}>Currently viewing as {user?.name}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFF" />
+          </Pressable>
+        )}
 
         {/* Account Settings */}
         <View style={styles.section}>
@@ -344,6 +431,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     marginBottom: 30,
+  },
+  backToAdminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 2,
+    marginBottom: 30,
+    gap: 12,
+  },
+  backToAdminText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  backToAdminSubtext: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   avatarContainer: {
     width: 100,

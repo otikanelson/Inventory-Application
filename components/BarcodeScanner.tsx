@@ -1,16 +1,11 @@
-import React, { useRef, useEffect } from "react";
-import {
-  StyleSheet,
-  View,
-  Animated,
-  Pressable,
-  ActivityIndicator,
-  Dimensions,
-} from "react-native";
 import { CameraView } from "expo-camera";
-import { Ionicons } from "@expo/vector-icons";
-
-const { height } = Dimensions.get("window");
+import React, { useEffect, useRef } from "react";
+import {
+    ActivityIndicator,
+    Animated,
+    StyleSheet,
+    View
+} from "react-native";
 
 interface ScannerProps {
   onScan: (data: any) => void;
@@ -20,6 +15,7 @@ interface ScannerProps {
   setTorch: (val: boolean) => void;
   tabColor?: string;
   children?: React.ReactNode;
+  cameraKey?: number;
 }
 
 export const BarcodeScanner = ({
@@ -30,10 +26,12 @@ export const BarcodeScanner = ({
   setTorch,
   tabColor = "#00FF00",
   children,
+  cameraKey = 0,
 }: ScannerProps) => {
   const scanAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    console.log('🎥 BarcodeScanner mounted with cameraKey:', cameraKey);
     Animated.loop(
       Animated.sequence([
         Animated.timing(scanAnim, {
@@ -53,14 +51,16 @@ export const BarcodeScanner = ({
   return (
     <View style={styles.container}>
       <CameraView
-        style={StyleSheet.absoluteFillObject}
+        key={cameraKey}
+        style={styles.camera}
+        facing="back"
         enableTorch={torch}
         onBarcodeScanned={loading ? undefined : onScan}
-        barcodeScannerSettings={{ barcodeTypes: ["ean13", "upc_a", "code128"] }}
+        barcodeScannerSettings={{ barcodeTypes: ["ean13", "upc_a", "code128", "qr"] }}
       />
 
       {/* Dark Overlay with Viewfinder hole */}
-      <View style={styles.mainOverlay}>
+      <View style={styles.mainOverlay} pointerEvents="box-none">
         {/* Top Section (Where Tabs go) */}
         <View style={styles.topSection}>
           {children && React.Children.toArray(children)[0]}
@@ -109,10 +109,19 @@ export const BarcodeScanner = ({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
+  camera: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
   mainOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "space-between", // Forces top and bottom sections to the edges
+    zIndex: 1,
   },
   topSection: {
     paddingTop: 60,

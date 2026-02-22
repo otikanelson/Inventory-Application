@@ -9,13 +9,13 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    Animated,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../context/ThemeContext";
@@ -45,6 +45,7 @@ export default function ScanScreen() {
   const [adminPin, setAdminPin] = useState("");
   const [rapidScanEnabled, setRapidScanEnabled] = useState(false);
   const [securityPINWarningVisible, setSecurityPINWarningVisible] = useState(false);
+  const [checkingSecurityPIN, setCheckingSecurityPIN] = useState(true);
 
   // CRITICAL: Key to force camera remount when screen focuses
   const [cameraKey, setCameraKey] = useState(0);
@@ -66,10 +67,18 @@ export default function ScanScreen() {
   }, []);
 
   const checkSecurityPIN = async () => {
+    console.log('🔐 Scanner - Starting security PIN check...');
+    setCheckingSecurityPIN(true);
     const pinSet = await hasSecurityPIN();
+    console.log('🔐 Scanner - PIN check result:', pinSet);
     if (!pinSet) {
+      console.log('⚠️ Scanner - No PIN found, showing warning');
       setSecurityPINWarningVisible(true);
+    } else {
+      console.log('✅ Scanner - PIN found, NOT showing warning');
+      setSecurityPINWarningVisible(false);
     }
+    setCheckingSecurityPIN(false);
   };
 
   const loadRapidScanSetting = async () => {
@@ -171,6 +180,8 @@ export default function ScanScreen() {
             BatchPlayer.play();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setScanned(false);
+            // Turn off torch before navigation
+            setTorch(false);
             router.replace(`/product/${localProductResponse.data.product._id}`);
           } else {
             // Product in registry but not in local stock
@@ -217,6 +228,8 @@ export default function ScanScreen() {
         // RAPID SCAN MODE: Skip confirmation, go directly to add-products
         if (rapidScanEnabled) {
           setScanned(false);
+          // Turn off torch before navigation
+          setTorch(false);
           router.push({
             pathname: "/add-products",
             params: { 
@@ -260,6 +273,8 @@ export default function ScanScreen() {
     } else {
       // Known product - go to add-products in inventory mode
       setScanned(false);
+      // Turn off torch before navigation
+      setTorch(false);
       router.push({
         pathname: "/add-products",
         params: { 
@@ -279,13 +294,13 @@ export default function ScanScreen() {
   // Handle admin PIN submission for new product registration
   const handlePinSubmit = async () => {
     try {
-      const storedPin = await AsyncStorage.getItem('admin_pin');
+      const storedPin = await AsyncStorage.getItem('admin_security_pin');
       
       if (!storedPin) {
         Toast.show({ 
           type: "error", 
-          text1: "PIN Not Set",
-          text2: "Please set up admin PIN in settings first"
+          text1: "Security PIN Not Set",
+          text2: "Please set up admin security PIN in settings first"
         });
         setPinModal(false);
         setAdminPin("");
@@ -301,6 +316,9 @@ export default function ScanScreen() {
         setAdminPin("");
         setScanned(false);
         
+        // Turn off torch before navigation
+        setTorch(false);
+        
         // Navigate to add-products in REGISTRY mode
         router.push({
           pathname: "/add-products",
@@ -314,7 +332,7 @@ export default function ScanScreen() {
         Toast.show({
           type: "error",
           text1: "Access Denied",
-          text2: "Incorrect PIN",
+          text2: "Incorrect Security PIN",
         });
         setAdminPin("");
       }
@@ -513,6 +531,9 @@ export default function ScanScreen() {
                   const timestamp = Date.now();
                   const random = Math.floor(Math.random() * 10000);
                   const generatedBarcode = `MAN-${timestamp}-${random}`;
+                  
+                  // Turn off torch before navigation
+                  setTorch(false);
                   
                   router.push({
                     pathname: "/add-products",

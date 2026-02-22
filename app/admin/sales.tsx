@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useAudioPlayer } from "expo-audio";
+
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -18,6 +19,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { AddProductModal } from "../../components/AddProductModal";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
@@ -450,23 +452,6 @@ export default function AdminSales() {
                 <Text style={[styles.emptyHint, { color: theme.subtext }]}>
                   Scan products or add manually to begin transaction
                 </Text>
-                <Pressable
-                  style={[styles.addManualButton, { backgroundColor: theme.primary }]}
-                  onPress={() => {
-                    if (products.length > 0) {
-                      setShowProductPicker(true);
-                    } else {
-                      Toast.show({
-                        type: 'error',
-                        text1: 'No Products',
-                        text2: 'Add products to inventory first'
-                      });
-                    }
-                  }}
-                >
-                  <Ionicons name="add-circle-outline" size={20} color="#FFF" />
-                  <Text style={styles.addManualButtonText}>Add Product Manually</Text>
-                </Pressable>
               </View>
             ) : (
               <View style={styles.productList}>
@@ -576,6 +561,25 @@ export default function AdminSales() {
                 ))}
               </View>
             )}
+
+            {/* Add Product Button - Always visible */}
+            <Pressable
+              style={[styles.addManualButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, marginTop: cart.length > 0 ? 16 : 0 }]}
+              onPress={() => {
+                if (products.length > 0) {
+                  setShowProductPicker(true);
+                } else {
+                  Toast.show({
+                    type: 'error',
+                    text1: 'No Products',
+                    text2: 'Add products to inventory first'
+                  });
+                }
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+              <Text style={[styles.addManualButtonText, { color: theme.primary }]}>Add Product Manually</Text>
+            </Pressable>
 
             {/* Complete Transaction Button */}
             {cart.length > 0 && (
@@ -852,65 +856,30 @@ export default function AdminSales() {
       </Modal>
 
       {/* Product Picker Modal */}
-      <Modal visible={showProductPicker} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.pickerModalContent, { backgroundColor: theme.surface }]}>
-            <View style={styles.pickerHeader}>
-              <Text style={[styles.pickerTitle, { color: theme.text }]}>
-                Select Product
-              </Text>
-              <Pressable onPress={() => setShowProductPicker(false)}>
-                <Ionicons name="close" size={28} color={theme.text} />
-              </Pressable>
-            </View>
-            
-            <FlatList
-              data={products.filter(p => p.totalQuantity > 0)}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={[styles.productPickerItem, { borderBottomColor: theme.border }]}
-                  onPress={() => {
-                    const existingItem = cart.find(c => c._id === item._id);
-                    if (existingItem) {
-                      Toast.show({
-                        type: 'info',
-                        text1: 'Already in Cart',
-                        text2: 'Adjust quantity in cart'
-                      });
-                    } else {
-                      setCart([...cart, { ...item, quantity: 1 }]);
-                      Toast.show({
-                        type: 'success',
-                        text1: 'Product Added',
-                        text2: item.name
-                      });
-                    }
-                    setShowProductPicker(false);
-                  }}
-                >
-                  <View style={styles.productPickerInfo}>
-                    <Text style={[styles.productPickerName, { color: theme.text }]}>
-                      {item.name}
-                    </Text>
-                    <Text style={[styles.productPickerDetails, { color: theme.subtext }]}>
-                      {item.category} • Stock: {item.totalQuantity}
-                    </Text>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color={theme.primary} />
-                </Pressable>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyPickerState}>
-                  <Text style={[styles.emptyPickerText, { color: theme.subtext }]}>
-                    No products available
-                  </Text>
-                </View>
-              }
-            />
-          </View>
-        </View>
-      </Modal>
+      <AddProductModal
+        visible={showProductPicker}
+        products={products}
+        onClose={() => setShowProductPicker(false)}
+        onSelectProduct={(item) => {
+          const existingItem = cart.find(c => c._id === item._id);
+          if (existingItem) {
+            Toast.show({
+              type: 'info',
+              text1: 'Already in Cart',
+              text2: 'Adjust quantity in cart'
+            });
+          } else {
+            setCart([...cart, { ...item, quantity: 1 }]);
+            Toast.show({
+              type: 'success',
+              text1: 'Product Added',
+              text2: item.name
+            });
+          }
+          setShowProductPicker(false);
+        }}
+        emptyMessage="No products available"
+      />
 
       {/* Sale Details Modal */}
       <Modal visible={showSaleDetails} transparent animationType="slide">
@@ -1401,49 +1370,5 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
     marginLeft: 16,
-  },
-  pickerModalContent: {
-    width: "90%",
-    maxHeight: "70%",
-    borderRadius: 16,
-    padding: 0,
-    overflow: "hidden",
-  },
-  pickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(150,150,150,0.1)",
-  },
-  pickerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  productPickerItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  productPickerInfo: {
-    flex: 1,
-  },
-  productPickerName: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  productPickerDetails: {
-    fontSize: 14,
-  },
-  emptyPickerState: {
-    padding: 40,
-    alignItems: "center",
-  },
-  emptyPickerText: {
-    fontSize: 16,
   },
 });

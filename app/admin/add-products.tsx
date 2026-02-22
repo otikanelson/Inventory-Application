@@ -4,23 +4,23 @@ import { useNavigation } from "@react-navigation/native";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    BackHandler,
-    FlatList,
-    Image,
-    ImageBackground,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  BackHandler,
+  FlatList,
+  Image,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import AdminSecurityPINWarning from "../../components/AdminSecurityPINWarning";
@@ -65,6 +65,9 @@ export default function AddProducts() {
   const [showFieldHelp, setShowFieldHelp] = useState<string | null>(null);
   const [highlightErrors, setHighlightErrors] = useState<string[]>([]); // For red flash effect
   const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
+  const [showProductSelector, setShowProductSelector] = useState(false);
+  const [registeredProducts, setRegisteredProducts] = useState<any[]>([]);
+  const [productSearchQuery, setProductSearchQuery] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -77,7 +80,12 @@ export default function AddProducts() {
   });
 
   const mode = (params.mode as "registry" | "inventory" | "manual") || "manual";
-  const isLocked = params.locked === "true";
+  
+  // Determine if fields should be locked
+  // Lock when: 1) explicitly locked via params, OR 2) existingProduct is set (adding batch to registered product)
+  const isLocked = useMemo(() => {
+    return params.locked === "true" || Boolean(existingProduct);
+  }, [params.locked, existingProduct]);
   
   // Smart detection: Check if barcode came from scanning vs manual entry
   const isScannedProduct = Boolean(params.barcode && params.barcode !== formData.barcode);
@@ -89,17 +97,20 @@ export default function AddProducts() {
   // Check for Admin Security PIN on mount
   useEffect(() => {
     const checkSecurityPIN = async () => {
+      console.log('🔐 Admin Add-Products - Starting security PIN check...');
       // Check if user is authenticated as admin
       const userRole = await AsyncStorage.getItem('auth_user_role');
+      console.log('🔐 Admin Add-Products - User role:', userRole);
       
-      // Only check Security PIN for staff users
-      if (userRole === 'staff') {
-        const hasPIN = await hasSecurityPIN();
-        if (!hasPIN) {
-          setShowSecurityPINWarning(true);
-        }
+      // Check Security PIN for ALL users (admin and staff)
+      const hasPIN = await hasSecurityPIN();
+      console.log('🔐 Admin Add-Products - PIN check result:', hasPIN);
+      if (!hasPIN) {
+        console.log('⚠️ Admin Add-Products - No PIN found, showing warning');
+        setShowSecurityPINWarning(true);
+      } else {
+        console.log('✅ Admin Add-Products - PIN found, NOT showing warning');
       }
-      // Admin users don't need Security PIN prompt when already authenticated
     };
     checkSecurityPIN();
   }, []);
@@ -173,7 +184,16 @@ export default function AddProducts() {
                   ...prev,
                   name: productData.name || "",
                   category: productData.category || "",
+                  price: productData.genericPrice ? String(productData.genericPrice) : prev.price,
                 }));
+              } else {
+                // If name is provided but price isn't, still auto-fill price
+                if (productData.genericPrice && !formData.price) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    price: String(productData.genericPrice),
+                  }));
+                }
               }
               if (!params.imageUrl && productData.imageUrl && productData.imageUrl !== "cube") {
                 setImage(productData.imageUrl);
@@ -193,8 +213,13 @@ export default function AddProducts() {
 
   useFocusEffect(
     useCallback(() => {
+      // Always reset form when focusing without scan params
+      // This ensures clean state when navigating back from scanner or after submission
       if (!params.barcode && !params.mode) {
+        console.log('📝 Admin Add-Products - Resetting form (no params)');
         resetForm();
+      } else if (params.barcode) {
+        console.log('📝 Admin Add-Products - Has barcode param, keeping form data');
       }
       return () => {};
     }, [params.barcode, params.mode]),
@@ -1086,6 +1111,41 @@ export default function AddProducts() {
             <Text style={{ color: theme.text, fontWeight: "700", marginLeft: 10 }}>Smart Scanner</Text>
           </Pressable>
 
+          {/* Manual Batch Addition for Registered Products */}
+          {mode === "manual" && !params.barcode && (
+            <Pressable 
+              style={[styles.manualBatchBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} 
+              onPress={async () => {
+                // Fetch registered products from registry
+                try {
+                  const response = await axios.get(`${API_URL}/registry/all`);
+                  if (response.data.success) {
+                    setRegisteredProducts(response.data.data);
+                    setShowProductSelector(true);
+                  }
+                } catch (error) {
+                  console.error('Error loading registered products:', error);
+                  Toast.show({
+                    type: "error",
+                    text1: "Error",
+                    text2: "Could not load registered products"
+                  });
+                }
+              }}
+            >
+              <Ionicons name="cube-outline" size={24} color={theme.primary} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>
+                  Registered Products
+                </Text>
+                <Text style={{ color: theme.subtext, fontSize: 12, marginTop: 2 }}>
+                  Select from your product registry
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+            </Pressable>
+          )}
+
           <Text style={styles.sectionTitle}>PRODUCT IDENTITY</Text>
 
           {/* Enhanced Barcode Input with Validation */}
@@ -1176,15 +1236,22 @@ export default function AddProducts() {
                   highlightErrors.includes('image') && styles.errorHighlight,
                 ]}
                 onPress={() => setShowPicker(true)}
-                disabled={isUploading}
+                disabled={isUploading || isLocked}
               >
                 {image ? (
-                  <Image source={{ uri: image }} style={styles.fullImg} />
+                  <>
+                    <Image source={{ uri: image }} style={styles.fullImg} />
+                    {isLocked && (
+                      <View style={styles.lockedOverlay}>
+                        <Ionicons name="lock-closed" size={24} color="#FFF" />
+                      </View>
+                    )}
+                  </>
                 ) : (
                   <View style={styles.photoPlaceholder}>
                     <Ionicons name="camera" size={30} color={theme.subtext} />
                     <Text style={[styles.photoPlaceholderText, { color: theme.subtext }]}>
-                      Tap to add
+                      {isLocked ? "Locked" : "Tap to add"}
                     </Text>
                   </View>
                 )}
@@ -1208,7 +1275,7 @@ export default function AddProducts() {
                 )}
               </Pressable>
               
-              {image && !isUploading && (
+              {image && !isUploading && !isLocked && (
                 <Pressable 
                   style={styles.removePhoto} 
                   onPress={() => { 
@@ -1327,7 +1394,7 @@ export default function AddProducts() {
                 iconColor={theme.subtext}
                 style={{ marginLeft: 6 }}
               />
-              {mode === "inventory" && existingProduct && existingProduct.category && (
+              {(isLocked || (mode === "inventory" && existingProduct && existingProduct.category)) && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
                   <Ionicons name="lock-closed" size={14} color={theme.subtext} />
                   <Text style={{ color: theme.subtext, fontSize: 11, marginLeft: 4 }}>Locked</Text>
@@ -1337,8 +1404,8 @@ export default function AddProducts() {
             
             <Pressable
               onPress={() => {
-                // Disable category picker when in inventory mode with existing product
-                const isCategoryLocked = mode === "inventory" && existingProduct && Boolean(existingProduct.category);
+                // Disable category picker when locked or in inventory mode with existing product
+                const isCategoryLocked = isLocked || (mode === "inventory" && existingProduct && Boolean(existingProduct.category));
                 if (isCategoryLocked) {
                   return;
                 }
@@ -1346,12 +1413,12 @@ export default function AddProducts() {
                 fetchCategories();
                 setShowCategoryPicker(true);
               }}
-              disabled={Boolean(mode === "inventory" && existingProduct && existingProduct.category)}
+              disabled={isLocked || Boolean(mode === "inventory" && existingProduct && existingProduct.category)}
               style={[
                 styles.input,
                 isLocked && styles.locked,
                 {
-                  backgroundColor: (mode === "inventory" && existingProduct && existingProduct.category) 
+                  backgroundColor: (isLocked || (mode === "inventory" && existingProduct && existingProduct.category)) 
                     ? theme.border + '40' // Semi-transparent to show disabled state
                     : theme.surface,
                   borderColor: highlightErrors.includes('category')
@@ -1365,12 +1432,12 @@ export default function AddProducts() {
                   justifyContent: "center",
                   flexDirection: "row",
                   alignItems: "center",
-                  opacity: (mode === "inventory" && existingProduct && existingProduct.category) ? 0.6 : 1,
+                  opacity: (isLocked || (mode === "inventory" && existingProduct && existingProduct.category)) ? 0.6 : 1,
                 },
                 highlightErrors.includes('category') && styles.errorHighlight,
               ]}
             >
-              {mode === "inventory" && existingProduct && existingProduct.category && (
+              {(isLocked || (mode === "inventory" && existingProduct && existingProduct.category)) && (
                 <Ionicons name="lock-closed" size={18} color={theme.subtext} style={{ marginRight: 8 }} />
               )}
               <Text style={{ 
@@ -1379,7 +1446,7 @@ export default function AddProducts() {
               }}>
                 {formData.category || "Select category"}
               </Text>
-              {!(mode === "inventory" && existingProduct && existingProduct.category) && (
+              {!(isLocked || (mode === "inventory" && existingProduct && existingProduct.category)) && (
                 <Ionicons name="chevron-down" size={20} color={theme.subtext} />
               )}
             </Pressable>
@@ -1406,6 +1473,7 @@ export default function AddProducts() {
               <Switch
                 value={isPerishable}
                 onValueChange={(val) => { setIsPerishable(val); setFormModified(true); }}
+                disabled={isLocked}
                 trackColor={{ true: theme.primary }}
               />
             </View>
@@ -1425,6 +1493,7 @@ export default function AddProducts() {
                   setFormModified(true);
                   if (!val) setFormData((prev) => ({ ...prev, expiryDate: "" }));
                 }}
+                disabled={isLocked}
                 trackColor={{ true: theme.primary }}
               />
             </View>
@@ -1869,6 +1938,140 @@ export default function AddProducts() {
           router.push('/admin/settings');
         }}
       />
+
+      {/* Product Selector Modal for Manual Batch Addition */}
+      <Modal visible={showProductSelector} transparent animationType="slide">
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.categoryModal, { backgroundColor: theme.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.pickerTitle, { color: theme.text }]}>Select Product</Text>
+              <Pressable onPress={() => {
+                setShowProductSelector(false);
+                setProductSearchQuery("");
+              }}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            
+            {/* Search Bar */}
+            <View style={[styles.searchContainer, { backgroundColor: theme.background, borderColor: theme.border, margin: 16 }]}>
+              <Ionicons name="search" size={18} color={theme.subtext} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder="Search products..."
+                placeholderTextColor={theme.subtext}
+                value={productSearchQuery}
+                onChangeText={setProductSearchQuery}
+              />
+            </View>
+            
+            {registeredProducts.length === 0 ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Ionicons name="cube-outline" size={64} color={theme.subtext} />
+                <Text style={{ color: theme.text, marginTop: 16, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>
+                  No Registered Products
+                </Text>
+                <Text style={{ color: theme.subtext, fontSize: 14, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+                  Register products first before adding batches.
+                </Text>
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: theme.primary, marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }]}
+                  onPress={() => setShowProductSelector(false)}
+                >
+                  <Text style={{ color: "#FFF", fontWeight: "700" }}>Close</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <FlatList
+                data={registeredProducts.filter(p => 
+                  p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                  (p.barcode && p.barcode.includes(productSearchQuery)) ||
+                  (p.category && p.category.toLowerCase().includes(productSearchQuery.toLowerCase()))
+                )}
+                keyExtractor={(item) => item._id || item.barcode}
+                style={{ maxHeight: 500 }}
+                renderItem={({ item }) => (
+                  <Pressable 
+                    style={[styles.productSelectorItem, { borderBottomColor: theme.border }]} 
+                    onPress={() => {
+                      // Pre-fill form with selected product data
+                      setFormData({
+                        barcode: item.barcode,
+                        name: item.name,
+                        category: item.category || "",
+                        price: item.genericPrice ? String(item.genericPrice) : "",
+                        quantity: "",
+                        expiryDate: "",
+                        manufacturerDate: "",
+                      });
+                      setIsPerishable(item.isPerishable || false);
+                      if (item.imageUrl && item.imageUrl !== "cube") {
+                        setImage(item.imageUrl);
+                      }
+                      setExistingProduct(item);
+                      setFormModified(true);
+                      setShowProductSelector(false);
+                      setProductSearchQuery("");
+                      
+                      Toast.show({
+                        type: "success",
+                        text1: "Product Selected",
+                        text2: `Adding batch for ${item.name}`
+                      });
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      {item.imageUrl && item.imageUrl !== "cube" ? (
+                        <Image 
+                          source={{ uri: item.imageUrl }} 
+                          style={{ width: 50, height: 50, borderRadius: 10, marginRight: 12 }}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: theme.border, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                          <Ionicons name="cube-outline" size={24} color={theme.subtext} />
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ 
+                          color: theme.text, 
+                          fontSize: 16,
+                          fontWeight: '600',
+                          marginBottom: 4
+                        }}>
+                          {item.name}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Text style={{ color: theme.subtext, fontSize: 12 }}>
+                            {item.barcode}
+                          </Text>
+                          {item.category && (
+                            <>
+                              <Text style={{ color: theme.subtext, fontSize: 12 }}>•</Text>
+                              <Text style={{ color: theme.subtext, fontSize: 12 }}>
+                                {item.category}
+                              </Text>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
+                  </Pressable>
+                )}
+                ListEmptyComponent={
+                  <View style={{ padding: 30, alignItems: 'center' }}>
+                    <Ionicons name="search-outline" size={48} color={theme.subtext} />
+                    <Text style={{ color: theme.subtext, marginTop: 12, fontSize: 14 }}>
+                      No products found
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
     </ImageBackground>
   );
@@ -2027,6 +2230,13 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 2,
   },
+  lockedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 20,
+  },
   imageRequirement: {
     flexDirection: "row",
     alignItems: "center",
@@ -2118,6 +2328,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 15,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginBottom: 15,
+  },
+  manualBatchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
     borderRadius: 20,
     borderWidth: 1.5,
     marginBottom: 25,
@@ -2252,6 +2470,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(150,150,150,0.05)",
+  },
+  productSelectorItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
   },
   modalOverlay: {
     flex: 1,

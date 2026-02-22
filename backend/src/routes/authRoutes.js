@@ -26,6 +26,9 @@ router.post('/verify-admin-security-pin', authController.verifyAdminSecurityPin)
 // Get admin info by store ID (used by staff to display admin name)
 router.get('/admin-info/:storeId', authController.getAdminInfo);
 
+// Check if admin has security PIN set (used by staff before registering products)
+router.get('/check-admin-security-pin/:storeId', authController.checkAdminSecurityPin);
+
 // Protected routes (authentication required)
 // Staff management
 router.post('/staff', authenticate, tenantFilter, authController.createStaff);

@@ -196,6 +196,8 @@ export default function AdminScanScreen() {
               // Product found in local inventory
               scanBeep.play();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              // Turn off torch before navigation
+              setTorch(false);
               router.push(`/admin/product/${localProductResponse.data.product._id}`);
             } else {
               // Product in registry but not in local stock
@@ -235,6 +237,8 @@ export default function AdminScanScreen() {
           scanBeep.play();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           
+          // Turn off torch before navigation
+          setTorch(false);
           router.push({
             pathname: "/admin/add-products",
             params: {
@@ -251,6 +255,8 @@ export default function AdminScanScreen() {
         } else {
           // Product NOT in registry - navigate to register new product
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          // Turn off torch before navigation
+          setTorch(false);
           router.push({
             pathname: "/admin/add-products",
             params: {
@@ -462,6 +468,7 @@ export default function AdminScanScreen() {
   return (
     <View style={styles.container}>
       <BarcodeScanner
+        cameraKey={cameraKey}
         onScan={handleBarCodeScanned}
         onClose={() => router.back()}
         loading={loading}
@@ -572,6 +579,9 @@ export default function AdminScanScreen() {
                 const timestamp = Date.now();
                 const random = Math.floor(Math.random() * 10000);
                 const generatedBarcode = `MAN-${timestamp}-${random}`;
+                
+                // Turn off torch before navigation
+                setTorch(false);
                 
                 router.push({
                   pathname: "/admin/add-products",
