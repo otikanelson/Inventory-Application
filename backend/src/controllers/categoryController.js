@@ -11,24 +11,25 @@ const GlobalProduct = require('../models/GlobalProduct');
  */
 exports.getCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    const categories = await Category.find().sort({ name: 1 }).lean();
     
-    // Add product count for each category
-    const categoriesWithCount = await Promise.all(
-      categories.map(async (category) => {
-        // Count products in this store's inventory
-        const productQuery = {
-          category: category.name,
-          ...req.tenantFilter
-        };
-        const productCount = await Product.countDocuments(productQuery);
-        
-        return {
-          ...category.toObject(),
-          productCount
-        };
-      })
-    );
+    // Get product counts for all categories in a single aggregation query
+    const productCounts = await Product.aggregate([
+      { $match: req.tenantFilter },
+      { $group: { _id: '$category', count: { $sum: 1 } } }
+    ]);
+    
+    // Create a map for quick lookup
+    const countMap = {};
+    productCounts.forEach(item => {
+      countMap[item._id] = item.count;
+    });
+    
+    // Add product count to each category
+    const categoriesWithCount = categories.map(category => ({
+      ...category,
+      productCount: countMap[category.name] || 0
+    }));
     
     res.status(200).json({
       success: true,

@@ -51,6 +51,7 @@ export default function AlertSettingsScreen() {
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [categoriesExpanded, setCategoriesExpanded] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(false);
 
   // Product Reassignment State (for category deletion)
   const [showReassignModal, setShowReassignModal] = useState(false);
@@ -64,11 +65,14 @@ export default function AlertSettingsScreen() {
     loadCategories();
   }, []);
   
-  // Reload categories when screen comes into focus
+  // Reload categories when screen comes into focus (but only if modals are closed)
   useFocusEffect(
     useCallback(() => {
-      loadCategories();
-    }, [])
+      // Only reload if we're not in the middle of editing/deleting
+      if (!categoryModalVisible && !showReassignModal) {
+        loadCategories();
+      }
+    }, [categoryModalVisible, showReassignModal])
   );
 
   const loadAlertSettings = async () => {
@@ -86,13 +90,22 @@ export default function AlertSettingsScreen() {
   };
 
   const loadCategories = async () => {
+    // Prevent multiple simultaneous calls
+    if (loadingCategories) {
+      console.log('⏳ Already loading categories, skipping...');
+      return;
+    }
+    
     try {
+      setLoadingCategories(true);
       const response = await axios.get(`${API_URL}/categories`);
       if (response.data.success) {
         setCategories(response.data.data);
       }
     } catch (error) {
       console.error('Error loading categories:', error);
+    } finally {
+      setLoadingCategories(false);
     }
   };
 
@@ -255,16 +268,52 @@ export default function AlertSettingsScreen() {
         console.log('🔍 Fetching products for category:', selectedCategory._id);
         console.log('🔍 API URL:', `${API_URL}/products/category/${selectedCategory._id}`);
         
-        // Fetch products in this category
-        const response = await axios.get(`${API_URL}/products/category/${selectedCategory._id}`);
-        console.log('✅ Response:', response.data);
+        // Fetch both inventory products and global products in this category
+        const [inventoryResponse, globalResponse] = await Promise.all([
+          axios.get(`${API_URL}/products/category/${selectedCategory._id}`),
+          axios.get(`${API_URL}/products/registry/all`).then(res => {
+            // Filter global products by category name
+            const allGlobalProducts = res.data.data || [];
+            return {
+              data: {
+                success: true,
+                data: allGlobalProducts.filter((p: any) => p.category === selectedCategory.name)
+              }
+            };
+          })
+        ]);
         
-        if (response.data.success) {
-          const products = response.data.data || [];
-          console.log('✅ Products found:', products.length);
+        console.log('✅ Inventory response:', inventoryResponse.data);
+        console.log('✅ Global response:', globalResponse.data);
+        
+        if (inventoryResponse.data.success && globalResponse.data.success) {
+          const inventoryProducts = inventoryResponse.data.data || [];
+          const globalProducts = globalResponse.data.data || [];
+          
+          // Create a map to track unique products by barcode
+          const productMap = new Map();
+          
+          // Add inventory products first (they take priority)
+          inventoryProducts.forEach((product: any) => {
+            if (!productMap.has(product.barcode)) {
+              productMap.set(product.barcode, { ...product, isGlobal: false });
+            }
+          });
+          
+          // Add global products only if barcode doesn't exist in inventory
+          globalProducts.forEach((product: any) => {
+            if (!productMap.has(product.barcode)) {
+              productMap.set(product.barcode, { ...product, isGlobal: true });
+            }
+          });
+          
+          // Convert map to array
+          const allProducts = Array.from(productMap.values());
+          
+          console.log('✅ Total unique products found:', allProducts.length, '(', inventoryProducts.length, 'inventory batches +', globalProducts.length, 'global products)');
           
           // If API returns 0 products but category says it has products, there's a data mismatch
-          if (products.length === 0) {
+          if (allProducts.length === 0) {
             console.warn('⚠️ Category productCount is out of sync. Allowing direct deletion.');
             Toast.show({
               type: 'info',
@@ -275,11 +324,11 @@ export default function AlertSettingsScreen() {
             // Fall through to direct deletion below (don't return here)
           } else {
             // We have products, show reassignment modal
-            setProductsToReassign(products);
-            // Initialize reassignments with empty values
+            setProductsToReassign(allProducts);
+            // Initialize reassignments with barcode as key (since we deduplicated by barcode)
             const initialReassignments: { [key: string]: string } = {};
-            products.forEach((product: any) => {
-              initialReassignments[product._id] = '';
+            allProducts.forEach((product: any) => {
+              initialReassignments[product.barcode] = '';
             });
             setProductReassignments(initialReassignments);
             setCategoryModalVisible(false);
@@ -356,7 +405,8 @@ export default function AlertSettingsScreen() {
     
     const newReassignments: { [key: string]: string } = {};
     productsToReassign.forEach((product) => {
-      newReassignments[product._id] = targetCategoryName;
+      // Always use barcode as key since we deduplicated by barcode
+      newReassignments[product.barcode] = targetCategoryName;
     });
     
     console.log('🔄 New reassignments:', newReassignments);
@@ -377,10 +427,10 @@ export default function AlertSettingsScreen() {
     console.log('🗑️ Product reassignments:', productReassignments);
     console.log('🗑️ Products to reassign:', productsToReassign.length);
 
-    // Validate all products have been reassigned
-    const unassignedProducts = productsToReassign.filter(
-      (product) => !productReassignments[product._id]
-    );
+    // Validate all products have been reassigned (using barcode as key)
+    const unassignedProducts = productsToReassign.filter((product) => {
+      return !productReassignments[product.barcode];
+    });
 
     console.log('🗑️ Unassigned products:', unassignedProducts.length);
 
@@ -398,15 +448,30 @@ export default function AlertSettingsScreen() {
     setDeletingCategory(true);
 
     try {
-      // Reassign all products - productReassignments now contains category names
-      const reassignPromises = Object.entries(productReassignments).map(
-        ([productId, newCategoryName]) => {
-          console.log('📦 Updating product', productId, 'to category:', newCategoryName);
-          return axios.patch(`${API_URL}/products/${productId}`, {
-            category: newCategoryName
-          });
+      const reassignPromises: Promise<any>[] = [];
+
+      // Update all products (both inventory and global) by barcode
+      for (const product of productsToReassign) {
+        const newCategoryName = productReassignments[product.barcode];
+        
+        if (product.isGlobal) {
+          // Update global product
+          console.log('🌍 Updating global product', product._id, '(barcode:', product.barcode, ') to category:', newCategoryName);
+          reassignPromises.push(
+            axios.patch(`${API_URL}/products/registry/${product._id}`, {
+              category: newCategoryName
+            })
+          );
+        } else {
+          // Update inventory product (this will update the specific product/batch)
+          console.log('📦 Updating inventory product', product._id, '(barcode:', product.barcode, ') to category:', newCategoryName);
+          reassignPromises.push(
+            axios.patch(`${API_URL}/products/${product._id}`, {
+              category: newCategoryName
+            })
+          );
         }
-      );
+      }
 
       await Promise.all(reassignPromises);
 
@@ -904,7 +969,7 @@ export default function AlertSettingsScreen() {
                   >
                     <View style={styles.productInfo}>
                       <Text style={[styles.productName, { color: theme.text }]} numberOfLines={1}>
-                        {product.name}
+                        {product.name} {product.isGlobal && '(Global)'}
                       </Text>
                       <Text style={[styles.productBarcode, { color: theme.subtext }]}>
                         {product.barcode}
@@ -914,47 +979,49 @@ export default function AlertSettingsScreen() {
                     <View style={styles.categoryButtons}>
                       {categories
                         .filter((cat) => cat._id !== selectedCategory?._id)
-                        .map((category) => (
-                          <Pressable
-                            key={category._id}
-                            style={[
-                              styles.categoryBtn,
-                              {
-                                backgroundColor:
-                                  productReassignments[product._id] === category.name
-                                    ? theme.primary
-                                    : theme.surface,
-                                borderColor:
-                                  productReassignments[product._id] === category.name
-                                    ? theme.primary
-                                    : theme.border,
-                              },
-                            ]}
-                            onPress={() => {
-                              console.log('📦 Reassigning product:', product.name, 'to category:', category.name);
-                              const newReassignments = {
-                                ...productReassignments,
-                                [product._id]: category.name,
-                              };
-                              console.log('📦 Updated reassignments:', newReassignments);
-                              setProductReassignments(newReassignments);
-                            }}
-                          >
-                            <Text
+                        .map((category) => {
+                          return (
+                            <Pressable
+                              key={category._id}
                               style={[
-                                styles.categoryBtnText,
+                                styles.categoryBtn,
                                 {
-                                  color:
-                                    productReassignments[product._id] === category.name
-                                      ? '#FFF'
-                                      : theme.text,
+                                  backgroundColor:
+                                    productReassignments[product.barcode] === category.name
+                                      ? theme.primary
+                                      : theme.surface,
+                                  borderColor:
+                                    productReassignments[product.barcode] === category.name
+                                      ? theme.primary
+                                      : theme.border,
                                 },
                               ]}
+                              onPress={() => {
+                                console.log('📦 Reassigning product:', product.name, '(barcode:', product.barcode, ') to category:', category.name);
+                                const newReassignments = {
+                                  ...productReassignments,
+                                  [product.barcode]: category.name,
+                                };
+                                console.log('📦 Updated reassignments:', newReassignments);
+                                setProductReassignments(newReassignments);
+                              }}
                             >
-                              {category.name}
-                            </Text>
-                          </Pressable>
-                        ))}
+                              <Text
+                                style={[
+                                  styles.categoryBtnText,
+                                  {
+                                    color:
+                                      productReassignments[product.barcode] === category.name
+                                        ? '#FFF'
+                                        : theme.text,
+                                  },
+                                ]}
+                              >
+                                {category.name}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
                     </View>
                   </View>
                 ))}
@@ -1175,7 +1242,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: "100%",
     maxWidth: 400,
-    padding: 10,
+    padding: 30,
     borderRadius: 30,
     alignItems: "center",
   },
