@@ -179,19 +179,40 @@ export default function AddProducts() {
             if (response.data.found) {
               const productData = response.data.productData;
               setExistingProduct(productData);
+              
+              // Auto-fill price logic:
+              // 1. Use generic price if available
+              // 2. Otherwise, fetch last batch price from inventory
+              let priceToUse = productData.genericPrice ? String(productData.genericPrice) : "";
+              
+              if (!priceToUse) {
+                // Fetch inventory products with this barcode to get last batch price
+                try {
+                  const inventoryResponse = await axios.get(`${API_URL}/barcode/${barcode}`);
+                  if (inventoryResponse.data.success && inventoryResponse.data.product) {
+                    const lastBatchPrice = inventoryResponse.data.product.price;
+                    if (lastBatchPrice) {
+                      priceToUse = String(lastBatchPrice);
+                    }
+                  }
+                } catch (invErr) {
+                  console.log("Could not fetch last batch price");
+                }
+              }
+              
               if (!params.name) {
                 setFormData((prev) => ({
                   ...prev,
                   name: productData.name || "",
                   category: productData.category || "",
-                  price: productData.genericPrice ? String(productData.genericPrice) : prev.price,
+                  price: priceToUse || prev.price,
                 }));
               } else {
                 // If name is provided but price isn't, still auto-fill price
-                if (productData.genericPrice && !formData.price) {
+                if (priceToUse && !formData.price) {
                   setFormData((prev) => ({
                     ...prev,
-                    price: String(productData.genericPrice),
+                    price: priceToUse,
                   }));
                 }
               }
@@ -974,15 +995,39 @@ export default function AddProducts() {
               </Text>
             </View>
             
-            {/* Refresh Button */}
-            {(params.barcode || params.mode) && (
-              <Pressable 
-                style={[styles.refreshBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={handleRefreshPress}
-              >
-                <Ionicons name="refresh" size={20} color={theme.primary} />
-              </Pressable>
-            )}
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {/* Refresh Button */}
+              {(params.barcode || params.mode) && (
+                <Pressable 
+                  style={[styles.refreshBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={handleRefreshPress}
+                >
+                  <Ionicons name="refresh" size={20} color={theme.primary} />
+                </Pressable>
+              )}
+              
+              {/* Reset to Default Button */}
+              {(params.barcode || params.mode) && (
+                <Pressable 
+                  style={[styles.refreshBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => {
+                    if (formModified) {
+                      setPendingNavAction(() => () => {
+                        resetForm();
+                        router.replace('/admin/add-products');
+                      });
+                      setShowExitModal(true);
+                    } else {
+                      resetForm();
+                      router.replace('/admin/add-products');
+                    }
+                  }}
+                >
+                  <Ionicons name="home-outline" size={20} color={theme.primary} />
+                </Pressable>
+              )}
+            </View>
           </View>
 
           {/* Enhanced Mode Selection with Help */}
@@ -1005,11 +1050,22 @@ export default function AddProducts() {
                     },
                   ]}
                   onPress={() => {
-                    setFormData(prev => ({ ...prev, mode: "registry" }));
-                    router.replace({
-                      pathname: "/admin/add-products",
-                      params: { mode: "registry" }
-                    });
+                    if (formModified) {
+                      setPendingNavAction(() => () => {
+                        setFormData(prev => ({ ...prev, mode: "registry" }));
+                        router.replace({
+                          pathname: "/admin/add-products",
+                          params: { mode: "registry" }
+                        });
+                      });
+                      setShowExitModal(true);
+                    } else {
+                      setFormData(prev => ({ ...prev, mode: "registry" }));
+                      router.replace({
+                        pathname: "/admin/add-products",
+                        params: { mode: "registry" }
+                      });
+                    }
                   }}
                 >
                   <Ionicons 
@@ -1044,11 +1100,22 @@ export default function AddProducts() {
                     },
                   ]}
                   onPress={() => {
-                    setFormData(prev => ({ ...prev, mode: "manual" }));
-                    router.replace({
-                      pathname: "/admin/add-products",
-                      params: { mode: "manual" }
-                    });
+                    if (formModified) {
+                      setPendingNavAction(() => () => {
+                        setFormData(prev => ({ ...prev, mode: "manual" }));
+                        router.replace({
+                          pathname: "/admin/add-products",
+                          params: { mode: "manual" }
+                        });
+                      });
+                      setShowExitModal(true);
+                    } else {
+                      setFormData(prev => ({ ...prev, mode: "manual" }));
+                      router.replace({
+                        pathname: "/admin/add-products",
+                        params: { mode: "manual" }
+                      });
+                    }
                   }}
                 >
                   <Ionicons 
@@ -2100,7 +2167,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 25, fontWeight: "900", letterSpacing: -1 },
+  title: { fontSize: 23, fontWeight: "900", letterSpacing: -1 },
   subtitle: { fontSize: 10, fontWeight: "900", letterSpacing: 2 },
   
   // Enhanced mode selection
