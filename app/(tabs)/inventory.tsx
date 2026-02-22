@@ -37,16 +37,11 @@ export default function InventoryScreen() {
     useCallback(() => {
       // Always force refresh when screen comes into focus
       refresh();
-      
-      // Also refresh analytics
-      if (products.length > 0) {
-        fetchAnalytics();
-      }
-    }, [refresh, products.length])
+    }, [refresh])
   );
   
   // Separate analytics fetch function
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
       const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
@@ -65,14 +60,14 @@ export default function InventoryScreen() {
     } catch (error) {
       console.error('Error fetching analytics:', error);
     }
-  };
+  }, []);
 
   // Fetch analytics for all products
   useEffect(() => {
     if (products.length > 0) {
       fetchAnalytics();
     }
-  }, [products]);
+  }, [products.length, fetchAnalytics]);
 
   // Helper functions
   const getRiskColor = (riskScore: number) => {

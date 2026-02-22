@@ -781,7 +781,11 @@ exports.impersonateStaff = async (req, res) => {
     }
 
     // Verify staff belongs to admin's store
-    if (staff.storeId.toString() !== req.user.storeId) {
+    const staffStoreId = staff.storeId ? staff.storeId.toString() : null;
+    const adminStoreId = req.user.storeId ? req.user.storeId.toString() : null;
+    
+    if (staffStoreId !== adminStoreId) {
+      console.log('❌ Store mismatch:', { staffStoreId, adminStoreId });
       return res.status(403).json({
         success: false,
         error: 'Access denied to this store'

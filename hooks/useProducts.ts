@@ -38,25 +38,14 @@ export const useProducts = () => {
   const [recentlySold, setRecentlySold] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastFetchTime, setLastFetchTime] = useState(0);
 
   const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
   const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
-  
-  // Cache products for 5 seconds to avoid redundant API calls
-  const CACHE_DURATION = 5000; // 5 seconds (reduced from 30)
 
   /** Fetch & Transform Data **/
   const fetchProducts = useCallback(async (force = false) => {
-    // Skip if cache is still valid and not forced
-    const now = Date.now();
-    if (!force && now - lastFetchTime < CACHE_DURATION && products.length > 0) {
-      return;
-    }
-    
     try {
       setLoading(true);
-      setLastFetchTime(now); // Update fetch time
       
       // Use shorter timeout for product list (10 seconds)
       const response = await axios.get(API_URL, { timeout: 10000 });
@@ -103,7 +92,7 @@ export const useProducts = () => {
     } finally {
       setLoading(false);
     }
-  }, [API_URL, lastFetchTime, products.length]);
+  }, [API_URL]);
 
   /** Fetch Recently Sold Products **/
   const fetchRecentlySold = useCallback(async () => {
@@ -215,8 +204,7 @@ export const useProducts = () => {
 
   /** Refresh function that updates both products and recently sold **/
   const refresh = useCallback(async () => {
-    // Force refresh by passing true
-    await Promise.all([fetchProducts(true), fetchRecentlySold()]);
+    await Promise.all([fetchProducts(), fetchRecentlySold()]);
   }, [fetchProducts, fetchRecentlySold]);
 
   return {
