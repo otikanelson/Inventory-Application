@@ -4,14 +4,16 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View} from 'react-native';
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { PinInput } from '../../components/PinInput';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,6 +22,10 @@ type RegistrationStep = 'name' | 'pin' | 'complete';
 
 export default function StaffRegisterScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const [step, setStep] = useState<RegistrationStep>('name');
   const [staffName, setStaffName] = useState('');
@@ -176,14 +182,13 @@ export default function StaffRegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: theme.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      
-
-      <ScrollView
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <KeyboardAvoidingView 
+        style={[styles.container, { backgroundColor: "transparent" }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -371,6 +376,7 @@ export default function StaffRegisterScreen() {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 

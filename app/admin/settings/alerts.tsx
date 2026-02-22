@@ -1,16 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from 'axios';
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View
+  ImageBackground,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../../components/HelpTooltip";
@@ -21,6 +23,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default function AlertSettingsScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
   const { settings: alertSettings, updateSettings } = useAlerts();
 
@@ -44,12 +50,30 @@ export default function AlertSettingsScreen() {
   });
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [categoriesExpanded, setCategoriesExpanded] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+
+  // Product Reassignment State (for category deletion)
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [productsToReassign, setProductsToReassign] = useState<any[]>([]);
+  const [productReassignments, setProductReassignments] = useState<{ [key: string]: string }>({});
+  const [deletingCategory, setDeletingCategory] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
     loadAlertSettings();
     loadCategories();
   }, []);
+  
+  // Reload categories when screen comes into focus (but only if modals are closed)
+  useFocusEffect(
+    useCallback(() => {
+      // Only reload if we're not in the middle of editing/deleting
+      if (!categoryModalVisible && !showReassignModal) {
+        loadCategories();
+      }
+    }, [categoryModalVisible, showReassignModal])
+  );
 
   const loadAlertSettings = async () => {
     try {
@@ -66,14 +90,29 @@ export default function AlertSettingsScreen() {
   };
 
   const loadCategories = async () => {
+    // Prevent multiple simultaneous calls
+    if (loadingCategories) {
+      console.log('⏳ Already loading categories, skipping...');
+      return;
+    }
+    
     try {
+      setLoadingCategories(true);
       const response = await axios.get(`${API_URL}/categories`);
       if (response.data.success) {
         setCategories(response.data.data);
       }
     } catch (error) {
       console.error('Error loading categories:', error);
+    } finally {
+      setLoadingCategories(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadAlertSettings(), loadCategories()]);
+    setRefreshing(false);
   };
 
   // Update loadAlertSettings when alertSettings changes
@@ -223,8 +262,114 @@ export default function AlertSettingsScreen() {
   const handleDeleteCategory = async () => {
     if (!selectedCategory) return;
 
+    // If category has products, show reassignment modal
+    if (selectedCategory.productCount > 0) {
+      try {
+        console.log('🔍 Fetching products for category:', selectedCategory._id);
+        console.log('🔍 API URL:', `${API_URL}/products/category/${selectedCategory._id}`);
+        
+        // Fetch both inventory products and global products in this category
+        const [inventoryResponse, globalResponse] = await Promise.all([
+          axios.get(`${API_URL}/products/category/${selectedCategory._id}`),
+          axios.get(`${API_URL}/products/registry/all`).then(res => {
+            // Filter global products by category name
+            const allGlobalProducts = res.data.data || [];
+            return {
+              data: {
+                success: true,
+                data: allGlobalProducts.filter((p: any) => p.category === selectedCategory.name)
+              }
+            };
+          })
+        ]);
+        
+        console.log('✅ Inventory response:', inventoryResponse.data);
+        console.log('✅ Global response:', globalResponse.data);
+        
+        if (inventoryResponse.data.success && globalResponse.data.success) {
+          const inventoryProducts = inventoryResponse.data.data || [];
+          const globalProducts = globalResponse.data.data || [];
+          
+          // Create a map to track unique products by barcode
+          const productMap = new Map();
+          
+          // Add inventory products first (they take priority)
+          inventoryProducts.forEach((product: any) => {
+            if (!productMap.has(product.barcode)) {
+              productMap.set(product.barcode, { ...product, isGlobal: false });
+            }
+          });
+          
+          // Add global products only if barcode doesn't exist in inventory
+          globalProducts.forEach((product: any) => {
+            if (!productMap.has(product.barcode)) {
+              productMap.set(product.barcode, { ...product, isGlobal: true });
+            }
+          });
+          
+          // Convert map to array
+          const allProducts = Array.from(productMap.values());
+          
+          console.log('✅ Total unique products found:', allProducts.length, '(', inventoryProducts.length, 'inventory batches +', globalProducts.length, 'global products)');
+          
+          // If API returns 0 products but category says it has products, there's a data mismatch
+          if (allProducts.length === 0) {
+            console.warn('⚠️ Category productCount is out of sync. Allowing direct deletion.');
+            Toast.show({
+              type: 'info',
+              text1: 'Data Mismatch Detected',
+              text2: 'Category count was incorrect. Deleting category directly.',
+              visibilityTime: 3000,
+            });
+            // Fall through to direct deletion below (don't return here)
+          } else {
+            // We have products, show reassignment modal
+            setProductsToReassign(allProducts);
+            // Initialize reassignments with barcode as key (since we deduplicated by barcode)
+            const initialReassignments: { [key: string]: string } = {};
+            allProducts.forEach((product: any) => {
+              initialReassignments[product.barcode] = '';
+            });
+            setProductReassignments(initialReassignments);
+            setCategoryModalVisible(false);
+            setShowReassignModal(true);
+            return; // Exit here - we're showing the reassignment modal
+          }
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: 'API returned unsuccessful response'
+          });
+          return;
+        }
+      } catch (error: any) {
+        let errorMessage = 'Could not load products in this category';
+        
+        if (error.response) {
+          errorMessage = error.response.data?.error || error.response.data?.message || `Server error: ${error.response.status}`;
+        } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
+          errorMessage = 'Network error - check if backend is running';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        Toast.show({
+          type: 'error',
+          text1: 'Error Loading Products',
+          text2: errorMessage,
+          visibilityTime: 5000,
+        });
+        return;
+      }
+    }
+
+    // If no products (or data mismatch), delete directly
     try {
+      console.log('🗑️ Attempting to delete category:', selectedCategory._id);
       const response = await axios.delete(`${API_URL}/categories/${selectedCategory._id}`);
+      console.log('🗑️ Delete response:', response.data);
+      
       if (response.data.success) {
         Toast.show({
           type: 'success',
@@ -233,21 +378,147 @@ export default function AlertSettingsScreen() {
         });
         await loadCategories();
         setCategoryModalVisible(false);
+      } else {
+        console.error('❌ Delete failed - response not successful:', response.data);
+        Toast.show({
+          type: 'error',
+          text1: 'Deletion Failed',
+          text2: response.data.error || 'Server returned unsuccessful response'
+        });
       }
     } catch (error: any) {
+      console.error('❌ Delete category error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
       Toast.show({
         type: 'error',
         text1: 'Deletion Failed',
-        text2: 'Please try again'
+        text2: error.response?.data?.error || error.message || 'Please try again'
       });
     }
   };
 
+  const handleReassignAllProducts = (targetCategoryId: string, targetCategoryName: string) => {
+    console.log('🔄 Reassigning all products to category:', targetCategoryName, '(ID:', targetCategoryId, ')');
+    console.log('🔄 Products to reassign:', productsToReassign.length);
+    
+    const newReassignments: { [key: string]: string } = {};
+    productsToReassign.forEach((product) => {
+      // Always use barcode as key since we deduplicated by barcode
+      newReassignments[product.barcode] = targetCategoryName;
+    });
+    
+    console.log('🔄 New reassignments:', newReassignments);
+    setProductReassignments(newReassignments);
+    
+    Toast.show({
+      type: 'success',
+      text1: 'All Products Reassigned',
+      text2: `${productsToReassign.length} product(s) will be moved`,
+      visibilityTime: 2000,
+    });
+  };
+
+  const handleConfirmDeletion = async () => {
+    if (!selectedCategory) return;
+
+    console.log('🗑️ Confirming deletion...');
+    console.log('🗑️ Product reassignments:', productReassignments);
+    console.log('🗑️ Products to reassign:', productsToReassign.length);
+
+    // Validate all products have been reassigned (using barcode as key)
+    const unassignedProducts = productsToReassign.filter((product) => {
+      return !productReassignments[product.barcode];
+    });
+
+    console.log('🗑️ Unassigned products:', unassignedProducts.length);
+
+    if (unassignedProducts.length > 0) {
+      console.log('❌ Some products not reassigned:', unassignedProducts.map(p => p.name));
+      Toast.show({
+        type: 'error',
+        text1: 'Reassignment Required',
+        text2: `Please reassign all ${unassignedProducts.length} product(s)`,
+        visibilityTime: 4000,
+      });
+      return;
+    }
+
+    setDeletingCategory(true);
+
+    try {
+      const reassignPromises: Promise<any>[] = [];
+
+      // Update all products (both inventory and global) by barcode
+      for (const product of productsToReassign) {
+        const newCategoryName = productReassignments[product.barcode];
+        
+        if (product.isGlobal) {
+          // Update global product
+          console.log('🌍 Updating global product', product._id, '(barcode:', product.barcode, ') to category:', newCategoryName);
+          reassignPromises.push(
+            axios.patch(`${API_URL}/products/registry/${product._id}`, {
+              category: newCategoryName
+            })
+          );
+        } else {
+          // Update inventory product (this will update the specific product/batch)
+          console.log('📦 Updating inventory product', product._id, '(barcode:', product.barcode, ') to category:', newCategoryName);
+          reassignPromises.push(
+            axios.patch(`${API_URL}/products/${product._id}`, {
+              category: newCategoryName
+            })
+          );
+        }
+      }
+
+      await Promise.all(reassignPromises);
+
+      // Delete the category
+      const response = await axios.delete(`${API_URL}/categories/${selectedCategory._id}`);
+      
+      if (response.data.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Category Deleted',
+          text2: `${selectedCategory.name} removed and ${productsToReassign.length} product(s) reassigned`
+        });
+        await loadCategories();
+        setShowReassignModal(false);
+        setProductsToReassign([]);
+        setProductReassignments({});
+      }
+    } catch (error: any) {
+      console.error('❌ Deletion error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      Toast.show({
+        type: 'error',
+        text1: 'Deletion Failed',
+        text2: error.response?.data?.error || 'Please try again'
+      });
+    } finally {
+      setDeletingCategory(false);
+    }
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
+      >
         {/* Header with Back Button */}
         <View style={styles.header}>
           <Pressable 
@@ -612,19 +883,184 @@ export default function AlertSettingsScreen() {
               </Pressable>
             </View>
 
-            {!isCreatingCategory && selectedCategory?.productCount === 0 && (
+            {!isCreatingCategory && (
               <Pressable
                 style={[styles.deleteBtn, { backgroundColor: '#FF4444' + '15', borderColor: '#FF4444' }]}
                 onPress={handleDeleteCategory}
               >
                 <Ionicons name="trash-outline" size={18} color="#FF4444" />
-                <Text style={[styles.deleteBtnText, { color: '#FF4444' }]}>Delete Category</Text>
+                <Text style={[styles.deleteBtnText, { color: '#FF4444' }]}>
+                  {selectedCategory?.productCount > 0 
+                    ? `Delete & Reassign ${selectedCategory.productCount} Product(s)`
+                    : 'Delete Category'
+                  }
+                </Text>
               </Pressable>
             )}
           </View>
         </View>
       </Modal>
+
+      {/* PRODUCT REASSIGNMENT MODAL */}
+      <Modal visible={showReassignModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <ScrollView 
+            style={styles.reassignModalScroll}
+            contentContainerStyle={styles.reassignModalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.reassignModal, { backgroundColor: theme.surface }]}>
+              <View style={[styles.modalIconBox, { backgroundColor: '#FF4444' + '15' }]}>
+                <Ionicons name="warning" size={32} color="#FF4444" />
+              </View>
+
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Reassign Products
+              </Text>
+              <Text style={[styles.modalDesc, { color: theme.subtext }]}>
+                {selectedCategory?.name} has {productsToReassign.length} product(s). 
+                Reassign them to other categories before deletion.
+              </Text>
+
+              {/* Debug Info - Shows current assignment status */}
+              <View style={[styles.debugInfo, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Text style={[styles.debugText, { color: theme.text }]}>
+                  Assigned: {Object.keys(productReassignments).filter(key => productReassignments[key]).length} / {productsToReassign.length}
+                </Text>
+              </View>
+
+              {/* Reassign All Button */}
+              <View style={[styles.reassignAllContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Text style={[styles.reassignAllLabel, { color: theme.text }]}>
+                  Reassign all products to:
+                </Text>
+                <View style={styles.reassignAllButtons}>
+                  {categories
+                    .filter((cat) => cat._id !== selectedCategory?._id)
+                    .map((category) => (
+                      <Pressable
+                        key={category._id}
+                        style={[
+                          styles.reassignAllBtn,
+                          { backgroundColor: theme.primary + '15', borderColor: theme.primary }
+                        ]}
+                        onPress={() => handleReassignAllProducts(category._id, category.name)}
+                      >
+                        <Text style={[styles.reassignAllBtnText, { color: theme.primary }]}>
+                          {category.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                </View>
+              </View>
+
+              {/* Individual Product Reassignments */}
+              <View style={styles.productsContainer}>
+                <Text style={[styles.productsHeader, { color: theme.text }]}>
+                  Individual Assignments
+                </Text>
+                {productsToReassign.map((product) => (
+                  <View
+                    key={product._id}
+                    style={[
+                      styles.productReassignCard,
+                      { backgroundColor: theme.background, borderColor: theme.border }
+                    ]}
+                  >
+                    <View style={styles.productInfo}>
+                      <Text style={[styles.productName, { color: theme.text }]} numberOfLines={1}>
+                        {product.name} {product.isGlobal && '(Global)'}
+                      </Text>
+                      <Text style={[styles.productBarcode, { color: theme.subtext }]}>
+                        {product.barcode}
+                      </Text>
+                    </View>
+
+                    <View style={styles.categoryButtons}>
+                      {categories
+                        .filter((cat) => cat._id !== selectedCategory?._id)
+                        .map((category) => {
+                          return (
+                            <Pressable
+                              key={category._id}
+                              style={[
+                                styles.categoryBtn,
+                                {
+                                  backgroundColor:
+                                    productReassignments[product.barcode] === category.name
+                                      ? theme.primary
+                                      : theme.surface,
+                                  borderColor:
+                                    productReassignments[product.barcode] === category.name
+                                      ? theme.primary
+                                      : theme.border,
+                                },
+                              ]}
+                              onPress={() => {
+                                console.log('📦 Reassigning product:', product.name, '(barcode:', product.barcode, ') to category:', category.name);
+                                const newReassignments = {
+                                  ...productReassignments,
+                                  [product.barcode]: category.name,
+                                };
+                                console.log('📦 Updated reassignments:', newReassignments);
+                                setProductReassignments(newReassignments);
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.categoryBtnText,
+                                  {
+                                    color:
+                                      productReassignments[product.barcode] === category.name
+                                        ? '#FFF'
+                                        : theme.text,
+                                  },
+                                ]}
+                              >
+                                {category.name}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.modalActions}>
+                <Pressable
+                  style={[
+                    styles.modalBtn,
+                    { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+                  ]}
+                  onPress={() => {
+                    setShowReassignModal(false);
+                    setProductsToReassign([]);
+                    setProductReassignments({});
+                    setCategoryModalVisible(true);
+                  }}
+                  disabled={deletingCategory}
+                >
+                  <Text style={{ color: theme.text, fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: '#FF4444' }]}
+                  onPress={handleConfirmDeletion}
+                  disabled={deletingCategory}
+                >
+                  {deletingCategory ? (
+                    <Text style={{ color: '#FFF', fontWeight: '700' }}>Deleting...</Text>
+                  ) : (
+                    <Text style={{ color: '#FFF', fontWeight: '700' }}>CONFIRM DELETION</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
+    </ImageBackground>
   );
 }
 
@@ -802,7 +1238,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
   modalContent: {
     width: "100%",
@@ -898,7 +1333,105 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deleteBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
+  },
+  reassignModalScroll: {
+    flex: 1,
+    width: '100%',
+  },
+  reassignModalContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  reassignModal: {
+    width: '100%',
+    maxWidth: 500,
+    padding: 30,
+    borderRadius: 30,
+    alignSelf: 'center',
+  },
+  debugInfo: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  debugText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reassignAllContainer: {
+    width: '100%',
+    padding: 16,
+    borderRadius: 15,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  reassignAllLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  reassignAllButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reassignAllBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  reassignAllBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  productsContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  productsHeader: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 12,
+    letterSpacing: 0.5,
+  },
+  productReassignCard: {
+    padding: 16,
+    borderRadius: 15,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  productInfo: {
+    marginBottom: 12,
+  },
+  productName: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  productBarcode: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  categoryButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  categoryBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

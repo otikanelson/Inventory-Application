@@ -1,127 +1,27 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import {
-    Modal,
+    ImageBackground,
     Pressable,
     ScrollView,
     StyleSheet,
     Switch,
     Text,
-    TextInput,
     View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIStatusIndicator } from "../components/AIStatusIndicator";
-import { lineHeight, margin, padding, touchTarget } from "../constants/spacing";
-import { useAuth } from "../context/AuthContext";
+import { margin, touchTarget } from "../constants/spacing";
 import { useTheme } from "../context/ThemeContext";
 import { useTour } from "../context/TourContext";
 
 export default function SettingsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
+  const backgroundImage = isDark
+    ? require("../assets/images/Background7.png")
+    : require("../assets/images/Background9.png");
   const router = useRouter();
   const { resetTour, startTour } = useTour();
-  const { logout: authLogout } = useAuth();
-
-  // Admin Login State
-  const [pinModal, setPinModal] = useState(false);
-  const [pin, setPin] = useState("");
-  const [hasAdminPin, setHasAdminPin] = useState(false);
-  const [showPin, setShowPin] = useState(false);
-
-  useEffect(() => {
-    checkAdminPinStatus();
-  }, []);
-
-  const checkAdminPinStatus = async () => {
-    try {
-      const adminSecurityPin = await AsyncStorage.getItem('admin_security_pin');
-      setHasAdminPin(!!adminSecurityPin);
-    } catch (error) {
-      console.error('Error checking admin PIN:', error);
-    }
-  };
-
-  const handleAdminAuth = async () => {
-    try {
-      const storedPin = await AsyncStorage.getItem('admin_security_pin');
-      const userRole = await AsyncStorage.getItem('auth_user_role');
-      const storeId = await AsyncStorage.getItem('auth_store_id');
-      
-      // If no Security PIN is set, prevent access
-      if (!storedPin) {
-        setPinModal(false);
-        setPin("");
-        
-        Toast.show({
-          type: 'error',
-          text1: 'No Admin Security PIN Set',
-          text2: 'Please set up your Admin Security PIN first'
-        });
-        return;
-      }
-
-      // Validate Security PIN
-      if (pin === storedPin) {
-        // Update last auth time
-        await AsyncStorage.setItem('admin_last_auth', Date.now().toString());
-        
-        let adminName = 'Admin';
-        let adminStoreId = storeId || '';
-        let adminStoreName = '';
-        
-        // If staff is logging in, fetch admin details from backend
-        if (userRole === 'staff' && storeId) {
-          try {
-            const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/auth/admin-info/${storeId}`);
-            if (response.data.success) {
-              adminName = response.data.data.name;
-              adminStoreId = response.data.data.storeId;
-              adminStoreName = response.data.data.storeName;
-            }
-          } catch (error) {
-            console.error('Error fetching admin info:', error);
-            // Fallback to local storage
-            adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
-            adminStoreName = await AsyncStorage.getItem('auth_store_name') || '';
-          }
-        } else {
-          // Admin is logging in - use their own info
-          adminName = await AsyncStorage.getItem('auth_user_name') || 'Admin';
-          adminStoreName = await AsyncStorage.getItem('auth_store_name') || '';
-        }
-        
-        // Store admin session data
-        await AsyncStorage.multiSet([
-          ['admin_session', 'active'],
-          ['admin_session_time', Date.now().toString()],
-          ['admin_session_name', adminName],
-          ['admin_session_store_id', adminStoreId],
-          ['admin_session_store_name', adminStoreName],
-        ]);
-        
-        setPinModal(false);
-        setPin("");
-        router.push("../admin");
-      } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Access Denied',
-          text2: 'Incorrect Security PIN'
-        });
-        setPin("");
-      }
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Login Error',
-        text2: 'Could not verify credentials'
-      });
-    }
-  };
 
   const SettingRow = ({ icon, label, children, description, onPress, style }: any) => {
     const row = (
@@ -159,7 +59,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView
@@ -203,27 +104,9 @@ export default function SettingsScreen() {
           label="My Profile"
           description="View account details"
           onPress={() => router.push('/profile' as any)}
+          style={{ marginBottom: 16 }}
         >
           <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-        </SettingRow>
-        <SettingRow
-          icon="shield"
-          label="Admin Dashboard"
-          description={hasAdminPin ? "Enter Admin Security PIN to access" : "Set up Admin Security PIN first"}
-          onPress={() => setPinModal(true)}
-          style={{ 
-            marginBottom: 16
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {!hasAdminPin && (
-              <View style={[styles.badge, { backgroundColor: '#FF9500' + '20' }]}>
-                <Text style={[styles.badgeText, { color: '#FF9500' }]}>SETUP REQUIRED</Text>
-              </View>
-            )}
-
-            <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
-          </View>
         </SettingRow>
       </View>
 
@@ -274,82 +157,8 @@ export default function SettingsScreen() {
           Build v2.0.5 - Production Environment
         </Text>
       </ScrollView>
-
-      {/* Admin Login Modal */}
-      <Modal visible={pinModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
-          >
-            <View style={[styles.modalIconBox, { backgroundColor: theme.primary + "15" }]}>
-              <Ionicons name="shield-checkmark" size={32} color={theme.primary} />
-            </View>
-            
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {hasAdminPin ? "Admin Security PIN" : "Setup Required"}
-            </Text>
-            <Text style={[styles.modalDesc, { color: theme.subtext }]}>
-              {hasAdminPin 
-                ? "Enter your Admin Security PIN to access admin dashboard"
-                : "Please set up your Admin Security PIN in admin settings first"
-              }
-            </Text>
-
-            {hasAdminPin && (
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={[
-                    styles.pinInput,
-                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
-                  ]}
-                  placeholder="Enter Admin Security PIN"
-                  placeholderTextColor={theme.subtext}
-                  secureTextEntry={!showPin}
-                  keyboardType="numeric"
-                  maxLength={4}
-                  value={pin}
-                  onChangeText={setPin}
-                  autoFocus
-                />
-                <Pressable
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPin(!showPin)}
-                >
-                  <Ionicons
-                    name={showPin ? 'eye-off-outline' : 'eye-outline'}
-                    size={22}
-                    color={theme.subtext}
-                  />
-                </Pressable>
-              </View>
-            )}
-
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[
-                  styles.modalBtn,
-                  { backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
-                ]}
-                onPress={() => {
-                  setPinModal(false);
-                  setPin("");
-                }}
-              >
-                <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
-                onPress={handleAdminAuth}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  {hasAdminPin ? "VERIFY PIN" : "OK"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
+    </ImageBackground>
   );
 }
 
@@ -401,80 +210,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: padding.container,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    padding: padding.modal,
-    borderRadius: 30,
-    alignItems: "center",
-  },
-  modalIconBox: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
   versionText: {
     textAlign: "center",
     color: "#888",
     fontSize: 10,
     marginBottom: 100,
     letterSpacing: 1,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  modalDesc: {
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 25,
-    lineHeight: lineHeight.description * 14,
-  },
-  inputContainer: {
-    width: "100%",
-    position: "relative",
-    marginBottom: 15,
-  },
-  pinInput: {
-    width: "100%",
-    height: 55,
-    borderWidth: 1,
-    borderRadius: 15,
-    paddingHorizontal: 20,
-    paddingRight: 50,
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  eyeIcon: {
-    position: "absolute",
-    right: 15,
-    top: 16,
-    padding: 5,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 10,
-    width: "100%",
-  },
-  modalBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
   },
 });

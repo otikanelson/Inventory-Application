@@ -11,7 +11,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos of products.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to select product images.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -48,7 +53,14 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "This app needs access to your photo library to select product images.",
+          "cameraPermission": "This app needs access to your camera to take photos of products."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

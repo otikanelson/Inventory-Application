@@ -3,19 +3,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    ActivityIndicator,
+    ImageBackground,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../../../context/ThemeContext";
 
 export default function StoreSettingsScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
 
   // Store Information State
@@ -99,7 +104,8 @@ export default function StoreSettingsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -261,6 +267,7 @@ export default function StoreSettingsScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
+    </ImageBackground>
   );
 }
 

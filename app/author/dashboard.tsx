@@ -4,13 +4,15 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View} from 'react-native';
+  ActivityIndicator,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -29,6 +31,10 @@ interface Store {
 
 export default function AuthorDashboard() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,10 +150,9 @@ export default function AuthorDashboard() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      
-
-      <ScrollView
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={[styles.container, { backgroundColor: "transparent" }]}>
+        <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -308,6 +313,7 @@ export default function AuthorDashboard() {
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
+    </ImageBackground>
   );
 }
 

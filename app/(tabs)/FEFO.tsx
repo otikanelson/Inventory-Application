@@ -2,15 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    FlatList,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
@@ -20,6 +19,10 @@ import { Prediction } from "../../types/ai-predictions";
 
 export default function FEFOScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const { products, loading, refresh } = useProducts();
   const { fetchBatchPredictions } = useAIPredictions({ enableWebSocket: false, autoFetch: false });
   const router = useRouter();
@@ -29,6 +32,36 @@ export default function FEFOScreen() {
   const [sortByAI, setSortByAI] = useState(false);
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
   const [loadingPredictions, setLoadingPredictions] = useState(false);
+
+  // Helper function to format time remaining in a readable way
+  const formatTimeRemaining = (days: number): string => {
+    if (days < 0) return 'EXPIRED';
+    
+    // Less than 14 days: show in days
+    if (days < 14) {
+      return `${days}d_REMAINING`;
+    }
+    
+    // Less than 60 days: show in weeks
+    if (days < 60) {
+      const weeks = Math.floor(days / 7);
+      return `${weeks}w_REMAINING`;
+    }
+    
+    // Less than 365 days: show in months
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return `${months}mo_REMAINING`;
+    }
+    
+    // 365 days or more: show in years
+    const years = Math.floor(days / 365);
+    const remainingMonths = Math.floor((days % 365) / 30);
+    if (remainingMonths > 0) {
+      return `${years}y ${remainingMonths}mo_REMAINING`;
+    }
+    return `${years}y_REMAINING`;
+  };
 
   // Fetch predictions for all perishable products
   useEffect(() => {
@@ -135,7 +168,8 @@ export default function FEFOScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <FlatList
@@ -174,7 +208,7 @@ export default function FEFOScreen() {
                     "AI Risk Sorting: Uses machine learning to predict which items are most likely to expire before being sold, considering sales velocity and stock levels."
                   ]}
                   icon="help-circle-outline"
-                  iconSize={18}
+                  iconSize={15}
                   iconColor={theme.primary}
                 />
               </View>
@@ -279,14 +313,12 @@ export default function FEFOScreen() {
                           RISK_{item.riskScore}/100
                         </Text>
                         <Text style={[styles.priorityScore, { color: theme.subtext }]}>
-                          {item.daysLeft < 0 ? 'EXPIRED' : `${item.daysLeft}d left`}
+                          {formatTimeRemaining(item.daysLeft)}
                         </Text>
                       </>
                     ) : (
                       <Text style={[styles.daysCounter, { color: statusColor }]}>
-                        {item.daysLeft < 0 ?
-                          "EXPIRED"
-                        : `${item.daysLeft}d_REMAINING`}
+                        {formatTimeRemaining(item.daysLeft)}
                       </Text>
                     )}
                   </View>
@@ -362,6 +394,7 @@ export default function FEFOScreen() {
         }
       />
     </View>
+    </ImageBackground>
   );
 }
 
@@ -381,7 +414,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 5,
-    marginLeft: 10,
+    marginLeft: 1,
   },
   filterToggle: {
     flexDirection: "row",

@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    ImageBackground,
     Modal,
     Pressable,
     ScrollView,
@@ -12,7 +13,7 @@ import {
     Text,
     TextInput,
     View
-} from 'react-native';
+} from "react-native";
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -29,6 +30,10 @@ interface StaffMember {
 
 export default function AdminProfileScreen() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const router = useRouter();
   const { user, role, logout } = useAuth();
 
@@ -45,56 +50,20 @@ export default function AdminProfileScreen() {
   const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
   const [deletingStaff, setDeletingStaff] = useState(false);
 
-  // Admin session state (for staff logged in as admin)
-  const [adminSessionName, setAdminSessionName] = useState<string | null>(null);
-  const [adminInfo, setAdminInfo] = useState<{ name: string; storeId: string; storeName: string } | null>(null);
-  const [isStaffViewingAdmin, setIsStaffViewingAdmin] = useState(false);
-
   useEffect(() => {
-    checkAdminSession();
-    fetchAdminInfo();
+    if (role === 'admin') {
+      fetchStaffMembers();
+    }
   }, [role]);
 
   // Refresh staff list when screen comes into focus (e.g., after adding a new staff member)
   useFocusEffect(
     useCallback(() => {
-      if (role === 'admin' || role === 'staff') {
+      if (role === 'admin') {
         fetchStaffMembers();
       }
     }, [role])
   );
-
-  const checkAdminSession = async () => {
-    try {
-      const sessionName = await AsyncStorage.getItem('admin_session_name');
-      if (sessionName) {
-        setAdminSessionName(sessionName);
-      }
-    } catch (error) {
-      console.error('Error checking admin session:', error);
-    }
-  };
-
-  const fetchAdminInfo = async () => {
-    try {
-      // If user is staff, fetch the admin's information
-      if (role === 'staff' && user?.storeId) {
-        setIsStaffViewingAdmin(true);
-        const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/auth/admin-info/${user.storeId}`);
-        if (response.data.success) {
-          setAdminInfo(response.data.data);
-          // Fetch staff members for the admin
-          fetchStaffMembers();
-        }
-      } else if (role === 'admin') {
-        setIsStaffViewingAdmin(false);
-        // For actual admin, fetch their staff members
-        fetchStaffMembers();
-      }
-    } catch (error: any) {
-      console.error('Error fetching admin info:', error);
-    }
-  };
 
   const fetchStaffMembers = async () => {
     setLoadingStaff(true);
@@ -148,6 +117,13 @@ export default function AdminProfileScreen() {
     try {
       console.log('🎭 Impersonating staff:', staff.name);
       
+      // Store admin session before impersonating
+      const adminUserId = await AsyncStorage.getItem('auth_user_id');
+      const adminUserName = await AsyncStorage.getItem('auth_user_name');
+      const adminStoreId = await AsyncStorage.getItem('auth_store_id');
+      const adminStoreName = await AsyncStorage.getItem('auth_store_name');
+      const adminSessionToken = await AsyncStorage.getItem('auth_session_token');
+      
       const response = await axios.post(
         `${process.env.EXPO_PUBLIC_API_URL}/auth/staff/${staff._id}/impersonate`
       );
@@ -155,9 +131,25 @@ export default function AdminProfileScreen() {
       if (response.data.success) {
         const { user: staffUser, sessionToken } = response.data.data;
         
-        // Save the new session
-        await AsyncStorage.setItem('sessionToken', sessionToken);
-        await AsyncStorage.setItem('user', JSON.stringify(staffUser));
+        // Store admin session for later restoration
+        await AsyncStorage.multiSet([
+          ['impersonation_active', 'true'],
+          ['impersonation_admin_id', adminUserId || ''],
+          ['impersonation_admin_name', adminUserName || ''],
+          ['impersonation_admin_store_id', adminStoreId || ''],
+          ['impersonation_admin_store_name', adminStoreName || ''],
+          ['impersonation_admin_token', adminSessionToken || ''],
+        ]);
+        
+        // Save the new staff session
+        await AsyncStorage.multiSet([
+          ['auth_session_token', sessionToken],
+          ['auth_user_role', staffUser.role],
+          ['auth_user_id', staffUser.id],
+          ['auth_user_name', staffUser.name],
+          ['auth_store_id', staffUser.storeId || ''],
+          ['auth_store_name', staffUser.storeName || ''],
+        ]);
         
         showSuccessToast("Logged in as Staff", `Now viewing as ${staff.name}`);
         
@@ -257,7 +249,8 @@ export default function AdminProfileScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -277,7 +270,7 @@ export default function AdminProfileScreen() {
           </View>
 
           <Text style={[styles.userName, { color: theme.text }]}>
-            {isStaffViewingAdmin && adminInfo ? adminInfo.name : (user?.name || 'User')}
+            {user?.name || 'User'}
           </Text>
 
           <View style={[styles.roleBadge, { backgroundColor: '#FF3B30' + '20' }]}>
@@ -286,13 +279,13 @@ export default function AdminProfileScreen() {
           </View>
 
           <Text style={[styles.userId, { color: theme.subtext }]}>
-            ID: {isStaffViewingAdmin && adminInfo ? 'Admin' : (user?.id || 'N/A')}
+            ID: {user?.id || 'N/A'}
           </Text>
           
           <View style={[styles.storeInfo, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '30' }]}>
             <Ionicons name="storefront" size={16} color={theme.primary} />
             <Text style={[styles.storeText, { color: theme.text }]}>
-              {isStaffViewingAdmin && adminInfo ? adminInfo.storeName : (user?.storeName || 'Store')}
+              {user?.storeName || 'Store'}
             </Text>
           </View>
         </View>
@@ -344,7 +337,8 @@ export default function AdminProfileScreen() {
           </View>
         </View>
 
-        {/* Staff Management Section - Always show in admin dashboard */}
+        {/* Staff Management Section - Only for admin users */}
+        {role === 'admin' && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.primary }]}>STAFF MEMBERS</Text>
@@ -418,6 +412,7 @@ export default function AdminProfileScreen() {
             </View>
           )}
         </View>
+        )}
 
         {/* Logout Button */}
         <Pressable 
@@ -554,6 +549,7 @@ export default function AdminProfileScreen() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

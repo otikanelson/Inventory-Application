@@ -41,19 +41,9 @@ export const useProducts = () => {
 
   const API_URL = `${process.env.EXPO_PUBLIC_API_URL}/products`;
   const ANALYTICS_URL = `${process.env.EXPO_PUBLIC_API_URL}/analytics`;
-  
-  // Cache products for 30 seconds to avoid redundant API calls
-  const CACHE_DURATION = 30000; // 30 seconds
-  const lastFetchTime = useState(0)[0];
 
   /** Fetch & Transform Data **/
-  const fetchProducts = useCallback(async (force = false) => {
-    // Skip if cache is still valid and not forced
-    const now = Date.now();
-    if (!force && now - lastFetchTime < CACHE_DURATION && products.length > 0) {
-      return;
-    }
-    
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -107,36 +97,19 @@ export const useProducts = () => {
   /** Fetch Recently Sold Products **/
   const fetchRecentlySold = useCallback(async () => {
     try {
-      console.log('📊 Fetching recently sold data...');
       // Use shorter timeout and don't block on failure
       const response = await axios.get(`${ANALYTICS_URL}/recently-sold?limit=10`, { 
         timeout: 5000 
       });
       
-      console.log('✅ Recently sold response:', response.data);
-      
       if (response.data.success) {
         const data = response.data.data || [];
         setRecentlySold(data);
-        console.log(`✅ Loaded ${data.length} recently sold products`);
       } else {
-        console.log('⚠️ Recently sold response not successful');
         setRecentlySold([]);
       }
     } catch (err: any) {
-      console.error('❌ Error fetching recently sold:', err.response?.status, err.message);
-      
-      // Check for authentication errors
-      if (err.response?.status === 401) {
-        console.error('🔒 Authentication required - user may not be logged in');
-        console.error('   Token may be missing or expired');
-      } else if (err.response?.status === 403) {
-        console.error('🚫 Access forbidden - insufficient permissions');
-      } else if (!err.response) {
-        console.error('📡 Network error - cannot reach server');
-      }
-      
-      // Set empty array but don't show error to user (not critical)
+      // Silently fail - recently sold is not critical
       setRecentlySold([]);
     }
   }, [ANALYTICS_URL]);
@@ -226,7 +199,8 @@ export const useProducts = () => {
   useEffect(() => {
     fetchProducts();
     fetchRecentlySold();
-  }, [fetchProducts, fetchRecentlySold]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   /** Refresh function that updates both products and recently sold **/
   const refresh = useCallback(async () => {

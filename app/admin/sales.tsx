@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useAudioPlayer } from "expo-audio";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  ImageBackground,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +19,7 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
+import { AddProductModal } from "../../components/AddProductModal";
 import { HelpTooltip } from "../../components/HelpTooltip";
 import { useTheme } from "../../context/ThemeContext";
 import { useProducts } from "../../hooks/useProducts";
@@ -44,6 +47,10 @@ interface RevenueStats {
 
 export default function AdminSales() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const { products, refresh } = useProducts();
   const { cartData } = useLocalSearchParams();
@@ -70,30 +77,7 @@ export default function AdminSales() {
   // Audio
   const scanBeep = useAudioPlayer(require("../../assets/sounds/beep.mp3"));
 
-  // Initialize cart from scanner if data is passed
-  useEffect(() => {
-    if (cartData && typeof cartData === 'string') {
-      try {
-        const parsedCart = JSON.parse(cartData);
-        setCart(parsedCart);
-        Toast.show({
-          type: 'success',
-          text1: 'Cart Loaded',
-          text2: `${parsedCart.length} items ready for checkout`
-        });
-      } catch (error) {
-        console.error('Error parsing cart data:', error);
-      }
-    }
-  }, [cartData]);
-
-  // Fetch sales history and revenue stats
-  useEffect(() => {
-    if (activeTab === "history") {
-      fetchSalesHistory();
-    }
-  }, [activeTab]);
-
+  // Define fetchSalesHistory before using it
   const fetchSalesHistory = async () => {
     setLoadingHistory(true);
     try {
@@ -145,21 +129,51 @@ export default function AdminSales() {
           Toast.show({
             type: 'info',
             text1: 'No Sales Yet',
-            text2: 'Complete a sale to see history here'
+            text2: 'Start selling to see your sales history'
           });
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching sales history:', error);
       Toast.show({
         type: 'error',
-        text1: 'Network Error',
-        text2: 'Could not connect to server. Please check your connection.'
+        text1: 'Failed to Load',
+        text2: 'Could not fetch sales history'
       });
     } finally {
       setLoadingHistory(false);
     }
   };
+  
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === "checkout") {
+        refresh();
+      } else if (activeTab === "history") {
+        fetchSalesHistory();
+      }
+    }, [activeTab])
+  );
+
+  // Initialize cart from scanner if data is passed
+  useEffect(() => {
+    if (cartData && typeof cartData === 'string') {
+      try {
+        const parsedCart = JSON.parse(cartData);
+        setCart(parsedCart);
+        // Set active tab to checkout when cart data is passed
+        setActiveTab("checkout");
+        Toast.show({
+          type: 'success',
+          text1: 'Cart Loaded',
+          text2: `${parsedCart.length} items ready for checkout`
+        });
+      } catch (error) {
+        console.error('Error parsing cart data:', error);
+      }
+    }
+  }, [cartData]);
 
   // Process FEFO Sale
   const finalizeSale = async () => {
@@ -209,6 +223,12 @@ export default function AdminSales() {
         text1: "Transaction Complete",
         text2: "Inventory updated via FEFO logic",
       });
+      
+      // Navigate back to scanner with clear flag
+      router.push({
+        pathname: "/admin/scan",
+        params: { clearCart: "true" }
+      });
     } catch (err) {
       console.error("Sale Error:", err);
       Toast.show({
@@ -249,8 +269,13 @@ export default function AdminSales() {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Reset time to midnight for accurate day comparison
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const diffTime = nowOnly.getTime() - dateOnly.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Yesterday";
@@ -296,7 +321,8 @@ export default function AdminSales() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       {/* Technical Header */}
@@ -426,23 +452,6 @@ export default function AdminSales() {
                 <Text style={[styles.emptyHint, { color: theme.subtext }]}>
                   Scan products or add manually to begin transaction
                 </Text>
-                <Pressable
-                  style={[styles.addManualButton, { backgroundColor: theme.primary }]}
-                  onPress={() => {
-                    if (products.length > 0) {
-                      setShowProductPicker(true);
-                    } else {
-                      Toast.show({
-                        type: 'error',
-                        text1: 'No Products',
-                        text2: 'Add products to inventory first'
-                      });
-                    }
-                  }}
-                >
-                  <Ionicons name="add-circle-outline" size={20} color="#FFF" />
-                  <Text style={styles.addManualButtonText}>Add Product Manually</Text>
-                </Pressable>
               </View>
             ) : (
               <View style={styles.productList}>
@@ -552,6 +561,25 @@ export default function AdminSales() {
                 ))}
               </View>
             )}
+
+            {/* Add Product Button - Always visible */}
+            <Pressable
+              style={[styles.addManualButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, marginTop: cart.length > 0 ? 16 : 0 }]}
+              onPress={() => {
+                if (products.length > 0) {
+                  setShowProductPicker(true);
+                } else {
+                  Toast.show({
+                    type: 'error',
+                    text1: 'No Products',
+                    text2: 'Add products to inventory first'
+                  });
+                }
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+              <Text style={[styles.addManualButtonText, { color: theme.primary }]}>Add Product Manually</Text>
+            </Pressable>
 
             {/* Complete Transaction Button */}
             {cart.length > 0 && (
@@ -828,65 +856,30 @@ export default function AdminSales() {
       </Modal>
 
       {/* Product Picker Modal */}
-      <Modal visible={showProductPicker} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.pickerModalContent, { backgroundColor: theme.surface }]}>
-            <View style={styles.pickerHeader}>
-              <Text style={[styles.pickerTitle, { color: theme.text }]}>
-                Select Product
-              </Text>
-              <Pressable onPress={() => setShowProductPicker(false)}>
-                <Ionicons name="close" size={28} color={theme.text} />
-              </Pressable>
-            </View>
-            
-            <FlatList
-              data={products.filter(p => p.totalQuantity > 0)}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={[styles.productPickerItem, { borderBottomColor: theme.border }]}
-                  onPress={() => {
-                    const existingItem = cart.find(c => c._id === item._id);
-                    if (existingItem) {
-                      Toast.show({
-                        type: 'info',
-                        text1: 'Already in Cart',
-                        text2: 'Adjust quantity in cart'
-                      });
-                    } else {
-                      setCart([...cart, { ...item, quantity: 1 }]);
-                      Toast.show({
-                        type: 'success',
-                        text1: 'Product Added',
-                        text2: item.name
-                      });
-                    }
-                    setShowProductPicker(false);
-                  }}
-                >
-                  <View style={styles.productPickerInfo}>
-                    <Text style={[styles.productPickerName, { color: theme.text }]}>
-                      {item.name}
-                    </Text>
-                    <Text style={[styles.productPickerDetails, { color: theme.subtext }]}>
-                      {item.category} • Stock: {item.totalQuantity}
-                    </Text>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color={theme.primary} />
-                </Pressable>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyPickerState}>
-                  <Text style={[styles.emptyPickerText, { color: theme.subtext }]}>
-                    No products available
-                  </Text>
-                </View>
-              }
-            />
-          </View>
-        </View>
-      </Modal>
+      <AddProductModal
+        visible={showProductPicker}
+        products={products}
+        onClose={() => setShowProductPicker(false)}
+        onSelectProduct={(item) => {
+          const existingItem = cart.find(c => c._id === item._id);
+          if (existingItem) {
+            Toast.show({
+              type: 'info',
+              text1: 'Already in Cart',
+              text2: 'Adjust quantity in cart'
+            });
+          } else {
+            setCart([...cart, { ...item, quantity: 1 }]);
+            Toast.show({
+              type: 'success',
+              text1: 'Product Added',
+              text2: item.name
+            });
+          }
+          setShowProductPicker(false);
+        }}
+        emptyMessage="No products available"
+      />
 
       {/* Sale Details Modal */}
       <Modal visible={showSaleDetails} transparent animationType="slide">
@@ -951,6 +944,7 @@ export default function AdminSales() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 
@@ -1013,7 +1007,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 130,
   },
 
   sessionPanel: {
@@ -1076,7 +1070,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    marginTop: 10,
   },
   addManualButtonText: {
     color: "#FFF",
@@ -1377,49 +1370,5 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
     marginLeft: 16,
-  },
-  pickerModalContent: {
-    width: "90%",
-    maxHeight: "70%",
-    borderRadius: 16,
-    padding: 0,
-    overflow: "hidden",
-  },
-  pickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(150,150,150,0.1)",
-  },
-  pickerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  productPickerItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  productPickerInfo: {
-    flex: 1,
-  },
-  productPickerName: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  productPickerDetails: {
-    fontSize: 14,
-  },
-  emptyPickerState: {
-    padding: 40,
-    alignItems: "center",
-  },
-  emptyPickerText: {
-    fontSize: 16,
   },
 });

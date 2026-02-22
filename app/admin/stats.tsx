@@ -5,15 +5,16 @@ import { useRouter } from "expo-router";
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    Dimensions,
+    ImageBackground,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { HelpTooltip } from "../../components/HelpTooltip";
@@ -26,6 +27,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default function AdminStats() {
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
   const router = useRouter();
   const { dashboardData, loading, refresh } = useAnalytics();
   const { quickInsights } = useAIPredictions({ enableWebSocket: true, autoFetch: true });
@@ -797,7 +802,8 @@ export default function AdminStats() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView
@@ -1020,6 +1026,7 @@ export default function AdminStats() {
         {renderTabContent()}
       </ScrollView>
     </View>
+    </ImageBackground>
   );
 }
 

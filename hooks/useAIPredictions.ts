@@ -7,11 +7,11 @@ import axios from 'axios';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
-  CategoryInsights,
-  DashboardUpdatePayload,
-  Prediction,
-  PredictionUpdatePayload,
-  QuickInsights
+    CategoryInsights,
+    DashboardUpdatePayload,
+    Prediction,
+    PredictionUpdatePayload,
+    QuickInsights
 } from '../types/ai-predictions';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -52,8 +52,14 @@ export const useAIPredictions = (options: UseAIPredictionsOptions = {}) => {
         setError('Failed to fetch prediction');
       }
     } catch (err: any) {
-      console.error('Error fetching prediction:', err);
-      setError(err.response?.data?.message || 'Failed to fetch prediction');
+      // Silently handle 404 errors - product may not have prediction data yet
+      if (err.response?.status === 404) {
+        setPrediction(null);
+        setError(null);
+      } else {
+        console.error('Error fetching prediction:', err);
+        setError(err.response?.data?.message || 'Failed to fetch prediction');
+      }
     } finally {
       setLoading(false);
     }

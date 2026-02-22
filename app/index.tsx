@@ -5,10 +5,12 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Image,
+  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
-  View} from "react-native";
+  View
+} from "react-native";
 import { AIOnboardingModal } from "../components/AIOnboardingModal";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -16,6 +18,10 @@ import { useTheme } from "../context/ThemeContext";
 export default function WelcomeScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../assets/images/Background7.png")
+    : require("../assets/images/Background9.png");
   const { role } = useAuth();
   const [showAIOnboarding, setShowAIOnboarding] = useState(false);
   const [showHelpTooltipIntro, setShowHelpTooltipIntro] = useState(false);
@@ -103,10 +109,9 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      
-
-      {/* Semicircular Header */}
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={[styles.container, { backgroundColor: "transparent" }]}>
+        {/* Semicircular Header */}
       <View style={[styles.headerCurve, { backgroundColor: theme.header }]}>
         <Text style={styles.headerTitle}>StockQ</Text>
       </View>
@@ -173,6 +178,7 @@ export default function WelcomeScreen() {
         onClose={handleHelpIntroClose}
       />
     </View>
+    </ImageBackground>
   );
 }
 

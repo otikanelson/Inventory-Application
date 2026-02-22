@@ -7,20 +7,25 @@ import axios from "axios";
 import { Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    FlatList,
-    Image,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  FlatList,
+  Image,
+  ImageBackground,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 
 export default function InventoryScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const { products, loading, refresh } = useProducts();
+
+  const backgroundImage = isDark
+    ? require("../../assets/images/Background7.png")
+    : require("../../assets/images/Background9.png");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<keyof Product | "risk" | "velocity">("name");
@@ -30,36 +35,39 @@ export default function InventoryScreen() {
   // Refresh inventory when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      // Always force refresh when screen comes into focus
       refresh();
     }, [refresh])
   );
+  
+  // Separate analytics fetch function
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+      const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
+      console.log('Analytics response:', response.data);
+      if (response.data.success) {
+        const analyticsMap: Record<string, { velocity: number; riskScore: number }> = {};
+        response.data.data.productAnalytics.forEach((item: any) => {
+          analyticsMap[item.productId] = {
+            velocity: item.velocity,
+            riskScore: item.riskScore
+          };
+        });
+        console.log('Analytics map:', analyticsMap);
+        setAnalytics(analyticsMap);
+      }
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    }
+  }, []);
 
   // Fetch analytics for all products
   useEffect(() => {
-    const fetchAnalytics = async () => {
-      if (products.length > 0) {
-        try {
-          console.log('Fetching analytics from:', `${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
-          const response = await axios.get(`${process.env.EXPO_PUBLIC_API_URL}/analytics/dashboard`);
-          console.log('Analytics response:', response.data);
-          if (response.data.success) {
-            const analyticsMap: Record<string, { velocity: number; riskScore: number }> = {};
-            response.data.data.productAnalytics.forEach((item: any) => {
-              analyticsMap[item.productId] = {
-                velocity: item.velocity,
-                riskScore: item.riskScore
-              };
-            });
-            console.log('Analytics map:', analyticsMap);
-            setAnalytics(analyticsMap);
-          }
-        } catch (error) {
-          console.error('Error fetching analytics:', error);
-        }
-      }
-    };
-    fetchAnalytics();
-  }, [products]);
+    if (products.length > 0) {
+      fetchAnalytics();
+    }
+  }, [products.length, fetchAnalytics]);
 
   // Helper functions
   const getRiskColor = (riskScore: number) => {
@@ -112,7 +120,8 @@ export default function InventoryScreen() {
   }, [filteredProducts, sortField, analytics]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       <View style={styles.container}>
         <View style={styles.topSection}>
           <Text style={[styles.subtitle, { color: theme.primary }]}>STOCK_MANAGEMENT</Text>
@@ -225,7 +234,10 @@ export default function InventoryScreen() {
           refreshControl={
             <RefreshControl
               refreshing={loading}
-              onRefresh={refresh}
+              onRefresh={async () => {
+                await refresh();
+                await fetchAnalytics();
+              }}
               tintColor={theme.primary}
             />
           }
@@ -450,7 +462,8 @@ export default function InventoryScreen() {
           }}
         />
       </View>
-    </View>
+      </View>
+    </ImageBackground>
   );
 }
 

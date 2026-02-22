@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -73,6 +74,10 @@ export default function AdminProductDetails() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { theme, isDark } = useTheme();
+
+  const backgroundImage = isDark
+    ? require("../../../assets/images/Background7.png")
+    : require("../../../assets/images/Background9.png");
   const { getProductById, refresh } = useProducts();
   const { prediction, loading: predictionLoading } = useAIPredictions({ 
     productId: id as string,
@@ -491,7 +496,8 @@ export default function AdminProductDetails() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ImageBackground source={backgroundImage} style={{ flex: 1 }} resizeMode="cover">
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
       
 
       <ScrollView
@@ -1218,6 +1224,7 @@ export default function AdminProductDetails() {
         </View>
       </Modal>
     </View>
+    </ImageBackground>
   );
 }
 

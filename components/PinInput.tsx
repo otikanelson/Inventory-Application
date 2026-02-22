@@ -39,28 +39,17 @@ export const PinInput: React.FC<PinInputProps> = ({
     }
   }, [pin, disabled]);
 
-  const handleKeyPress = (key: string) => {
+  const handleChangeText = (text: string) => {
     if (disabled) return;
 
-    console.log('PinInput - Key pressed:', key);
-    console.log('PinInput - Current pin:', pin);
-    console.log('PinInput - Focused index:', focusedIndex);
-
-    if (key === 'backspace') {
-      const newPin = [...pin];
-      if (focusedIndex > 0 || pin[focusedIndex] !== '') {
-        const indexToClear = pin[focusedIndex] !== '' ? focusedIndex : focusedIndex - 1;
-        newPin[indexToClear] = '';
-        setPin(newPin);
-        setFocusedIndex(Math.max(0, indexToClear));
-      }
-    } else if (/^\d$/.test(key) && focusedIndex < length) {
-      const newPin = [...pin];
-      newPin[focusedIndex] = key;
-      console.log('PinInput - New pin after digit:', newPin);
-      setPin(newPin);
-      setFocusedIndex(Math.min(length - 1, focusedIndex + 1));
-    }
+    const digits = text.replace(/\D/g, '').split('').slice(0, length);
+    const newPin = [...Array(length).fill('')];
+    digits.forEach((digit, index) => {
+      newPin[index] = digit;
+    });
+    
+    setPin(newPin);
+    setFocusedIndex(Math.min(digits.length, length - 1));
   };
 
   const handleClear = () => {
@@ -79,7 +68,7 @@ export const PinInput: React.FC<PinInputProps> = ({
         keyboardType="number-pad"
         maxLength={length}
         value={pin.join('')}
-        onKeyPress={(e) => handleKeyPress(e.nativeEvent.key)}
+        onChangeText={handleChangeText}
         editable={!disabled}
         autoFocus
       />
