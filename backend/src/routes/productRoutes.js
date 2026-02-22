@@ -30,11 +30,24 @@ router.route("/").post(addProduct).get(getProducts);
 router.get("/category/:categoryId", async (req, res) => {
   try {
     const { categoryId } = req.params;
-    console.log('🔍 Fetching products for category:', categoryId);
+    console.log('🔍 Fetching products for category ID:', categoryId);
     console.log('🔍 Tenant filter:', req.tenantFilter);
 
-    // Apply tenant filter
-    const query = { category: categoryId, ...req.tenantFilter };
+    // First, find the category by ID to get its name
+    const Category = require("../models/Category");
+    const category = await Category.findById(categoryId);
+    
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: 'Category not found',
+      });
+    }
+
+    console.log('🔍 Category name:', category.name);
+
+    // Apply tenant filter and search by category name
+    const query = { category: category.name, ...req.tenantFilter };
     const products = await Product.find(query).select('_id name barcode category imageUrl');
 
     console.log('✅ Found products:', products.length);

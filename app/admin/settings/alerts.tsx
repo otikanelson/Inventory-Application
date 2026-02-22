@@ -260,28 +260,44 @@ export default function AlertSettingsScreen() {
         console.log('✅ Response:', response.data);
         
         if (response.data.success) {
-          setProductsToReassign(response.data.data);
-          // Initialize reassignments with empty values
-          const initialReassignments: { [key: string]: string } = {};
-          response.data.data.forEach((product: any) => {
-            initialReassignments[product._id] = '';
-          });
-          setProductReassignments(initialReassignments);
-          setCategoryModalVisible(false);
-          setShowReassignModal(true);
+          const products = response.data.data || [];
+          console.log('✅ Products found:', products.length);
+          
+          // If API returns 0 products but category says it has products, there's a data mismatch
+          if (products.length === 0) {
+            console.warn('⚠️ Category productCount is out of sync. Allowing direct deletion.');
+            Toast.show({
+              type: 'info',
+              text1: 'Data Mismatch Detected',
+              text2: 'Category count was incorrect. Deleting category directly.',
+              visibilityTime: 3000,
+            });
+            // Fall through to direct deletion below (don't return here)
+          } else {
+            // We have products, show reassignment modal
+            setProductsToReassign(products);
+            // Initialize reassignments with empty values
+            const initialReassignments: { [key: string]: string } = {};
+            products.forEach((product: any) => {
+              initialReassignments[product._id] = '';
+            });
+            setProductReassignments(initialReassignments);
+            setCategoryModalVisible(false);
+            setShowReassignModal(true);
+            return; // Exit here - we're showing the reassignment modal
+          }
         } else {
           Toast.show({
             type: 'error',
             text1: 'Error',
-            text2: 'No products found or API returned unsuccessful response'
+            text2: 'API returned unsuccessful response'
           });
+          return;
         }
       } catch (error: any) {
-        
         let errorMessage = 'Could not load products in this category';
         
         if (error.response) {
-          // Server responded with error
           errorMessage = error.response.data?.error || error.response.data?.message || `Server error: ${error.response.status}`;
         } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
           errorMessage = 'Network error - check if backend is running';
@@ -295,13 +311,16 @@ export default function AlertSettingsScreen() {
           text2: errorMessage,
           visibilityTime: 5000,
         });
+        return;
       }
-      return;
     }
 
-    // If no products, delete directly
+    // If no products (or data mismatch), delete directly
     try {
+      console.log('🗑️ Attempting to delete category:', selectedCategory._id);
       const response = await axios.delete(`${API_URL}/categories/${selectedCategory._id}`);
+      console.log('🗑️ Delete response:', response.data);
+      
       if (response.data.success) {
         Toast.show({
           type: 'success',
@@ -310,37 +329,68 @@ export default function AlertSettingsScreen() {
         });
         await loadCategories();
         setCategoryModalVisible(false);
+      } else {
+        console.error('❌ Delete failed - response not successful:', response.data);
+        Toast.show({
+          type: 'error',
+          text1: 'Deletion Failed',
+          text2: response.data.error || 'Server returned unsuccessful response'
+        });
       }
     } catch (error: any) {
+      console.error('❌ Delete category error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
       Toast.show({
         type: 'error',
         text1: 'Deletion Failed',
-        text2: 'Please try again'
+        text2: error.response?.data?.error || error.message || 'Please try again'
       });
     }
   };
 
   const handleReassignAllProducts = (targetCategoryId: string) => {
+    console.log('🔄 Reassigning all products to category:', targetCategoryId);
+    console.log('🔄 Products to reassign:', productsToReassign.length);
+    
     const newReassignments: { [key: string]: string } = {};
     productsToReassign.forEach((product) => {
       newReassignments[product._id] = targetCategoryId;
     });
+    
+    console.log('🔄 New reassignments:', newReassignments);
     setProductReassignments(newReassignments);
+    
+    Toast.show({
+      type: 'success',
+      text1: 'All Products Reassigned',
+      text2: `${productsToReassign.length} product(s) will be moved`,
+      visibilityTime: 2000,
+    });
   };
 
   const handleConfirmDeletion = async () => {
     if (!selectedCategory) return;
+
+    console.log('🗑️ Confirming deletion...');
+    console.log('🗑️ Product reassignments:', productReassignments);
+    console.log('🗑️ Products to reassign:', productsToReassign.length);
 
     // Validate all products have been reassigned
     const unassignedProducts = productsToReassign.filter(
       (product) => !productReassignments[product._id]
     );
 
+    console.log('🗑️ Unassigned products:', unassignedProducts.length);
+
     if (unassignedProducts.length > 0) {
+      console.log('❌ Some products not reassigned:', unassignedProducts.map(p => p.name));
       Toast.show({
         type: 'error',
         text1: 'Reassignment Required',
-        text2: `Please reassign all ${unassignedProducts.length} product(s)`
+        text2: `Please reassign all ${unassignedProducts.length} product(s)`,
+        visibilityTime: 4000,
       });
       return;
     }
@@ -803,6 +853,13 @@ export default function AlertSettingsScreen() {
                 Reassign them to other categories before deletion.
               </Text>
 
+              {/* Debug Info - Shows current assignment status */}
+              <View style={[styles.debugInfo, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Text style={[styles.debugText, { color: theme.text }]}>
+                  Assigned: {Object.keys(productReassignments).filter(key => productReassignments[key]).length} / {productsToReassign.length}
+                </Text>
+              </View>
+
               {/* Reassign All Button */}
               <View style={[styles.reassignAllContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
                 <Text style={[styles.reassignAllLabel, { color: theme.text }]}>
@@ -869,12 +926,15 @@ export default function AlertSettingsScreen() {
                                     : theme.border,
                               },
                             ]}
-                            onPress={() =>
-                              setProductReassignments({
+                            onPress={() => {
+                              console.log('📦 Reassigning product:', product.name, 'to category:', category.name);
+                              const newReassignments = {
                                 ...productReassignments,
                                 [product._id]: category._id,
-                              })
-                            }
+                              };
+                              console.log('📦 Updated reassignments:', newReassignments);
+                              setProductReassignments(newReassignments);
+                            }}
                           >
                             <Text
                               style={[
@@ -1203,7 +1263,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deleteBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
   },
   reassignModalScroll: {
@@ -1221,6 +1281,18 @@ const styles = StyleSheet.create({
     padding: 30,
     borderRadius: 30,
     alignSelf: 'center',
+  },
+  debugInfo: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  debugText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   reassignAllContainer: {
     width: '100%',
