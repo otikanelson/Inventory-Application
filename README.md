@@ -48,51 +48,79 @@ Stockq is a cutting-edge mobile inventory management application that combines a
 ## 📸 Demo
 
 ### Dashboard
-> **Add screenshot here:** Dashboard showing inventory overview, AI insights, and recently sold products
+> Dashboard showing inventory overview, AI insights, and recently sold products
 
-![Dashboard Screenshot](path/to/dashboard-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/38b2bcf4-82a2-4084-a37a-763c094f0885" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/5bcff7e7-a9e6-461a-86f3-dda9ee17e3cd" width="220" />
+</p>
 
 ---
 
 ### Barcode Scanner
-> **Add screenshot here:** Barcode scanner in action with product lookup results
+> Barcode scanner in action with product lookup results
 
-![Scanner Screenshot](path/to/scanner-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/c94748fe-b343-4139-a8f5-ec8edf49b844" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/6aaf029b-96c9-47a6-9197-f7872098fb32" width="220" />
+</p>
 
 ---
 
 ### Inventory Management
-> **Add screenshot here:** Product list with search, filter, and category options
+> Product list with search, filter, and category options
 
-![Inventory Screenshot](path/to/inventory-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/ff9d6207-eb3a-4149-94f3-86d33583273a" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/1283dfcb-9d3e-4be4-a60c-e35aa6bdd228" width="220" />
+</p>
 
 ---
 
 ### FEFO (First Expired, First Out)
-> **Add screenshot here:** FEFO page showing products sorted by expiry date with color coding
+> FEFO page showing products sorted by expiry date with color coding
 
-![FEFO Screenshot](path/to/fefo-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fd47bfdf-d62d-4169-838f-cee769be3645" width="220" />
+</p>
 
 ---
 
 ### AI Predictions
-> **Add screenshot here:** AI predictions dashboard with risk scores and forecasts
+> AI predictions dashboard with risk scores and forecasts
 
-![AI Predictions Screenshot](path/to/ai-predictions-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/1abad26e-0a07-4739-a271-16bc649b6499" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/bd53efb9-8a33-48c8-b22e-c9006941ee12" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/1c0460d8-c587-4190-933e-c0a07fb48d9b" width="220" />
+</p>
 
 ---
 
 ### Admin Dashboard
-> **Add screenshot here:** Admin analytics with charts and performance metrics
+> Admin analytics with charts and performance metrics
 
-![Admin Dashboard Screenshot](path/to/admin-dashboard-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/e2dc456e-e2ae-4efa-9373-54837d629f0e" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/3dcf3e92-7fa5-4127-876b-977f856cfaa3" width="220" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/6d552cf9-b055-4fe6-a387-e7aac6d09b48" width="220" />
+</p>
 
 ---
 
 ### Alerts System
-> **Add screenshot here:** Alerts page showing critical expiry and low stock warnings
+> Alerts page showing critical expiry and low stock warnings
 
-![Alerts Screenshot](path/to/alerts-screenshot.png)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/28685794-3f94-4b9b-8896-8528a025a734" width="220" />
+</p>
 
 ---
 
@@ -244,7 +272,7 @@ You'll also need accounts for:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/otikanelson/Inventory-Application.git
+git clone [https://github.com/otikanelson/Inventory-Application.git](https://github.com/otikanelson/Inventory-Application.git)
 cd Inventory-Application
 
 # 2. Install frontend dependencies
@@ -265,12 +293,10 @@ npm run dev
 npx expo start
 
 # 7. Scan QR code with Expo Go app on your device
-```
 
-### Environment Configuration
+## Environment Configuration
 
-#### Backend Configuration
-
+### Backend Configuration  
 Create `backend/.env`:
 
 ```env
@@ -290,16 +316,16 @@ CLOUDINARY_API_SECRET=your_api_secret
 JWT_SECRET=your_super_secret_jwt_key_here
 ```
 
-#### Frontend Configuration
-
+### Frontend Configuration  
 Create `.env` in root directory:
 
 ```env
 # Backend API URL (use your local IP for mobile testing)
-EXPO_PUBLIC_API_URL=http://192.168.1.100:5000/api
+EXPO_PUBLIC_API_URL=http://123.456.7.800:5000/api
 ```
 
-> **Note**: Replace `192.168.1.100` with your computer's local IP address. Find it using `ipconfig` (Windows) or `ifconfig` (Mac/Linux).
+> **Note:** Replace `123.456.7.800` with your computer's local IP address.  
+> Find it using `ipconfig` (Windows) or `ifconfig` (Mac/Linux).
 
 ---
 
@@ -326,7 +352,8 @@ eas build --platform android --profile production-aab --clear-cache
 eas build --platform ios --profile production --clear-cache
 ```
 
-> **Note**: iOS builds require an Apple Developer account ($99/year). See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for detailed build and deployment guide.
+> **Note:** iOS builds require an Apple Developer account ($99/year).  
+> See `BUILD_INSTRUCTIONS.md` for detailed build and deployment guide.
 
 ---
 
@@ -335,26 +362,25 @@ eas build --platform ios --profile production --clear-cache
 ### For Developers
 
 | Document | Description |
-|----------|-------------|
-| [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) | Complete build and deployment guide (30+ pages) |
-| [TESTING_MANUAL.md](TESTING_MANUAL.md) | Comprehensive testing procedures with 60+ test cases (40+ pages) |
-| [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) | Complete technical documentation (50+ pages) |
+|----------|------------|
+| BUILD_INSTRUCTIONS.md | Complete build and deployment guide (30+ pages) |
+| TESTING_MANUAL.md | Comprehensive testing procedures with 60+ test cases (40+ pages) |
+| PROJECT_DOCUMENTATION.md | Complete technical documentation (50+ pages) |
 | This README | Quick start and overview |
 
 ### For Business/Clients
 
 | Document | Description |
-|----------|-------------|
-| [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) | Complete project presentation with business impact |
-| [DOCUMENTATION_SUMMARY.md](DOCUMENTATION_SUMMARY.md) | Overview of all documentation |
+|----------|------------|
+| PROJECT_DOCUMENTATION.md | Complete project presentation with business impact |
+| DOCUMENTATION_SUMMARY.md | Overview of all documentation |
 
 ### Quick Links
-
-- 📖 [API Documentation](PROJECT_DOCUMENTATION.md#7-api-documentation)
-- 🗄️ [Database Schema](PROJECT_DOCUMENTATION.md#6-database-schema)
-- 🔐 [Security Features](PROJECT_DOCUMENTATION.md#8-security-features)
-- 🤖 [AI/ML Implementation](PROJECT_DOCUMENTATION.md#9-aiml-implementation)
-- 🏢 [Multi-Tenancy Architecture](PROJECT_DOCUMENTATION.md#10-multi-tenancy-architecture)
+- 📖 API Documentation  
+- 🗄️ Database Schema  
+- 🔐 Security Features  
+- 🤖 AI/ML Implementation  
+- 🏢 Multi-Tenancy Architecture  
 
 ---
 
@@ -375,25 +401,25 @@ npm test -- --coverage
 
 ### Manual Testing
 
-Follow the comprehensive [TESTING_MANUAL.md](TESTING_MANUAL.md) which includes:
+Follow the comprehensive `TESTING_MANUAL.md` which includes:
 
-- ✅ 60+ detailed test cases
-- ✅ Authentication tests
-- ✅ Feature functionality tests
-- ✅ Performance tests
-- ✅ Security tests
-- ✅ Edge case tests
-- ✅ Multi-tenancy tests
+- ✅ 60+ detailed test cases  
+- ✅ Authentication tests  
+- ✅ Feature functionality tests  
+- ✅ Performance tests  
+- ✅ Security tests  
+- ✅ Edge case tests  
+- ✅ Multi-tenancy tests  
 
 ### Quick Smoke Test
 
-1. ✅ Launch app and login
-2. ✅ Add a product via barcode scanner
-3. ✅ View product in inventory
-4. ✅ Check FEFO page for expiring products
-5. ✅ Review AI predictions
-6. ✅ Access admin dashboard
-7. ✅ Configure alert settings
+- ✅ Launch app and login  
+- ✅ Add a product via barcode scanner  
+- ✅ View product in inventory  
+- ✅ Check FEFO page for expiring products  
+- ✅ Review AI predictions  
+- ✅ Access admin dashboard  
+- ✅ Configure alert settings  
 
 ---
 
@@ -418,15 +444,15 @@ Follow the comprehensive [TESTING_MANUAL.md](TESTING_MANUAL.md) which includes:
 
 Stockq implements enterprise-grade security:
 
-- 🔒 **JWT Authentication** - Secure token-based auth
-- 🔑 **Dual PIN System** - Login PIN + Security PIN for sensitive operations
-- 👥 **Role-Based Access Control** - Admin, Staff, Viewer roles
-- 🏢 **Multi-Tenant Isolation** - Complete data separation between stores
-- 🔐 **Encrypted Storage** - Sensitive data encrypted at rest
-- 🌐 **HTTPS Only** - All API calls encrypted in transit
-- 🛡️ **Input Validation** - Protection against injection attacks
-- ⏱️ **Session Management** - Auto-logout after 30 minutes
-- 📝 **Audit Logging** - All sensitive operations logged
+- 🔒 JWT Authentication - Secure token-based auth  
+- 🔑 Dual PIN System - Login PIN + Security PIN for sensitive operations  
+- 👥 Role-Based Access Control - Admin, Staff, Viewer roles  
+- 🏢 Multi-Tenant Isolation - Complete data separation between stores  
+- 🔐 Encrypted Storage - Sensitive data encrypted at rest  
+- 🌐 HTTPS Only - All API calls encrypted in transit  
+- 🛡️ Input Validation - Protection against injection attacks  
+- ⏱️ Session Management - Auto-logout after 30 minutes  
+- 📝 Audit Logging - All sensitive operations logged  
 
 ---
 
@@ -437,22 +463,22 @@ Stockq implements enterprise-grade security:
 <div align="center">
 
 | Color | Hex | Usage |
-|-------|-----|-------|
-| 🔵 Primary | `#007AFF` | Buttons, links, highlights |
-| 🔴 Critical | `#FF3B30` | Errors, expired items |
-| 🟠 Warning | `#FF9500` | Warnings, urgent items |
-| 🟡 Caution | `#FFCC00` | Moderate warnings |
-| 🟢 Success | `#34C759` | Success messages, safe items |
-| ⚫ Dark | `#000000` | Dark mode background |
-| ⚪ Light | `#FFFFFF` | Light mode background |
+|-------|------|--------|
+| 🔵 Primary | #007AFF | Buttons, links, highlights |
+| 🔴 Critical | #FF3B30 | Errors, expired items |
+| 🟠 Warning | #FF9500 | Warnings, urgent items |
+| 🟡 Caution | #FFCC00 | Moderate warnings |
+| 🟢 Success | #34C759 | Success messages, safe items |
+| ⚫ Dark | #000000 | Dark mode background |
+| ⚪ Light | #FFFFFF | Light mode background |
 
 </div>
 
 ### Typography
 
-- **Headers**: System Bold
-- **Body**: System Regular
-- **Monospace**: Courier (for barcodes and codes)
+- Headers: System Bold  
+- Body: System Regular  
+- Monospace: Courier (for barcodes and codes)  
 
 ---
 
@@ -460,37 +486,37 @@ Stockq implements enterprise-grade security:
 
 ### ✅ Completed (v1.0.0)
 
-- [x] Dashboard with AI insights
-- [x] Barcode scanner
-- [x] Inventory management
-- [x] FEFO sorting
-- [x] AI prediction engine
-- [x] Alerts system
-- [x] Admin dashboard
-- [x] Multi-tenancy support
-- [x] Dark/light mode
-- [x] Image uploads
-- [x] Sales tracking
-- [x] Analytics
-- [x] Staff management
-- [x] Admin impersonation
+- [x] Dashboard with AI insights  
+- [x] Barcode scanner  
+- [x] Inventory management  
+- [x] FEFO sorting  
+- [x] AI prediction engine  
+- [x] Alerts system  
+- [x] Admin dashboard  
+- [x] Multi-tenancy support  
+- [x] Dark/light mode  
+- [x] Image uploads  
+- [x] Sales tracking  
+- [x] Analytics  
+- [x] Staff management  
+- [x] Admin impersonation  
 
 ### 🚧 In Progress (v1.1.0)
 
-- [ ] Push notifications
-- [ ] Offline mode improvements
-- [ ] Advanced reporting
-- [ ] Data export (CSV, PDF)
+- [ ] Push notifications  
+- [ ] Offline mode improvements  
+- [ ] Advanced reporting  
+- [ ] Data export (CSV, PDF)  
 
 ### 📅 Planned (v2.0.0)
 
-- [ ] iOS App Store release
-- [ ] Deep learning AI models
-- [ ] Multi-language support
-- [ ] Accounting software integration
-- [ ] E-commerce platform sync
-- [ ] Supplier management
-- [ ] Web dashboard
+- [ ] iOS App Store release  
+- [ ] Deep learning AI models  
+- [ ] Multi-language support  
+- [ ] Accounting software integration  
+- [ ] E-commerce platform sync  
+- [ ] Supplier management  
+- [ ] Web dashboard  
 
 ---
 
@@ -499,37 +525,42 @@ Stockq implements enterprise-grade security:
 We welcome contributions! Here's how you can help:
 
 ### Reporting Bugs
-
-1. Check if the bug has already been reported
-2. Create a detailed bug report including:
-   - Steps to reproduce
-   - Expected behavior
-   - Actual behavior
-   - Screenshots (if applicable)
-   - Device and OS version
+- Check if the bug has already been reported  
+- Create a detailed bug report including:
+  - Steps to reproduce  
+  - Expected behavior  
+  - Actual behavior  
+  - Screenshots (if applicable)  
+  - Device and OS version  
 
 ### Suggesting Features
-
-1. Check if the feature has already been suggested
-2. Create a feature request including:
-   - Clear description
-   - Use case
-   - Expected benefits
-   - Mockups (if applicable)
+- Check if the feature has already been suggested  
+- Create a feature request including:
+  - Clear description  
+  - Use case  
+  - Expected benefits  
+  - Mockups (if applicable)  
 
 ### Pull Requests
+```bash
+# 1. Fork the repository
+# 2. Create a feature branch
+git checkout -b feature/AmazingFeature
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+# 3. Commit your changes
+git commit -m 'Add some AmazingFeature'
+
+# 4. Push to the branch
+git push origin feature/AmazingFeature
+```
+
+Then open a Pull Request.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the ISC License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the ISC License - see the LICENSE file for details.
 
 ---
 
@@ -537,9 +568,9 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**Developed by:** [Your Name]  
+**Developed by:** Nelson Otika  
 **Project:** Stockq v1.0.0  
-**Repository:** [github.com/otikanelson/Inventory-Application](https://github.com/otikanelson/Inventory-Application)
+**Repository:** github.com/otikanelson/Inventory-Application  
 
 </div>
 
@@ -549,10 +580,10 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 Need help? We're here for you!
 
-- 📧 **Email**: [your-email@example.com](mailto:your-email@example.com)
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/otikanelson/Inventory-Application/issues)
-- 📖 **Documentation**: [View Docs](PROJECT_DOCUMENTATION.md)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/otikanelson/Inventory-Application/discussions)
+- 📧 Email: somtootika@gmail.com  
+- 🐛 Bug Reports: GitHub Issues  
+- 📖 Documentation: View Docs  
+- 💬 Discussions: GitHub Discussions  
 
 ---
 
@@ -560,11 +591,11 @@ Need help? We're here for you!
 
 Special thanks to:
 
-- [Expo](https://expo.dev) - For the excellent mobile development framework
-- [MongoDB](https://www.mongodb.com) - For the flexible database solution
-- [Cloudinary](https://cloudinary.com) - For seamless image management
-- [React Native Community](https://reactnative.dev) - For continuous support and resources
-- [Vercel](https://vercel.com) - For reliable backend hosting
+- Expo - For the excellent mobile development framework  
+- MongoDB - For the flexible database solution  
+- Cloudinary - For seamless image management  
+- React Native Community - For continuous support and resources  
+- Vercel - For reliable backend hosting  
 
 ---
 
@@ -572,22 +603,12 @@ Special thanks to:
 
 If you find this project useful, please consider giving it a star! ⭐
 
-[![Star History Chart](https://api.star-history.com/svg?repos=otikanelson/Inventory-Application&type=Date)](https://star-history.com/#otikanelson/Inventory-Application&Date)
-
----
-
 <div align="center">
 
-### Built with ❤️ for businesses that want to reduce waste and maximize profits
+Built with ❤️ for businesses that want to reduce waste and maximize profits  
 
-**[⬆ Back to Top](#-stockq)**
+⬆ Back to Top  
 
----
-
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Last Updated](https://img.shields.io/badge/last%20updated-February%202026-green.svg)
-![Status](https://img.shields.io/badge/status-Production%20Ready-success.svg)
-
-*© 2026 Stockq. All rights reserved.*
+© 2026 Stockq. All rights reserved.
 
 </div>
