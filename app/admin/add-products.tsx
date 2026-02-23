@@ -633,13 +633,17 @@ export default function AddProducts() {
   };
 
   const pickImage = async (useCamera: boolean) => {
+    console.log('🖼️ pickImage called with useCamera:', useCamera);
     setShowPicker(false);
     
     try {
+      console.log('📸 Requesting permissions...');
       // Request permissions
       if (useCamera) {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        console.log('📸 Camera permission status:', status);
         if (status !== 'granted') {
+          console.log('❌ Camera permission denied');
           Toast.show({ 
             type: "error", 
             text1: "Camera Permission Required", 
@@ -649,7 +653,9 @@ export default function AddProducts() {
         }
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        console.log('📸 Media library permission status:', status);
         if (status !== 'granted') {
+          console.log('❌ Media library permission denied');
           Toast.show({ 
             type: "error", 
             text1: "Photo Library Permission Required", 
@@ -659,20 +665,33 @@ export default function AddProducts() {
         }
       }
       
-      // Image picker options
+      console.log('✅ Permissions granted, launching picker...');
+      
+      // Image picker options - simplified for iOS compatibility
       const options: ImagePicker.ImagePickerOptions = { 
         mediaTypes: ['images'],
         quality: 0.7,
-        allowsEditing: true,
-        aspect: [1, 1] as [number, number],
+        // Removed allowsEditing and aspect as they can cause issues on iOS
       };
       
+      console.log('📸 Picker options:', options);
+      
+      console.log('🚀 Launching image picker...');
       const result = useCamera 
         ? await ImagePicker.launchCameraAsync(options) 
         : await ImagePicker.launchImageLibraryAsync(options);
+      
+      console.log('✅ Image picker returned!');
+      console.log('📸 Picker result:', {
+        canceled: result.canceled,
+        hasAssets: !!result.assets,
+        assetsLength: result.assets?.length,
+        firstAssetUri: result.assets?.[0]?.uri
+      });
         
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const imageUri = result.assets[0].uri;
+        console.log('✅ Image selected:', imageUri);
         setImage(imageUri);
         setFormModified(true);
         
@@ -681,9 +700,16 @@ export default function AddProducts() {
           text1: "Image Selected",
           text2: "Image will be uploaded when you save the product"
         });
+      } else {
+        console.log('❌ Image selection canceled or no assets');
       }
     } catch (error: any) {
-      console.error('Image picker error:', error);
+      console.error('❌ Image picker error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       Toast.show({
         type: "error",
         text1: "Error",
@@ -1302,7 +1328,11 @@ export default function AddProducts() {
                   },
                   highlightErrors.includes('image') && styles.errorHighlight,
                 ]}
-                onPress={() => setShowPicker(true)}
+                onPress={() => {
+                  console.log('🔘 Image upload button pressed');
+                  console.log('📊 State:', { isUploading, isLocked, hasImage: !!image });
+                  setShowPicker(true);
+                }}
                 disabled={isUploading || isLocked}
               >
                 {image ? (
@@ -1841,15 +1871,33 @@ export default function AddProducts() {
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerContent, { backgroundColor: theme.surface }]}>
             <Text style={[styles.pickerTitle, { color: theme.text }]}>Add Product Image</Text>
-            <Pressable style={styles.pickerOpt} onPress={() => pickImage(true)}>
+            <Pressable 
+              style={styles.pickerOpt} 
+              onPress={() => {
+                console.log('🔘 Take Photo button pressed');
+                pickImage(true);
+              }}
+            >
               <Ionicons name="camera" size={24} color={theme.primary} />
               <Text style={{ color: theme.text, marginLeft: 15, fontSize: 16 }}>Take Photo</Text>
             </Pressable>
-            <Pressable style={styles.pickerOpt} onPress={() => pickImage(false)}>
+            <Pressable 
+              style={styles.pickerOpt} 
+              onPress={() => {
+                console.log('🔘 Choose from Gallery button pressed');
+                pickImage(false);
+              }}
+            >
               <Ionicons name="images" size={24} color={theme.primary} />
               <Text style={{ color: theme.text, marginLeft: 15, fontSize: 16 }}>Choose from Gallery</Text>
             </Pressable>
-            <Pressable style={[styles.pickerOpt, { borderBottomWidth: 0 }]} onPress={() => setShowPicker(false)}>
+            <Pressable 
+              style={[styles.pickerOpt, { borderBottomWidth: 0 }]} 
+              onPress={() => {
+                console.log('🔘 Cancel button pressed');
+                setShowPicker(false);
+              }}
+            >
               <Text style={{ color: "#FF4444", fontWeight: "700", fontSize: 16 }}>Cancel</Text>
             </Pressable>
           </View>

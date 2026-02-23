@@ -3,15 +3,15 @@ import axios from "axios";
 import { Href, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  ImageBackground,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    FlatList,
+    Image,
+    ImageBackground,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { AIInsightsBadge } from "../../components/AIInsightsBadge";
@@ -528,6 +528,8 @@ export default function Dashboard() {
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 10,
+                      flex: 1,
+                      marginRight: 12,
                     }}
                   >
                     <View
@@ -536,7 +538,11 @@ export default function Dashboard() {
                         { backgroundColor: theme.notification },
                       ]}
                     />
-                    <Text style={{ color: theme.text, fontWeight: "700" }}>
+                    <Text 
+                      style={{ color: theme.text, fontWeight: "700", flex: 1 }}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
                       {item.name}
                     </Text>
                   </View>
@@ -545,6 +551,7 @@ export default function Dashboard() {
                       color: theme.notification,
                       fontSize: 12,
                       fontWeight: "800",
+                      flexShrink: 0,
                     }}
                   >
                     Exp:{" "}

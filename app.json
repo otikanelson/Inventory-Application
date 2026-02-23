@@ -72,9 +72,7 @@
         "projectId": "7ccb323f-ce43-4d57-aaae-d99c8139faa3"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "owner": "neil2022",
     "updates": {
       "url": "https://u.expo.dev/7ccb323f-ce43-4d57-aaae-d99c8139faa3"
